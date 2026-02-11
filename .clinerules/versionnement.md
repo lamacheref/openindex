@@ -16,3 +16,5 @@ N'oubliez jamais que le versionnement est un élément clé de la gestion de pro
 - Maintenez une branche `main` stable et utilisez des branches de fonctionnalités pour les développements.
 - Documentez les changements majeurs dans un fichier CHANGELOG.md.
 - Assurez-vous que chaque commit est testé avant d'être fusionné dans la branche principale.
+- Ne changez pas de version majeure sans validation explicite de l'utilisateur.
+- Mettez à jour le fichier CHANGELOG.md à chaque commit, en incluant le numéro de commit pour chaque entrée.
