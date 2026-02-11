@@ -5,7 +5,10 @@ Ce fichier contient la liste des tâches à effectuer pour le projet OpenIndex, 
 ## Tâches à effectuer
 
 ### Phase 1 : Préparation et Configuration (Date butoir : 2026-02-15)
-- [ ] 🚀 **Finaliser la documentation technique** : Compléter les sections manquantes dans le fichier `PROJET.md` et s'assurer que toutes les spécifications techniques sont à jour.
+- [ ] 🛠️ **Configurer l'environnement de développement** : Installer Docker, SQLite, et Python pour le projet.
+- [ ] 📦 **Installer les bibliothèques nécessaires** : Ajouter les dépendances (`smbprotocol`, FastAPI, Streamlit).
+- [ ] 📜 **Créer les scripts de base pour le crawler SMB** : Développer les scripts avec pagination et indexation progressive.
+- [ ] � **Finaliser la documentation technique** : Compléter les sections manquantes dans le fichier `PROJET.md` et s'assurer que toutes les spécifications techniques sont à jour.
 - [ ] 🔧 **Optimiser les performances du moteur de recherche** : Identifier et corriger les goulots d'étranglement dans l'algorithme de recherche.
 - [ ] 📚 **Mettre à jour la documentation utilisateur** : Ajouter des exemples concrets et des captures d'écran pour faciliter la compréhension.
 
