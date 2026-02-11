@@ -1,6 +1,6 @@
 # Instructions pour la gestion des fichiers cœur du projet
 
-Vous devez impérativement maintenir à jour les fichiers cœur du projet pour assurer la cohérence et la clarté des informations essentielles. Ces fichiers incluent `README.md`, `ROADMAP.md`, et `PROJET.md`, qui servent de référence principale pour les développeurs et les utilisateurs.
+Vous devez impérativement maintenir à jour les fichiers cœur du projet pour assurer la cohérence et la clarté des informations essentielles. Ces fichiers incluent `README.md`, `ROADMAP.md`, `PROJET.md`, et `CHANGELOG.md`, qui servent de référence principale pour les développeurs et les utilisateurs.
 
 ## Règles générales
 
@@ -24,6 +24,11 @@ Vous devez impérativement maintenir à jour les fichiers cœur du projet pour a
 - **Contenu** : Fournit une vue d'ensemble complète du projet, incluant les objectifs, l'architecture technique, et les spécifications détaillées.
 - **Mises à jour** : À chaque modification des spécifications techniques ou des contraintes du projet.
 - **Structure** : Utilisez des sections bien définies pour les objectifs, les contraintes, l'architecture, et les spécifications.
+
+### CHANGELOG.md
+- **Contenu** : Documente les changements apportés au projet, avec les numéros de commit associés pour assurer la traçabilité.
+- **Mises à jour** : À chaque commit, en incluant le numéro de commit et une description claire des modifications.
+- **Structure** : Organisez les entrées par version, avec les changements associés.
 
 ## Règles spécifiques pour l'IA
 
