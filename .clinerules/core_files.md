@@ -1,12 +1,13 @@
 # Instructions pour la gestion des fichiers cœur du projet
 
-Vous devez impérativement maintenir à jour les fichiers cœur du projet pour assurer la cohérence et la clarté des informations essentielles. Ces fichiers incluent `README.md`, `ROADMAP.md`, `PROJET.md`, et `CHANGELOG.md`, qui servent de référence principale pour les développeurs et les utilisateurs.
+Vous devez impérativement maintenir à jour les fichiers cœur du projet pour assurer la cohérence et la clarté des informations essentielles. Ces fichiers incluent `README.md`, `ROADMAP.md`, `PROJET.md`, `CHANGELOG.md`, et `TODO.md`, qui servent de référence principale pour les développeurs et les utilisateurs.
 
 ## Règles générales
 
 - **Mises à jour régulières** : Assurez-vous que ces fichiers sont mis à jour à chaque modification majeure du projet ou de ses objectifs.
 - **Clarté et précision** : Les informations doivent être rédigées de manière claire et concise, en évitant les ambiguïtés.
 - **Liens croisés** : Maintenez des liens cohérents entre ces fichiers pour faciliter la navigation et la compréhension.
+- **Suivi en temps réel** : Le fichier `TODO.md` doit suivre les commits en temps réel pour refléter l'état actuel des tâches.
 
 ## Règles spécifiques pour chaque fichier
 
@@ -29,6 +30,11 @@ Vous devez impérativement maintenir à jour les fichiers cœur du projet pour a
 - **Contenu** : Documente les changements apportés au projet, avec les numéros de commit associés pour assurer la traçabilité.
 - **Mises à jour** : À chaque commit, en incluant le numéro de commit et une description claire des modifications.
 - **Structure** : Organisez les entrées par version, avec les changements associés.
+
+### TODO.md
+- **Contenu** : Liste les tâches à effectuer pour le projet, classées par ordre d'importance.
+- **Mises à jour** : À chaque commit, pour refléter l'état actuel des tâches.
+- **Structure** : Les tâches terminées doivent être archivées dans le bas du fichier, datées et marquées de leur numéro de commit sous forme de tableau.
 
 ## Règles spécifiques pour l'IA
 
