@@ -35,6 +35,12 @@ Vous devez impérativement maintenir à jour les fichiers cœur du projet pour a
 - **Contenu** : Liste les tâches à effectuer pour le projet, classées par ordre d'importance.
 - **Mises à jour** : À chaque commit, pour refléter l'état actuel des tâches.
 - **Structure** : Les tâches terminées doivent être archivées dans le bas du fichier, datées et marquées de leur numéro de commit sous forme de tableau.
+- **Exemple** :
+  ```
+  | Date       | Commit    | Description                                                                 | Statut |
+  |------------|-----------|-----------------------------------------------------------------------------|--------|
+  | 2026-02-11 | `bdfd46d` | Création du crawler SMB avec smbclient et nettoyage du code.                | ✅     |
+  ```
 
 ## Règles spécifiques pour l'IA
 

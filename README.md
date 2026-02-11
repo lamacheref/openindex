@@ -1,32 +1,108 @@
 # OpenIndex
 
-Bienvenue sur le projet OpenIndex ! Ce projet vise à fournir une solution complète pour l'archivage et la gestion des fichiers professionnels, en permettant aux utilisateurs de crawler, organiser, et archiver leurs fichiers de manière efficace.
+**Solution complète d'archivage et de gestion des fichiers professionnels avec crawler SMB et interface web moderne.**
 
-## Documentation du projet
+## 🎯 Objectif Principal
 
-- **[PROJET.md](PROJET.md)** : Vue d'ensemble complète du projet, incluant les objectifs, l'architecture technique, et les spécifications détaillées.
-- **[ROADMAP.md](ROADMAP.md)** : Feuille de route détaillée pour le développement du projet, incluant les phases, les objectifs, et les livrables prévus.
-- **[CHANGELOG.md](CHANGELOG.md)** : Historique des changements apportés au projet, avec les numéros de commit associés pour assurer la traçabilité.
-- **[VERSION](VERSION)** : Fichier contenant la version actuelle du projet.
+OpenIndex permet de crawler, indexer, et gérer efficacement des partages SMB de grande volumétrie (>2 To) avec déduplication automatique et interface de visualisation interactive.
 
-## Archives
+## ✅ Fonctionnalités Actuelles
 
-- **[Archives/PROJET.MD](Archives/PROJET.MD)** : Version archivée des objectifs initiaux du projet.
-- **[Archives/PROPOSITION.md](Archives/PROPOSITION.md)** : Proposition initiale d'architecture pour le projet.
-- **[Archives/PROPOSITION_WS.md](Archives/PROPOSITION_WS.md)** : Plan détaillé pour la phase 1 du projet.
+### 🚀 **Crawler SMB Avancé**
+- **Multi-threading** : Workers dédiés pour répertoires et fichiers
+- **Robustesse** : Gestion des erreurs, reprise après interruption
+- **Performance** : Temporisation adaptative, queues optimisées
+- **Déduplication** : Détection automatique des doublons par checksum SHA-256
 
-## Règles et conventions
+### 🌐 **Interface Web Moderne**
+- **Arborescence Interactive** : streamlit-tree-select pour navigation fluide
+- **Visualisation de Fichiers** : streamlit-elements pour documents, images, Excel
+- **Tableau de Bord** : Métriques temps réel et graphiques interactifs
+- **Analyse des Doublons** : Groupes détaillés avec comparaison
+- **Panneau Latéral** : Actions contextuelles (⚠️ en cours de correction)
 
-Les règles et conventions pour le développement sont définies dans le dossier [`.clinerules`](.clinerules). Ces règles sont appliquées automatiquement pour guider les interactions et le développement de code.
+### 📊 **Gestion des Données**
+- **Base SQLite** : Optimisée pour grande volumétrie
+- **Export CSV** : Données filtrées et statistiques
+- **Configuration** : Paramètres dynamiques du crawler
+- **Filtres Avancés** : Recherche, type, doublons
 
-## Installation et utilisation
+## 🏗️ Architecture Technique
 
-Pour plus d'informations sur l'installation et l'utilisation du projet, veuillez consulter la section correspondante dans le fichier [PROJET.md](PROJET.md).
+- **Backend** : Python 3.11+ avec smbprotocol
+- **Frontend** : Streamlit v2 avec composants modernes
+- **Base** : SQLite avec schéma optimisé
+- **Librairies** : streamlit-tree-select, streamlit-elements, plotly
 
-## Contribution
+## 📁 Structure du Projet
 
-Si vous souhaitez contribuer à ce projet, veuillez suivre les règles définies dans le dossier [`.clinerules`](.clinerules) et consulter le fichier [PROJET.md](PROJET.md) pour les spécifications techniques.
+```
+OpenIndex/
+├── src/
+│   ├── smb_crawler.py          # Crawler SMB principal
+│   └── web_interface_v2.py     # Interface web moderne
+├── docs/                      # Documentation quotidienne
+├── archives/                  # Fichiers archivés
+├── PROJET.md                  # Spécifications complètes
+├── TODO.md                    # Tâches en cours
+└── requirements.txt           # Dépendances Python
+```
 
-## Licence
+## 🚀 Démarrage Rapide
+
+### Installation
+```bash
+# Cloner le projet
+git clone <repository-url>
+cd OpenIndex
+
+# Installer les dépendances
+pip install -r requirements.txt
+
+# Lancer l'interface web
+streamlit run src/web_interface_v2.py
+```
+
+### Accès
+- **Interface Web** : http://localhost:8502
+- **Documentation** : [PROJET.md](PROJET.md)
+- **Tâches en cours** : [TODO.md](TODO.md)
+
+## 📋 État du Projet
+
+### ✅ **Accompli (Phase 1-2)**
+- Crawler SMB récursif complet
+- Interface web avec onglets multiples
+- Détection et gestion des doublons
+- Visualisation de fichiers intégrée
+- Arborescence interactive
+
+### 🔄 **En Cours (Phase 3)**
+- ⚠️ Correction du panneau latéral (s'affiche en bas)
+- Responsive design pour mobiles
+- Actions en temps réel
+
+### 📋 **Planifié (Phase 4-5)**
+- Module d'archivage NAS
+- Gestion des favoris et tags
+- Notifications système
+- Déploiement Docker
+
+## 📊 Métriques Actuelles
+
+- **Fichiers indexés** : 77
+- **Dossiers** : 151
+- **Doublons détectés** : 0
+- **Taille totale** : Variable selon crawl
+
+## 🤝 Contribution
+
+Les contributions sont bienvenues ! Consultez [TODO.md](TODO.md) pour les tâches disponibles et suivez les règles dans [`.clinerules`](.clinerules).
+
+## 📄 Licence
 
 Ce projet est sous licence [MIT](LICENSE).
+
+---
+
+**Développé avec ❤️ pour l'archivage professionnel efficace**

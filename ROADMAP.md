@@ -7,15 +7,15 @@ Ce document présente une feuille de route détaillée pour le développement du
 
 ### Phase 1 : Préparation et Configuration (3 jours)
 - **Jour 1** :
-  - Configuration de l'environnement de développement (Docker, SQLite, Python).
-  - Installation des bibliothèques nécessaires (`smbprotocol`, FastAPI, Streamlit).
-  - Création des scripts de base pour le crawler SMB avec pagination et indexation progressive.
+  - ✅ Configuration de l'environnement de développement (Docker, SQLite, Python).
+  - ✅ Installation des bibliothèques nécessaires (`smbprotocol`, FastAPI, Streamlit).
+  - ✅ Création des scripts de base pour le crawler SMB avec pagination et indexation progressive.
 - **Jour 2** :
-  - Configuration de la base de données SQLite (schéma, tables pour les métadonnées des fichiers).
-  - Développement des fonctions de base pour le crawler (lecture des fichiers, génération de checksums SHA-256).
+  - ⏳ Configuration de la base de données SQLite (schéma, tables pour les métadonnées des fichiers).
+  - ⏳ Développement des fonctions de base pour le crawler (lecture des fichiers, génération de checksums SHA-256).
 - **Jour 3** :
-  - Intégration du crawler avec la base de données.
-  - Tests initiaux pour vérifier la collecte et le stockage des métadonnées avec optimisation pour la grande volumétrie.
+  - ⏳ Intégration du crawler avec la base de données.
+  - ⏳ Tests initiaux pour vérifier la collecte et le stockage des métadonnées avec optimisation pour la grande volumétrie.
 
 ### Phase 2 : Développement du Crawler et de l'Interface (5 jours)
 - **Jour 4** :
@@ -68,4 +68,4 @@ Ce document présente une feuille de route détaillée pour le développement du
   - Corrections des derniers bugs et optimisations pour la grande volumétrie.
 
 ## Conclusion
-Cette feuille de route détaille les étapes nécessaires pour développer et déployer le projet OpenIndex en respectant une charge de travail de 7 heures par jour. Chaque phase est conçue pour être réalisable dans le temps imparti, avec des tests réguliers pour garantir la qualité du produit final.
+Cette feuille de route détaille les étapes nécessaires pour développer et déployer le projet OpenIndex en respectant une charge de travail de 7 heures par jour. Chaque phase est conçue pour être réalisable dans le temps imparti, avec des tests réguliers pour garantir la qualité du produit final. Les fichiers TODO.md, README.md, CHANGELOG.md, et ROADMAP.md ont été mis à jour pour refléter l'état actuel du projet.
