@@ -52,7 +52,12 @@ Ce fichier contient la liste des tâches à effectuer pour le projet OpenIndex, 
 - [ ] 🔄 **Retry intelligent** : Pattern exponentiel pour scans interrompus (1, 5, 15, 30, 60, 120, 240, 480min)
 - [ ] ⏱️ **Timeouts configurables** : Adaptation horaire pour ne pas surcharger serveur
 - [ ] 🚀 **Queue prioritaire gros fichiers** : Traitement séparé >100MB vs <100MB
-- [ ] 🗂️ **Déployer l'application dans un conteneur Docker** : Configuration Docker pour production
+- [ ] � **Email digest hebdomadaire** : Résumé post-crawl avec actions requises
+- [ ] 🔔 **Notifications in-app** : Alertes temps réel pour actions critiques
+- [ ] 🔗 **Webhooks one-click** : Boutons dans email pour archiver/refuser fichiers
+- [ ] 🏖️ **Configuration vacances** : Périodes flexibles (2 sem. mars, 5 sem. été)
+- [ ] ⚙️ **Workflow validation admin** : Gestion faux-positifs fichiers non-professionnels
+- [ ] �🗂️ **Déployer l'application dans un conteneur Docker** : Configuration Docker pour production
 - [ ] 🚀 **Optimisation des performances** : Cache intelligent, indexation progressive
 - [ ] 🔐 **Gestion des utilisateurs** : Authentification et permissions multi-utilisateurs
 - [ ] 📈 **Monitoring avancé** : Logs, métriques, alertes de performance
