@@ -149,7 +149,7 @@ class SMBCrawler:
                     time.sleep(self.delay_between_requests)
                 
                 # Construire le chemin UNC
-                unc_path = f"\\{self.server}\{self.share_name}\{current_path}"
+                unc_path = f"\\\\{self.server}\\{self.share_name}\\{current_path}"
                 
                 # Lister les fichiers dans le répertoire courant
                 try:
@@ -166,7 +166,7 @@ class SMBCrawler:
                         continue
                     
                     file_data = {
-                        "path": os.path.join(current_path, file_info.name),
+                        "path": current_path + '/' + file_info.name if current_path else file_info.name,
                         "name": file_info.name,
                         "size": file_info.stat().st_size,
                         "last_modified": datetime.fromtimestamp(file_info.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S'),
@@ -220,7 +220,7 @@ class SMBCrawler:
                 
                 # Calculer le checksum
                 try:
-                    file_unc_path = f"\\{self.server}\{self.share_name}\{file_data['path']}"
+                    file_unc_path = f"\\\\{self.server}\\{self.share_name}\\{file_data['path']}"
                     with smbclient.open_file(file_unc_path, mode='rb') as f:
                         sha256_hash = hashlib.sha256()
                         for byte_block in iter(lambda: f.read(4096), b""):
@@ -609,9 +609,9 @@ if __name__ == "__main__":
     # Exemple d'utilisation avec le nouveau système de queues
     crawler = SMBCrawler(
         server="172.16.252.34",
-        username="flamachere",
-        password="F6r)OW+lg2",
-        share_name="public",
+        username="adminsmiden",
+        password="Us52uK",
+        share_name="Public",
         domain="SMIDEN",
         max_workers=4,           # 4 threads au total
         delay_between_requests=0.1,  # 100ms entre les requêtes
