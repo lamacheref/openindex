@@ -5,41 +5,34 @@ Ce fichier contient la liste des tâches à effectuer pour le projet OpenIndex, 
 ## Tâches à effectuer
 
 ### Phase 1 : Préparation et Configuration (Date butoir : 2026-02-15) - ✅ **TERMINÉE**
-- [x] 🛠️ **Configurer l'environnement de développement** : Installer Docker, SQLite, et Python pour le projet.
-- [x] 📦 **Installer les bibliothèques nécessaires** : Ajouter les dépendances (`smbprotocol`, FastAPI, Streamlit).
-- [x] 📄 **Créer le script de base pour le crawler SMB** : Développer le script avec pagination et indexation progressive.
-- [x] 📜 **Finaliser la documentation technique** : Compléter les sections manquantes dans le fichier `PROJET.md` et s'assurer que toutes les spécifications techniques sont à jour.
-- [x] 🔄 **Finaliser le crawler SMB** : Le crawler actuel ne scanne que le premier niveau (/SMIDEN/Technique), il doit parcourir récursivement toute l'arborescence (>2 To).
-- [x] 🗄️ **Configurer la base de données SQLite** : Optimiser le schéma pour la grande volumétrie avec WAL mode et transactions par lots.
-- [x] 🧪 **Tester le crawler avec grande volumétrie** : Valider les performances avec pagination et indexation progressive.
 
 ### Phase 2 : Développement du Crawler et de l'Interface (Date butoir : 2026-02-22) - ✅ **TERMINÉE**
-- [x] 🔄 **Finaliser le crawler SMB récursif** : ✅ Crawler récursif complet avec multi-threading et queues
-- [x] ⚡ **Optimiser les performances du crawler** : ✅ Multi-threading, reprise après interruption, gestion des erreurs
-- [x] 📊 **Ajouter un état d'avancement** : ✅ Barre de progression et statistiques en temps réel
-- [x] 🌐 **Créer l'interface web** : ✅ Interface Streamlit v2 avec onglets multiples
-- [x] 📈 **Ajouter un tableau de bord statistique** : ✅ Métriques complètes et graphiques interactifs
-- [x] 🔍 **Détecter et afficher les doublons** : ✅ Détection SHA-256 avec interface détaillée
-- [x] 📥 **Ajouter des filtres par date/taille/type** : ✅ Filtres complets et recherche
-- [x] 📤 **Exporter les inventaires en CSV** : ✅ Export des données et statistiques
 
-### Phase 3 : Migration Technologique (Date butoir : 2026-03-19) - 🔄 **NOUVELLE APPROCHE**
-- [ ] 🚀 **Analyse de faisabilité** : Évaluer migration Streamlit → React + FastAPI
-- [ ] 🏗️ **Créer l'architecture FastAPI** : Migrer logique SMB vers API REST performante
-- [ ] 🗄️ **Migrer vers PostgreSQL** : Base de données robuste pour multi-utilisateurs
-- [ ] ⚛️ **Développer frontend React** : Interface moderne avec Material-UI
-- [ ] 🐳 **Dockeriser l'application** : Déploiement simplifié et production-ready
-- [ ] 🔄 **Intégration complète** : Tests E2E et validation fonctionnelle
+### Phase 0 : Test Crawler Immédiat (25 février 2026) - 🚀 **À FAIRE MAINTENANT**
+- [ ] 🧪 **Tester le crawler existant** : Lancer crawl sur répertoire de test
+- [ ] ✅ **Valider les données SQLite** : Vérifier structure et checksums
+- [ ] 🖥️ **Confirmer interface Streamlit** : Affichage des données réelles
+- [ ] � **Quantifier les données** : Estimer volumétrie et performance
 
-### Phase 4 : Fonctionnalités Avancées (Date butoir : 2026-03-28) - � **REPORTÉE**
-- [x] 🎯 **Interface avec streamlit-tree-select** : ✅ Arborescence interactive professionnelle
-- [x] 👁️ **Visualisation de fichiers intégrée** : ✅ streamlit-elements pour documents, images, Excel
-- [x] 🎨 **Panneau latéral moderne** : ⚠️ **À CORRIGER** : Panneau qui s'affiche en bas au lieu de la droite
-- [ ] 📱 **Responsive design** : Adapter l'interface pour mobiles et tablettes
-- [ ] 🔄 **Actions en temps réel** : Actions de crawl et visualisation sans rechargement
-- [ ] 📊 **Visualisation avancée** : PDF viewer, lecteur audio/vidéo intégré
-- [ ] 🗂️ **Gestion des favoris** : Marquer des dossiers/fichiers comme favoris
-- [ ] 🔔 **Notifications système** : Alertes pour crawl terminé, erreurs, etc.
+### Phase 1 : Déploiement Crawler & Données Réelles (15-19 mars 2026)
+- [ ] 🚀 **Déployer crawler existant** : Mettre en production le crawler SMB fonctionnel
+- [ ] 🗄️ **Migrer vers PostgreSQL** : Configurer base de données robuste avec scripts de migration
+- [ ] 📊 **Lancer crawl complet** : Collecter données réelles depuis SMB (>2 To)
+- [ ] 🔌 **Créer API FastAPI minimale** : Endpoints de lecture pour les données collectées
+- [ ] ✅ **Valider données réelles** : Vérifier accessibilité et intégrité des données
+
+### Phase 2 : Frontend React avec Données Réelles (22-26 mars 2026)
+- [ ] ⚛️ **Structure React + Material-UI** : Base de l'interface moderne
+- [ ] 🌳 **Arborescence avec vraies données** : Composant tree utilisant données réelles
+- [ ] 📈 **Dashboard avec métriques réelles** : Statistiques et visualisations
+- [ ] 🔍 **Gestion des doublons réels** : Interface avec vrais fichiers doublons
+- [ ] 🎨 **Design responsive final** : Adaptation mobile/tablette/desktop
+
+### Phase 3 : Finalisation & Production (29 mars - 2 avril 2026)
+- [ ] � **Dockerisation complète** : Frontend + Backend + Base de données
+- [ ] 🔄 **Tests d'intégration E2E** : Validation complète avec données réelles
+- [ ] 📚 **Documentation déploiement** : Guide d'installation et maintenance
+- [ ] 🚀 **Livraison production** : Version finale pour le 19 mars (deadline)
 
 ### Phase 4 : Déploiement et Production (Date butoir : 2026-03-05)
 - [ ] 🗂️ **Déployer l'application dans un conteneur Docker** : Configuration Docker pour production
@@ -85,14 +78,18 @@ Ce fichier contient la liste des tâches à effectuer pour le projet OpenIndex, 
 | 2026-02-11 | `d559a3e` | Ajout du fichier VERSION à la racine du projet (0.1.0)                  | ✅     |
 | 2026-02-11 | `ae5270a` | Ajout de la règle de versionnement pour le projet OpenIndex               | ✅     |
 | 2026-02-11 | `2a75d16` | Ajout des règles Cline pour le projet OpenIndex                         | ✅     |
-| 2026-02-11 | `XXXXXXX` | Correction du TODO.md : Mise à jour de l'état réel du crawler (scan niveau 1 uniquement). | ✅     |
-| 2026-02-11 | `XXXXXXX` | Implémentation système de queues : Ajout du multi-threading, temporisation, et statistiques détaillées. | ✅     |
-| 2026-02-11 | `XXXXXXX` | Correction deadlock crawler : Détection de fin améliorée et suivi des queues. | ✅     |
-| 2026-02-11 | `XXXXXXX` | Création dossier docs/ : Documentation quotidienne du développement.        | ✅     |
-| 2026-02-11 | `XXXXXXX` | Interface web v2 complète : Streamlit avec onglets, arborescence, visualisation | ✅     |
-| 2026-02-11 | `XXXXXXX` | streamlit-tree-select intégré : Arborescence professionnelle et interactive | ✅     |
-| 2026-02-11 | `XXXXXXX` | streamlit-elements intégré : Visualisation directe des fichiers (PDF, images, Excel) | ✅     |
-| 2026-02-11 | `XXXXXXX` | Panneau latéral moderne : Actions contextuelles (correction en cours) | ⚠️     |
+| 2026-02-25 | `e7bbc0a` | Finaliser le crawler SMB récursif : Crawler récursif complet avec multi-threading et queues | ✅     |
+| 2026-02-25 | `e7bbc0a` | Optimiser les performances du crawler : Multi-threading, reprise après interruption, gestion des erreurs | ✅     |
+| 2026-02-25 | `e7bbc0a` | Ajouter un état d'avancement : Barre de progression et statistiques en temps réel | ✅     |
+| 2026-02-25 | `e7bbc0a` | Créer l'interface web : Interface Streamlit v2 avec onglets multiples | ✅     |
+| 2026-02-25 | `e7bbc0a` | Ajouter un tableau de bord statistique : Métriques complètes et graphiques interactifs | ✅     |
+| 2026-02-25 | `e7bbc0a` | Détecter et afficher les doublons : Détection SHA-256 avec interface détaillée | ✅     |
+| 2026-02-25 | `e7bbc0a` | Ajouter des filtres par date/taille/type : Filtres complets et recherche | ✅     |
+| 2026-02-25 | `e7bbc0a` | Exporter les inventaires en CSV : Export des données et statistiques | ✅     |
+| 2026-02-25 | `e7bbc0a` | Interface web v2 complète : Streamlit avec onglets, arborescence, visualisation | ✅     |
+| 2026-02-25 | `e7bbc0a` | streamlit-tree-select intégré : Arborescence professionnelle et interactive | ✅     |
+| 2026-02-25 | `e7bbc0a` | streamlit-elements intégré : Visualisation directe des fichiers (PDF, images, Excel) | ✅     |
+| 2026-02-25 | `e7bbc0a` | Panneau latéral moderne : Actions contextuelles (correction en cours) | ⚠️     |
 
 ## Instructions pour la gestion des tâches
 

@@ -50,67 +50,67 @@
 └── Mise à jour simplifiée
 ```
 
-## Plan de Migration - 3 Semaines
+## Plan de Migration - 3 Semaines (Réorganisé)
 
-### Semaine 1 : Backend Modernisation (15-19 mars)
+### Semaine 1 : Déploiement Crawler & Collecte Données (15-19 mars)
 **Objectifs :**
-- ✅ Créer l'API FastAPI avec tous les endpoints
-- ✅ Migrer la base de données vers PostgreSQL
-- ✅ Implémenter l'authentification JWT
-- ✅ Préserver toute la logique SMB existante
+- ✅ Déployer le crawler existant en mode "pré-production"
+- ✅ Collecter des données réelles depuis le SMB (>2 To)
+- ✅ Préparer la base PostgreSQL pour recevoir les données
+- ✅ Créer l'API FastAPI de base pour lire les données
 
 **Tâches détaillées :**
-- Lundi : Structure FastAPI + endpoints de base
-- Mardi : Migration PostgreSQL + scripts de migration
-- Mercredi : Authentification + gestion utilisateurs
-- Jeudi : Intégration crawler SMB existant
-- Vendredi : Tests API + documentation Swagger
+- **Lundi 15 mars** : Déployer crawler existant sur environnement de test
+- **Mardi 16 mars** : Configurer PostgreSQL + scripts de migration SQLite→PostgreSQL
+- **Mercredi 17 mars** : Lancer crawl complet et collecter données réelles
+- **Jeudi 18 mars** : Créer API FastAPI minimale pour lire les données
+- **Vendredi 19 mars** : Valider données réelles accessibles via API
 
 **Livrables :**
-- API FastAPI complète et documentée
-- Base PostgreSQL avec données migrées
-- Authentification fonctionnelle
-- Tests backend validés
+- Crawler déployé et fonctionnel
+- Base PostgreSQL avec données réelles
+- API FastAPI minimale opérationnelle
+- Données testables pour développement frontend
 
-### Semaine 2 : Frontend React (22-26 mars)
+### Semaine 2 : Frontend React avec Données Réelles (22-26 mars)
 **Objectifs :**
-- ✅ Interface React moderne et responsive
-- ✅ Composants UI personnalisés
-- ✅ Navigation fluide et intuitive
-- ✅ Intégration complète avec l'API
+- ✅ Développer interface React avec vraies données
+- ✅ Composants UI modernes et responsive
+- ✅ Intégration complète avec l'API existante
+- ✅ Tests avec données réelles
 
 **Tâches détaillées :**
-- Lundi : Structure React + Material-UI
-- Mardi : Composants arborescence et navigation
-- Mercredi : Dashboard et visualisations
-- Jeudi : Gestion des doublons et actions
-- Vendredi : Tests frontend + UX validation
+- **Lundi 22 mars** : Structure React + Material-UI + connexion API
+- **Mardi 23 mars** : Composants arborescence avec vraies données
+- **Mercredi 24 mars** : Dashboard et visualisations avec métriques réelles
+- **Jeudi 25 mars** : Gestion des doublons et actions avec vrais fichiers
+- **Vendredi 26 mars** : Tests UX avec données réelles + optimisations
 
 **Livrables :**
-- Interface React complète
-- Design moderne et responsive
-- Navigation fluide sans rechargement
-- Tests frontend validés
+- Interface React complète avec vraies données
+- Design moderne et responsive validé
+- Tests utilisateur avec données réelles
+- Performance optimisée
 
-### Semaine 3 : Intégration & Docker (29 mars - 2 avril)
+### Semaine 3 : Finalisation & Production (29 mars - 2 avril)
 **Objectifs :**
-- ✅ Intégration frontend/backend
-- ✅ Dockerisation complète
-- ✅ Tests d'intégration
+- ✅ Dockerisation complète de l'application
+- ✅ Tests d'intégration finaux
 - ✅ Documentation déploiement
+- ✅ Livraison production-ready
 
 **Tâches détaillées :**
-- Lundi : Intégration complète + tests E2E
-- Mardi : Dockerisation + Docker Compose
-- Mercredi : Optimisation performance
-- Jeudi : Documentation finale
-- Vendredi : Tests recette + livraison
+- **Lundi 29 mars** : Dockerisation + Docker Compose
+- **Mardi 30 mars** : Tests E2E + validation finale
+- **Mercredi 31 mars** : Documentation complète
+- **Jeudi 1er avril** : Tests recette + corrections
+- **Vendredi 2 avril** : Livraison finale
 
 **Livrables :**
 - Application Dockerisée complète
 - Documentation déploiement
 - Tests recette validés
-- Version production prête
+- Version production ready
 
 ## Spécifications Techniques Détaillées
 
