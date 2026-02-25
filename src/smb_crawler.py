@@ -159,7 +159,16 @@ class SMBCrawler:
                     files = list(smbclient.scandir(unc_path))
                     self.stats['processed_directories'] += 1
                 except Exception as e:
-                    print(f"Erreur lors de l'accès au répertoire {unc_path}: {e}")
+                    error_msg = f"Erreur lors de l'accès au répertoire {unc_path}: {e}"
+                    print(error_msg)
+                    
+                    # Si erreur d'accès, arrêter le crawler
+                    if "NtStatus error returned" in str(e):
+                        print(f"\n🛑 Erreur d'accès détectée : {e}")
+                        print("🛑 Arrêt du crawler suite à l'erreur d'accès")
+                        self.stop()
+                        break
+                    
                     self.stats['errors'] += 1
                     continue
                 
@@ -238,6 +247,17 @@ class SMBCrawler:
                     
                 except Exception as e:
                     error_msg = f"Erreur lors du calcul du checksum pour {file_data['path']}: {e}"
+                    print(f"❌ {error_msg}")
+                    
+                    # Si erreur d'accès au fichier, arrêter le crawler
+                    if "NtStatus error returned" in str(e):
+                        print(f"\n🛑 Erreur d'accès fichier détectée : {e}")
+                        print("🛑 Arrêt du crawler suite à l'erreur d'accès")
+                        self.stop()
+                        break
+                    
+                    # Continuer le traitement même en cas d'erreur
+                    self.stats['processed_files'] += 1
                     print(f"❌ {error_msg}")
                     self.stats['errors'] += 1
                     file_data["checksum"] = None
