@@ -5,6 +5,7 @@ Ce script utilise la bibliothèque smbclient pour parcourir les partages SMB.
 """
 
 import os
+import sys
 import hashlib
 import sqlite3
 import time
@@ -18,7 +19,7 @@ import smbclient
 class SMBCrawler:
     """Classe principale pour le crawler SMB."""
 
-    def __init__(self, server, username, password, share_name, domain='', db_path='openindex.db', max_workers=4, delay_between_requests=0.1, max_queue_size=1000, max_depth=None):
+    def __init__(self, server, username, password, share_name, domain='', db_path='openindex.db', max_workers=4, delay_between_requests=0.1, max_queue_size=1000, max_depth=None, debug=False):
         """
         Initialise le crawler SMB.
 
@@ -29,6 +30,7 @@ class SMBCrawler:
             share_name (str): Nom du partage SMB à parcourir.
             domain (str): Domaine pour la connexion.
             db_path (str): Chemin vers la base de données SQLite.
+            debug (bool): Active le mode debug pour afficher des informations détaillées.
         """
         self.server = server
         self.username = username
@@ -40,6 +42,7 @@ class SMBCrawler:
         self.delay_between_requests = delay_between_requests
         self.max_queue_size = max_queue_size
         self.max_depth = max_depth
+        self.debug = debug
         
         # Queues pour la gestion des tâches
         self.directory_queue = Queue(maxsize=max_queue_size)
@@ -149,23 +152,25 @@ class SMBCrawler:
                     time.sleep(self.delay_between_requests)
                 
                 # Construire le chemin UNC
-                # Debug: afficher les variables utilisées
-                print(f"🔧 Debug UNC:")
-                print(f"   - self.server: '{self.server}'")
-                print(f"   - self.share_name: '{self.share_name}'")
-                print(f"   - current_path: '{current_path}'")
+                if self.debug:
+                    print(f"🔧 Debug UNC:")
+                    print(f"   - self.server: '{self.server}'")
+                    print(f"   - self.share_name: '{self.share_name}'")
+                    print(f"   - current_path: '{current_path}'")
                 
                 # Convertir les slashes du share_name en backslashes
                 share_name_clean = self.share_name.replace('/', '\\')
-                print(f"   - share_name_clean: '{share_name_clean}'")
+                if self.debug:
+                    print(f"   - share_name_clean: '{share_name_clean}'")
                 
                 if current_path:
-                    unc_path = f"\\\\{self.server}\\{share_name_clean}\\{current_path}"
+                    unc_path = rf"\\{self.server}\{share_name_clean}\{current_path}"
                 else:
-                    unc_path = f"\\\\{self.server}\\{share_name_clean}"
+                    unc_path = rf"\\{self.server}\{share_name_clean}"
                 
-                print(f"🔍 Chemin UNC final : {unc_path}")
-                print(f"🔍 Longueur du chemin: {len(unc_path)} caractères")
+                if self.debug:
+                    print(f"🔍 Chemin UNC final : {unc_path}")
+                    print(f"🔍 Longueur du chemin: {len(unc_path)} caractères")
                 
                 # Lister les fichiers dans le répertoire courant
                 try:
@@ -175,12 +180,10 @@ class SMBCrawler:
                     error_msg = f"Erreur lors de l'accès au répertoire {unc_path}: {e}"
                     print(error_msg)
                     
-                    # Si erreur d'accès, arrêter le crawler
+                    # Si erreur d'accès, continuer sans arrêter le crawler
                     if "NtStatus error returned" in str(e):
-                        print(f"\n🛑 Erreur d'accès détectée : {e}")
-                        print("🛑 Arrêt du crawler suite à l'erreur d'accès")
-                        self.stop()
-                        break
+                        print(f"⚠️  Erreur d'accès détectée : {e}")
+                        print("   Continuation du crawl...")
                     
                     self.stats['errors'] += 1
                     continue
@@ -235,7 +238,7 @@ class SMBCrawler:
                 if self.pause_event.is_set():
                     time.sleep(0.1)
                     continue
-                    
+                
                 # Récupérer un fichier à traiter
                 file_data = self.file_queue.get(timeout=1)
                 self.stats['last_activity'] = time.time()
@@ -246,9 +249,9 @@ class SMBCrawler:
                 # Calculer le checksum
                 try:
                     if file_data['path']:
-                        file_unc_path = f"\\\\{self.server}\\{self.share_name}\\{file_data['path']}"
+                        file_unc_path = rf"\\{self.server}\{self.share_name}\{file_data['path']}"
                     else:
-                        file_unc_path = f"\\\\{self.server}\\{self.share_name}"
+                        file_unc_path = rf"\\{self.server}\{self.share_name}"
                     with smbclient.open_file(file_unc_path, mode='rb') as f:
                         sha256_hash = hashlib.sha256()
                         for byte_block in iter(lambda: f.read(4096), b""):
@@ -262,12 +265,10 @@ class SMBCrawler:
                     error_msg = f"Erreur lors du calcul du checksum pour {file_data['path']}: {e}"
                     print(f"❌ {error_msg}")
                     
-                    # Si erreur d'accès au fichier, arrêter le crawler
+                    # Si erreur d'accès au fichier, continuer sans arrêter le crawler
                     if "NtStatus error returned" in str(e):
-                        print(f"\n🛑 Erreur d'accès fichier détectée : {e}")
-                        print("🛑 Arrêt du crawler suite à l'erreur d'accès")
-                        self.stop()
-                        break
+                        print(f"⚠️  Erreur d'accès fichier détectée : {e}")
+                        print("   Continuation du crawl...")
                     
                     # Continuer le traitement même en cas d'erreur
                     self.stats['processed_files'] += 1
@@ -275,9 +276,6 @@ class SMBCrawler:
                     self.stats['errors'] += 1
                     file_data["checksum"] = None
                     file_data["error"] = str(e)
-                    
-                    # Continuer le traitement même en cas d'erreur
-                    self.stats['processed_files'] += 1
                 
                 # Mettre le résultat dans la queue
                 self.result_queue.put(file_data)
@@ -288,6 +286,7 @@ class SMBCrawler:
             except Exception as e:
                 print(f"Erreur dans le file worker: {e}")
                 self.stats['errors'] += 1
+
     def crawl(self, base_path="", progress_callback=None):
         """
         Parcourt les fichiers dans le partage SMB avec queues multi-threadées et temporisation.
@@ -376,7 +375,7 @@ class SMBCrawler:
                         if len(batch) >= batch_size:
                             self._save_batch(batch)
                             batch = []
-                            
+                        
                         # Callback de progression
                         if progress_callback and len(batch) % 10 == 0:
                             progress_callback(self.get_stats())
@@ -584,7 +583,7 @@ class SMBCrawler:
         except Exception as e:
             print(f"Erreur lors de la sauvegarde du batch: {e}")
             self.stats['errors'] += 1
-            
+
     def init_db(self):
         """
         Initialise la base de données SQLite avec les tables nécessaires.
@@ -608,7 +607,6 @@ class SMBCrawler:
         """)
         conn.commit()
         conn.close()
-
 
     def save_to_db(self, file_data):
         """
@@ -657,7 +655,8 @@ if __name__ == "__main__":
         print(f"   - Utilisateur: {smb_config['username']}")
         print(f"   - Domaine: {smb_config['domain']}")
         print(f"   - Share: {smb_config['share_name']}")
-        print(f"   - Chemin UNC sera: \\\\{smb_config['server']}\\{smb_config['share_name'].replace('/', '\\\\')}")
+        unc_path_display = f"\\{smb_config['server']}\{smb_config['share_name'].replace('/', chr(92))}"
+        print(f"   - Chemin UNC sera: {unc_path_display}")
         
     except Exception as e:
         print(f"❌ Erreur lors du chargement de la configuration: {e}")
@@ -671,6 +670,9 @@ if __name__ == "__main__":
               f"Temps restant: {stats.get('estimated_remaining_time', 0):.1f}s", end="")
         sys.stdout.flush()
     
+    # Vérifier si le mode debug est activé
+    debug_mode = "--debug" in sys.argv
+    
     # Utilisation de la configuration chargée
     crawler = SMBCrawler(
         server=smb_config["server"],
@@ -681,7 +683,8 @@ if __name__ == "__main__":
         max_workers=crawler_config["max_workers"],
         delay_between_requests=crawler_config["delay_between_requests"],
         max_queue_size=crawler_config["max_queue_size"],
-        max_depth=crawler_config["max_depth"]
+        max_depth=crawler_config["max_depth"],
+        debug=debug_mode
     )
 
     print("Initialisation de la base de données...")
