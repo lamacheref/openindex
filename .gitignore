@@ -1,5 +1,6 @@
 # Ignorer les fichiers de l'environnement virtuel
 venv/
+.venv/
 
 # Ignorer les fichiers Python compilés
 __pycache__/
