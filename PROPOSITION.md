@@ -465,6 +465,12 @@ volumes:
 - **Configuration vacances** : Périodes flexibles (ex: 2 semaines mars, 5 semaines été)
 - **Digest personnalisable** : Fréquence et contenu adaptés aux rôles
 
+### Authentification & SSO
+- **Keycloak intégré** : Active Directory local (fédération possible)
+- **Gestion des rôles** : Agents/Modérateur de groupe, Modérateur (DGS), Administrateur
+- **Session timeout** : 20 minutes d'inactivité par défaut
+- **Support multi-fédération** : Azure AD, Google Workspace extensibles
+
 ### Monitoring & Maintenance
 - **Logs structurés** : Suivi des actions utilisateurs
 - **Métriques temps réel** : Performance et utilisation

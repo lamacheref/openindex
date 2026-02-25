@@ -26,8 +26,10 @@ Ce fichier contient la liste des tâches à effectuer pour le projet OpenIndex, 
 - [ ] 🌳 **Arborescence avec vraies données** : Composant tree utilisant données réelles
 - [ ] 📈 **Dashboard avec métriques réelles** : Statistiques et visualisations
 - [ ] 🔍 **Gestion des doublons réels** : Interface avec vrais fichiers doublons
-- [ ] 🔐 **Intégration Active Directory** : Connexion au serveur 172.16.252.33
-- [ ] 👥 **Gestion rôles utilisateurs** : Admin (technicien SMIDEN, DGS) vs utilisateurs
+- [ ] 🔐 **Intégration Keycloak** : Active Directory local + fédération possible
+- [ ] �️ **Gestion rôles étendue** : Agents/Modérateur groupe, Modérateur DGS, Admin
+- [ ] ⏰ **Session timeout 20mn** : Déconnexion automatique après inactivité
+- [ ] 🌐 **Support multi-fédération** : Azure AD, Google Workspace extensibles
 - [ ] 📋 **Layout fixe avec onglets** : Structure VanillaJS, pas de personnalisation utilisateur
 - [ ] 🎯 **Mode focus** : Panneau principal + volets latéraux repliables
 - [ ] 🖥️ **Responsive desktop** : Priorité bureau (mobile/tablette plus tard)
