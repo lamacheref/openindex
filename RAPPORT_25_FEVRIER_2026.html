@@ -113,11 +113,17 @@
             gap: 20px;
             margin: 20px 0;
         }
-        .feature-card {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 10px;
-            border-left: 4px solid #667eea;
+        .feature-card.completed {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+        }
+        .feature-card.active {
+            background: #d1ecf1;
+            border-left: 4px solid #17a2b8;
+        }
+        .feature-card.future {
+            background: #e9ecef;
+            border-left: 4px solid #6c757d;
         }
         .feature-card h4 {
             color: #667eea;
@@ -297,7 +303,18 @@
         <h2>🚀 Fonctionnalités Innovantes Intégrées</h2>
         
         <div class="feature-grid">
-            <div class="feature-card">
+            <div class="feature-card completed">
+                <h4>🔍 Explorateur et Déduplication</h4>
+                <p>Fonctionnalité de base validée et opérationnelle :</p>
+                <ul>
+                    <li>Explorateur de serveur de fichiers fonctionnel</li>
+                    <li>Déduplication par empreinte numérique</li>
+                    <li>Configuration sécurisée des identifiants</li>
+                    <li>Test de connexion validé</li>
+                </ul>
+            </div>
+
+            <div class="feature-card active">
                 <h4>🤖 Intelligence Artificielle Locale</h4>
                 <p>Intégration d'Ollama pour l'analyse automatique des documents :</p>
                 <ul>
@@ -308,7 +325,7 @@
                 </ul>
             </div>
 
-            <div class="feature-card">
+            <div class="feature-card future">
                 <h4>📧 Communication Utilisateur</h4>
                 <p>Système complet de notifications et d'alertes :</p>
                 <ul>
@@ -319,7 +336,7 @@
                 </ul>
             </div>
 
-            <div class="feature-card">
+            <div class="feature-card future">
                 <h4>🔐 Authentification Sécurisée</h4>
                 <p>Gestion des accès multi-niveaux avec Keycloak :</p>
                 <ul>
@@ -330,7 +347,7 @@
                 </ul>
             </div>
 
-            <div class="feature-card">
+            <div class="feature-card future">
                 <h4>💾 Archivage Intelligent</h4>
                 <p>Gestion automatique du cycle de vie des fichiers :</p>
                 <ul>
@@ -341,7 +358,7 @@
                 </ul>
             </div>
 
-            <div class="feature-card">
+            <div class="feature-card future">
                 <h4>🔄 Résilience Avancée</h4>
                 <p>Système robuste avec gestion des pannes :</p>
                 <ul>
@@ -352,7 +369,7 @@
                 </ul>
             </div>
 
-            <div class="feature-card">
+            <div class="feature-card future">
                 <h4>🖥️ Interface Moderne</h4>
                 <p>Expérience utilisateur optimisée pour bureau :</p>
                 <ul>
