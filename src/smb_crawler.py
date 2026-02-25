@@ -422,39 +422,107 @@ class SMBCrawler:
             except Empty:
                 pass
     
+    def _should_skip_file(self, file_data, cursor):
+        """
+        Vérifie si un fichier doit être ignoré car déjà existant avec les mêmes caractéristiques.
+        
+        Args:
+            file_data (dict): Données du fichier à vérifier
+            cursor: Curseur de base de données
+            
+        Returns:
+            tuple: (should_skip, reason)
+        """
+        # Pour les répertoires, toujours traiter (structure peut changer)
+        if file_data["is_directory"]:
+            return False, None
+        
+        # Vérifier si le fichier existe déjà au même chemin
+        cursor.execute("""
+            SELECT id, size, last_modified, checksum 
+            FROM files 
+            WHERE path = ? AND is_directory = 0
+        """, (file_data["path"],))
+        
+        existing_file = cursor.fetchone()
+        
+        if existing_file:
+            existing_id, existing_size, existing_modified, existing_checksum = existing_file
+            
+            # Critères de comparaison complets
+            size_match = existing_size == file_data["size"]
+            modified_match = existing_modified == file_data["last_modified"]
+            name_match = True  # Le chemin est identique donc le nom aussi
+            
+            # Si tous les critères correspondent, le fichier n'a pas changé
+            if size_match and modified_match and name_match:
+                return True, "Fichier identique (même chemin, taille, et date de modification)"
+            
+            # Si la taille ou la date a changé, mettre à jour
+            if not size_match or not modified_match:
+                # Supprimer l'ancien enregistrement et permettre la mise à jour
+                cursor.execute("DELETE FROM files WHERE id = ?", (existing_id,))
+                print(f"🔄 Fichier modifié détecté: {file_data['name']}")
+                print(f"   Ancienne taille: {existing_size}, Nouvelle: {file_data['size']}")
+                print(f"   Ancienne date: {existing_modified}")
+                print(f"   Nouvelle date: {file_data['last_modified']}")
+                return False, "Fichier modifié - mise à jour requise"
+        
+        return False, None
+    
+    def _check_duplicates(self, file_data, cursor):
+        """
+        Vérifie si un fichier est un doublon basé sur le checksum.
+        
+        Args:
+            file_data (dict): Données du fichier à vérifier
+            cursor: Curseur de base de données
+            
+        Returns:
+            list: Liste des chemins des doublons existants
+        """
+        if file_data["is_directory"] or not file_data.get("checksum"):
+            return []
+        
+        cursor.execute("""
+            SELECT path FROM files 
+            WHERE checksum = ? AND is_directory = 0 AND path != ?
+        """, (file_data["checksum"], file_data["path"]))
+        
+        duplicates = [dup[0] for dup in cursor.fetchall()]
+        return duplicates
+    
     def _save_batch(self, batch):
         """
-        Sauvegarde un batch de fichiers dans la base de données avec déduplication.
+        Sauvegarde un batch de fichiers dans la base de données avec déduplication intelligente.
         """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
         try:
             for file_data in batch:
-                # Vérifier si le fichier existe déjà (même chemin)
-                cursor.execute("SELECT id FROM files WHERE path = ?", (file_data["path"],))
-                existing_by_path = cursor.fetchone()
+                # Vérifier si le fichier doit être ignoré (logique complète)
+                should_skip, skip_reason = self._should_skip_file(file_data, cursor)
                 
-                if existing_by_path:
-                    # Le fichier existe déjà au même endroit, ignorer
-                    print(f" Fichier déjà présent: {file_data['path']}")
+                if should_skip:
+                    print(f"⏭️  Ignoré: {file_data['name']} - {skip_reason}")
                     continue
                 
-                # Pour les fichiers (pas les répertoires), vérifier les doublons par checksum
-                if not file_data["is_directory"] and file_data.get("checksum"):
-                    cursor.execute("SELECT path FROM files WHERE checksum = ? AND is_directory = 0", (file_data["checksum"],))
-                    duplicates = cursor.fetchall()
+                # Vérifier les doublons par checksum
+                duplicates = self._check_duplicates(file_data, cursor)
+                
+                if duplicates:
+                    # C'est un doublon de contenu mais à un endroit différent
+                    print(f"🔄 Doublon détecté: {file_data['name']}")
+                    print(f"   Nouvel emplacement: {file_data['path']}")
+                    print(f"   Déjà présent à: {', '.join(duplicates[:3])}{'...' if len(duplicates) > 3 else ''}")
                     
-                    if duplicates:
-                        # C'est un doublon de contenu mais à un endroit différent
-                        duplicate_paths = [dup[0] for dup in duplicates]
-                        print(f" Doublon détecté: {file_data['name']}")
-                        print(f"   Nouvel emplacement: {file_data['path']}")
-                        print(f"   Déjà présent à: {', '.join(duplicate_paths[:3])}{'...' if len(duplicate_paths) > 3 else ''}")
-                        
-                        # Marquer comme doublon mais quand même l'insérer
-                        file_data["is_duplicate"] = True
-                        file_data["duplicate_of"] = duplicate_paths[0]  # Premier emplacement connu
+                    # Marquer comme doublon mais quand même l'insérer
+                    file_data["is_duplicate"] = True
+                    file_data["duplicate_of"] = duplicates[0]  # Premier emplacement connu
+                else:
+                    file_data["is_duplicate"] = False
+                    file_data["duplicate_of"] = None
                 
                 # Insérer le fichier
                 cursor.execute("""

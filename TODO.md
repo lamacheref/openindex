@@ -26,15 +26,32 @@ Ce fichier contient la liste des tâches à effectuer pour le projet OpenIndex, 
 - [ ] 🌳 **Arborescence avec vraies données** : Composant tree utilisant données réelles
 - [ ] 📈 **Dashboard avec métriques réelles** : Statistiques et visualisations
 - [ ] 🔍 **Gestion des doublons réels** : Interface avec vrais fichiers doublons
+- [ ] 🤖 **Intégrer service IA Ollama** : Configuration Docker et modèles
+- [ ] 🧠 **Développer API IA** : Endpoints pour résumés et analyse
+- [ ] 📄 **Résumés automatiques PDF/DOCX** : Traitement par lots en nuit
+- [ ] 📊 **Extraction données Excel** : Analyse structurée des tableurs
+- [ ] 🖼️ **Description images/vidéos** : Modèles LLaVA pour contenus visuels
 - [ ] 🎨 **Design responsive final** : Adaptation mobile/tablette/desktop
 
 ### Phase 3 : Finalisation & Production (29 mars - 2 avril 2026)
-- [ ] � **Dockerisation complète** : Frontend + Backend + Base de données
-- [ ] 🔄 **Tests d'intégration E2E** : Validation complète avec données réelles
-- [ ] 📚 **Documentation déploiement** : Guide d'installation et maintenance
-- [ ] 🚀 **Livraison production** : Version finale pour le 19 mars (deadline)
+- [ ] 🐳 **Dockerisation complète** : Frontend + Backend + Base de données + Service IA
+- [ ] 🤖 **Configuration Ollama** : Modèles Llama3.2, LLaVA, CodeLlama déployés
+- [ ] 🔄 **Tests d'intégration E2E** : Validation complète avec données réelles et IA
+- [ ] 📚 **Documentation déploiement** : Guide d'installation et maintenance IA incluse
+- [ ] 🚀 **Livraison production** : Version finale avec IA intégrée (deadline 19 mars)
 
-### Phase 4 : Déploiement et Production (Date butoir : 2026-03-05)
+### Phase 4 : Fonctionnalités IA Avancées (Date butoir : 2026-04-15) - 📋 **PLANIFIÉ**
+- [ ] 🧹 **Nettoyage fichiers Windows inutiles** : Thumbs.db, desktop.ini, .lnk automatiquement filtrés
+- [ ] 📁 **Suppression dossiers vides** : Nettoyage automatique de l'arborescence
+- [ ] 🔍 **Détection fichiers corrompus** : Analyse par extension et taille anormale
+- [ ] 🗑️ **Fichiers temporaires Office** : Identification automatique ~$*.tmp, ~$*.docx
+- [ ] 📏 **Identification fichiers volumineux** : Alertes et suggestions d'archivage
+- [ ] 📅 **Fichiers anciens** : Détection et propositions de backup automatique
+- [ ] ⚠️ **Fichiers non-professionnels** : IA locale pour détecter contenus inappropriés
+- [ ] 👤 **Traçabilité propriétaires** : Intégration SMB owner pour gestion utilisateur
+- [ ] 🔄 **Retry intelligent** : Pattern exponentiel pour scans interrompus (1, 5, 15, 30, 60, 120, 240, 480min)
+- [ ] ⏱️ **Timeouts configurables** : Adaptation horaire pour ne pas surcharger serveur
+- [ ] 🚀 **Queue prioritaire gros fichiers** : Traitement séparé >100MB vs <100MB
 - [ ] 🗂️ **Déployer l'application dans un conteneur Docker** : Configuration Docker pour production
 - [ ] 🚀 **Optimisation des performances** : Cache intelligent, indexation progressive
 - [ ] 🔐 **Gestion des utilisateurs** : Authentification et permissions multi-utilisateurs

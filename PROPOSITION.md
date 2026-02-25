@@ -78,19 +78,21 @@
 - ✅ Composants UI modernes et responsive
 - ✅ Intégration complète avec l'API existante
 - ✅ Tests avec données réelles
+- ✅ **Intégrer IA locale pour analyse de contenu**
 
 **Tâches détaillées :**
 - **Lundi 22 mars** : Structure React + Material-UI + connexion API
 - **Mardi 23 mars** : Composants arborescence avec vraies données
 - **Mercredi 24 mars** : Dashboard et visualisations avec métriques réelles
 - **Jeudi 25 mars** : Gestion des doublons et actions avec vrais fichiers
-- **Vendredi 26 mars** : Tests UX avec données réelles + optimisations
+- **Vendredi 26 mars** : **Intégration IA locale Ollama + résumés automatiques**
 
 **Livrables :**
 - Interface React complète avec vraies données
 - Design moderne et responsive validé
 - Tests utilisateur avec données réelles
 - Performance optimisée
+- **Service IA local opérationnel pour résumés de documents**
 
 ### Semaine 3 : Finalisation & Production (29 mars - 2 avril)
 **Objectifs :**
@@ -140,6 +142,27 @@
 }
 ```
 
+### Service IA Locale - Ollama Stack
+```json
+{
+  "ia_engine": "Ollama + Docker",
+  "models": {
+    "document_analysis": "llama3.2:8b",
+    "image_analysis": "llava:7b",
+    "spreadsheet_analysis": "codellama:7b",
+    "video_analysis": "llava:7b"
+  },
+  "hardware": "32 vCPU + 128GB RAM",
+  "processing_mode": "batch_night_weekend",
+  "capabilities": [
+    "PDF summarization",
+    "Excel data extraction",
+    "Image description",
+    "Video content analysis"
+  ]
+}
+```
+
 ### Base de Données PostgreSQL
 ```sql
 -- Utilisateurs et permissions
@@ -152,7 +175,7 @@ CREATE TABLE users (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Fichiers (schema amélioré)
+-- Fichiers (schema amélioré avec IA)
 CREATE TABLE files (
     id SERIAL PRIMARY KEY,
     path VARCHAR(1000) NOT NULL,
@@ -163,14 +186,35 @@ CREATE TABLE files (
     is_directory BOOLEAN DEFAULT FALSE,
     is_duplicate BOOLEAN DEFAULT FALSE,
     duplicate_of INTEGER REFERENCES files(id),
+    file_owner VARCHAR(100),  -- Propriétaire du fichier
+    ai_summary TEXT,  -- Résumé généré par l'IA
+    ai_analysis JSONB,  -- Analyse structurée par l'IA
+    ai_processed BOOLEAN DEFAULT FALSE,  -- Si l'IA a traité le fichier
+    ai_model_version VARCHAR(50),  -- Version du modèle IA utilisé
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Tâches IA pour traitement par lots
+CREATE TABLE ai_tasks (
+    id SERIAL PRIMARY KEY,
+    file_id INTEGER REFERENCES files(id),
+    task_type VARCHAR(50) NOT NULL, -- 'summarize', 'analyze_image', 'extract_data'
+    status VARCHAR(20) DEFAULT 'pending', -- 'pending', 'processing', 'completed', 'failed'
+    model_used VARCHAR(50),
+    result JSONB,
+    error_message TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    completed_at TIMESTAMP
 );
 
 -- Index optimisés pour performance
 CREATE INDEX idx_files_path ON files(path);
 CREATE INDEX idx_files_checksum ON files(checksum);
 CREATE INDEX idx_files_duplicate ON files(is_duplicate);
+CREATE INDEX idx_files_ai_processed ON files(ai_processed);
+CREATE INDEX idx_ai_tasks_status ON ai_tasks(status);
+CREATE INDEX idx_ai_tasks_type ON ai_tasks(task_type);
 ```
 
 ### Docker Configuration
@@ -194,8 +238,27 @@ services:
     environment:
       - DATABASE_URL=postgresql://user:pass@postgres:5432/openindex
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - OLLAMA_URL=http://ai-service:11434
     depends_on:
       - postgres
+      - ai-service
+
+  ai-service:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    deploy:
+      resources:
+        limits:
+          cpus: '16'
+          memory: 64G
+        reservations:
+          cpus: '8'
+          memory: 32G
 
   postgres:
     image: postgres:15
@@ -208,6 +271,7 @@ services:
 
 volumes:
   postgres_data:
+  ollama_data:
 ```
 
 ## Fonctionnalités Améliorées
@@ -218,18 +282,30 @@ volumes:
 - **Responsive** : Adapté mobile/tablette/desktop
 - **Animations fluides** : Transitions et micro-interactions
 - **Thème personnalisable** : Clair/sombre automatique
+- **Résumés IA intégrés** : Aperçu du contenu sans ouvrir les fichiers
+- **Analyse intelligente** : Extraction données Excel, description images/vidéos
 
 ### Performance
 - **Base de données PostgreSQL** : 10x plus performante que SQLite
 - **API asynchrone** : FastAPI avec support concurrence
 - **Cache intelligent** : Redis pour données fréquemment accédées
 - **Pagination optimisée** : Streaming pour grandes volumétries
+- **Traitement IA par lots** : Analyse en nuit/week-end pour optimiser ressources
 
 ### Multi-Utilisateurs
 - **Authentification JWT** : Sécurisée et stateless
 - **Gestion des rôles** : Admin vs Utilisateurs
-- **Permissions granulaires** : Accès par dossier
+- **Permissions granulaires** : Accès par dossier et fichiers de l'utilisateur
 - **Sessions simultanées** : Support 15 utilisateurs
+- **Propriétaires fichiers** : Traçabilité utilisateur SMB
+
+### Intelligence Artificielle Locale
+- **Ollama intégré** : Modèles spécialisés par type de fichier
+- **Traitement par lots** : Analyse automatique en nuit/week-end
+- **Résumés documents** : PDF, DOCX, TXT synthétisés
+- **Extraction données** : Tableurs Excel analysés et structurés
+- **Description visuelle** : Images et vidéos analysées
+- **Multi-modèles** : Llama3.2 pour textes, LLaVA pour images, CodeLlama pour données structurées
 
 ### Monitoring & Maintenance
 - **Logs structurés** : Suivi des actions utilisateurs
