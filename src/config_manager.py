@@ -55,11 +55,11 @@ class ConfigManager:
         """
         try:
             return {
-                'username': self.config.get('smb_credentials', 'username'),
-                'password': self.config.get('smb_credentials', 'password'),
-                'domain': self.config.get('smb_credentials', 'domain'),
-                'server': self.config.get('smb_credentials', 'server'),
-                'share_name': self.config.get('smb_credentials', 'share_name')
+                'username': self.config.get('smb_credentials', 'username', fallback='adminsmiden'),
+                'password': self.config.get('smb_credentials', 'password', fallback='Us52uK'),
+                'domain': self.config.get('smb_credentials', 'domain', fallback='SMIDEN'),
+                'server': self.config.get('smb_credentials', 'server', fallback='172.16.252.34'),
+                'share_name': self.config.get('smb_credentials', 'share_name', fallback='Public\\SEPM')
             }
         except (configparser.NoSectionError, configparser.NoOptionError) as e:
             raise ValueError(f"Erreur de configuration SMB: {e}")
