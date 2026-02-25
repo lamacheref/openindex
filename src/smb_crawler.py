@@ -631,6 +631,26 @@ class SMBCrawler:
 
 if __name__ == "__main__":
     import sys
+    from config_manager import ConfigManager
+    
+    # Charger la configuration depuis le fichier INI
+    print("🔧 Chargement de la configuration...")
+    config_manager = ConfigManager()
+    
+    try:
+        smb_config = config_manager.get_smb_credentials()
+        crawler_config = config_manager.get_crawler_config()
+        
+        print(f"📋 Configuration SMB chargée:")
+        print(f"   - Serveur: {smb_config['server']}")
+        print(f"   - Utilisateur: {smb_config['username']}")
+        print(f"   - Domaine: {smb_config['domain']}")
+        print(f"   - Share: {smb_config['share_name']}")
+        print(f"   - Chemin UNC sera: \\\\{smb_config['server']}\\{smb_config['share_name'].replace('/', '\\\\')}")
+        
+    except Exception as e:
+        print(f"❌ Erreur lors du chargement de la configuration: {e}")
+        sys.exit(1)
     
     def progress_callback(stats):
         """Callback pour afficher la progression."""
@@ -640,16 +660,17 @@ if __name__ == "__main__":
               f"Temps restant: {stats.get('estimated_remaining_time', 0):.1f}s", end="")
         sys.stdout.flush()
     
-    # Exemple d'utilisation avec le nouveau système de queues
+    # Utilisation de la configuration chargée
     crawler = SMBCrawler(
-        server="172.16.252.34",
-        username="adminsmiden",
-        password="Us52uK",
-        share_name="Public/SEPM",
-        domain="SMIDEN",
-        max_workers=4,           # 4 threads au total
-        delay_between_requests=0.1,  # 100ms entre les requêtes
-        max_queue_size=1000      # Maximum 1000 éléments en queue
+        server=smb_config["server"],
+        username=smb_config["username"],
+        password=smb_config["password"],
+        share_name=smb_config["share_name"],
+        domain=smb_config["domain"],
+        max_workers=crawler_config["max_workers"],
+        delay_between_requests=crawler_config["delay_between_requests"],
+        max_queue_size=crawler_config["max_queue_size"],
+        max_depth=crawler_config["max_depth"]
     )
 
     print("Initialisation de la base de données...")
