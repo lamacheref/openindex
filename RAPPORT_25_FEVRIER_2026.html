@@ -53,6 +53,18 @@
             margin: 15px 0;
             border-radius: 5px;
         }
+        .phase.completed {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+        }
+        .phase.active {
+            background: #d1ecf1;
+            border-left: 4px solid #17a2b8;
+        }
+        .phase.future {
+            background: #e9ecef;
+            border-left: 4px solid #6c757d;
+        }
         .phase h3 {
             color: #667eea;
             margin-top: 0;
@@ -236,7 +248,7 @@
             </div>
         </div>
 
-        <div class="phase">
+        <div class="phase completed">
             <h3>✅ Phase 0 - Test Explorateur Immédiat</h3>
             <p><strong>Statut : TERMINÉ</strong></p>
             <ul>
@@ -247,14 +259,36 @@
             </ul>
         </div>
 
-        <div class="phase">
+        <div class="phase active">
             <h3>🔄 Phase 1 - Migration Technologique</h3>
             <p><strong>Statut : EN COURS</strong></p>
             <ul>
                 <li>Migration de SQLite vers PostgreSQL en cours</li>
                 <li>API FastAPI en développement pour le frontend React</li>
-                <li>Collecte de données réelles depuis le SMB (>2 To)</li>
+                <li>Collecte de données réelles depuis le serveur de fichiers (>2 To)</li>
                 <li>Intégration du service IA Ollama planifiée</li>
+            </ul>
+        </div>
+
+        <div class="phase future">
+            <h3>📅 Phase 2 - Frontend React avec Données Réelles</h3>
+            <p><strong>Statut : PLANIFIÉ</strong></p>
+            <ul>
+                <li>Développement interface React avec Material-UI</li>
+                <li>Arborescence avec vraies données et dashboard</li>
+                <li>Gestion des doublons et navigation par onglets</li>
+                <li>Layout fixe avec mode focus et responsive desktop</li>
+            </ul>
+        </div>
+
+        <div class="phase future">
+            <h3>🚀 Phase 3 - Version Lite Mars 2026</h3>
+            <p><strong>Statut : PLANIFIÉ</strong></p>
+            <ul>
+                <li>Version fonctionnelle minimale pour déploiement immédiat</li>
+                <li>Fonctionnalités essentielles : indexation, déduplication, interface de base</li>
+                <li>Deadline respectée pour livraison DGS</li>
+                <li><strong>Note</strong> : Version complète avec IA avancée arrivera ultérieurement</li>
             </ul>
         </div>
     </div>
