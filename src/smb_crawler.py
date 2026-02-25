@@ -611,7 +611,7 @@ if __name__ == "__main__":
         server="172.16.252.34",
         username="adminsmiden",
         password="Us52uK",
-        share_name="Public",
+        share_name="Public/SEPM",
         domain="SMIDEN",
         max_workers=4,           # 4 threads au total
         delay_between_requests=0.1,  # 100ms entre les requêtes
