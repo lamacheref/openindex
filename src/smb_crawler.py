@@ -149,7 +149,10 @@ class SMBCrawler:
                     time.sleep(self.delay_between_requests)
                 
                 # Construire le chemin UNC
-                unc_path = f"\\\\{self.server}\\{self.share_name}\\{current_path}"
+                if current_path:
+                    unc_path = f"\\\\{self.server}\\{self.share_name}\\{current_path}"
+                else:
+                    unc_path = f"\\\\{self.server}\\{self.share_name}"
                 
                 # Lister les fichiers dans le répertoire courant
                 try:
@@ -220,7 +223,10 @@ class SMBCrawler:
                 
                 # Calculer le checksum
                 try:
-                    file_unc_path = f"\\\\{self.server}\\{self.share_name}\\{file_data['path']}"
+                    if file_data['path']:
+                        file_unc_path = f"\\\\{self.server}\\{self.share_name}\\{file_data['path']}"
+                    else:
+                        file_unc_path = f"\\\\{self.server}\\{self.share_name}"
                     with smbclient.open_file(file_unc_path, mode='rb') as f:
                         sha256_hash = hashlib.sha256()
                         for byte_block in iter(lambda: f.read(4096), b""):
