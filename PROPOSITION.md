@@ -255,6 +255,33 @@ CREATE TABLE vacation_periods (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Configuration backup et archivage
+CREATE TABLE backup_config (
+    id SERIAL PRIMARY KEY,
+    max_age_days INTEGER DEFAULT 730, -- 2 ans par défaut
+    large_file_threshold_mb INTEGER DEFAULT 100, -- 100MB par défaut
+    backup_path VARCHAR(500) NOT NULL DEFAULT '/mnt/nas/archives',
+    create_symlinks BOOLEAN DEFAULT TRUE,
+    admin_validation_required BOOLEAN DEFAULT FALSE, -- FALSE pour automatique
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Historique des archivages
+CREATE TABLE archive_history (
+    id SERIAL PRIMARY KEY,
+    file_id INTEGER REFERENCES files(id),
+    original_path VARCHAR(1000) NOT NULL,
+    archive_path VARCHAR(1000) NOT NULL,
+    symlink_path VARCHAR(1000),
+    archive_reason VARCHAR(100), -- 'old_file', 'large_file', 'manual'
+    archived_by INTEGER REFERENCES users(id),
+    archive_date TIMESTAMP DEFAULT NOW(),
+    file_size BIGINT,
+    is_symlink_valid BOOLEAN DEFAULT TRUE
+);
+
 -- Webhooks pour actions one-click
 CREATE TABLE webhooks (
     id SERIAL PRIMARY KEY,
@@ -282,6 +309,9 @@ CREATE INDEX idx_webhooks_expires ON webhooks(expires_at);
 CREATE INDEX idx_users_ad_username ON users(ad_username);
 CREATE INDEX idx_users_domain ON users(domain);
 CREATE INDEX idx_users_role ON users(role);
+CREATE INDEX idx_archive_history_file ON archive_history(file_id);
+CREATE INDEX idx_archive_history_date ON archive_history(archive_date);
+CREATE INDEX idx_archive_history_reason ON archive_history(archive_reason);
 ```
 
 ### Docker Configuration
@@ -389,6 +419,14 @@ volumes:
 - **Métriques temps réel** : Performance et utilisation
 - **Alertes automatiques** : Erreurs et seuils
 - **Sauvegardes automatiques** : Base de données PostgreSQL
+
+### Backup Automatique & Archivage
+- **Seuil ancienneté** : 2 ans par défaut (configurable)
+- **Taille critique** : Fichiers >100MB considérés comme "très gros"
+- **Archivage transparent** : Déplacement automatique vers NAS locaux (23To)
+- **Liens symboliques** : Création automatique pour transparence utilisateur
+- **Infrastructure hybride** : 2To cloud + 23To NAS/SAN locaux
+- **Validation admin** : Optionnelle pour gros volumes critiques
 
 ## Migration des Données
 

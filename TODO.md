@@ -48,13 +48,16 @@ Ce fichier contient la liste des tâches à effectuer pour le projet OpenIndex, 
 - [ ] 🔍 **Détection fichiers corrompus** : Analyse par extension et taille anormale
 - [ ] 🗑️ **Fichiers temporaires Office** : Identification automatique ~$*.tmp, ~$*.docx
 - [ ] 📏 **Identification fichiers volumineux** : Alertes et suggestions d'archivage
-- [ ] 📅 **Fichiers anciens** : Détection et propositions de backup automatique
+- [ ] 📅 **Archivage automatique 2 ans** : Fichiers >730 jours déplacés vers NAS
+- [ ] 💾 **Gros fichiers >100MB** : Archivage automatique avec liens symboliques
+- [ ] 🔗 **Liens symboliques transparents** : Accès utilisateur maintenu après archivage
+- [ ] 🗄️ **Infrastructure hybride** : 2To cloud + 23To NAS/SAN locaux
 - [ ] ⚠️ **Fichiers non-professionnels** : IA locale pour détecter contenus inappropriés
 - [ ] 👤 **Traçabilité propriétaires** : Intégration SMB owner pour gestion utilisateur
 - [ ] 🔄 **Retry intelligent** : Pattern exponentiel pour scans interrompus (1, 5, 15, 30, 60, 120, 240, 480min)
 - [ ] ⏱️ **Timeouts configurables** : Adaptation horaire pour ne pas surcharger serveur
 - [ ] 🚀 **Queue prioritaire gros fichiers** : Traitement séparé >100MB vs <100MB
-- [ ] � **Email digest hebdomadaire** : Résumé post-crawl avec actions requises
+- [ ] 📧 **Email digest hebdomadaire** : Résumé post-crawl avec actions requises
 - [ ] 🔔 **Notifications in-app** : Alertes temps réel pour actions critiques
 - [ ] 🔗 **Webhooks one-click** : Boutons dans email pour archiver/refuser fichiers
 - [ ] 🏖️ **Configuration vacances** : Périodes flexibles (2 sem. mars, 5 sem. été)
