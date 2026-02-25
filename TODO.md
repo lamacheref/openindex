@@ -26,7 +26,7 @@ Ce fichier contient la liste des tâches à effectuer pour le projet OpenIndex, 
 - [ ] 🌳 **Arborescence avec vraies données** : Composant tree utilisant données réelles
 - [ ] 📈 **Dashboard avec métriques réelles** : Statistiques et visualisations
 - [ ] 🔍 **Gestion des doublons réels** : Interface avec vrais fichiers doublons
-- [ ] 🔐 **Intégration Keycloak** : Active Directory local + fédération possible
+- [ ] 🔐 **Intégration Keycloak** : Active Directory local + fédération possible (Pas ici / Cette partie est à long terme !)
 - [ ] �️ **Gestion rôles étendue** : Agents/Modérateur groupe, Modérateur DGS, Admin
 - [ ] ⏰ **Session timeout 20mn** : Déconnexion automatique après inactivité
 - [ ] 🌐 **Support multi-fédération** : Azure AD, Google Workspace extensibles
@@ -65,7 +65,9 @@ Ce fichier contient la liste des tâches à effectuer pour le projet OpenIndex, 
 - [ ] ⏱️ **Adaptation reboot VM** : Temps 2-20min pour redémarrage
 - [ ] 🔄 **Continuation scan automatique** : Poursuite si possible, erreur si impossible
 - [ ] 👷 **Workers individuels** : Relance automatique workers en échec
-- [ ] 📊 **Monitoring temps réel** : État workers et historique retries
+- [ ] 📊 **Monitoring crawler temps réel** : État workers + métriques performance
+- [ ] ⚡ **Alertes WebSocket** : Légèreté maximale sans surcharge
+- [ ] 📝 **Historique externe** : Backup journalier sans rétention en base
 - [ ] ⏱️ **Timeouts configurables** : Adaptation horaire pour ne pas surcharger serveur
 - [ ] 🚀 **Queue prioritaire gros fichiers** : Traitement séparé >100MB vs <100MB
 - [ ] 📧 **Email digest hebdomadaire** : Résumé post-crawl avec actions requises

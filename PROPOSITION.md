@@ -310,6 +310,18 @@ CREATE TABLE worker_status (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Configuration monitoring crawler
+CREATE TABLE crawler_monitoring_config (
+    id SERIAL PRIMARY KEY,
+    metrics_priority VARCHAR(50) DEFAULT 'files_per_second', -- 'files_per_second', 'errors', 'worker_status'
+    real_time_alerts BOOLEAN DEFAULT TRUE, -- WebSocket alerts
+    history_retention_days INTEGER DEFAULT 0, -- 0 = illimité, backup externe
+    performance_tracking BOOLEAN DEFAULT TRUE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
 -- Historique des archivages
 CREATE TABLE archive_history (
     id SERIAL PRIMARY KEY,
@@ -470,6 +482,11 @@ volumes:
 - **Gestion des rôles** : Agents/Modérateur de groupe, Modérateur (DGS), Administrateur
 - **Session timeout** : 20 minutes d'inactivité par défaut
 - **Support multi-fédération** : Azure AD, Google Workspace extensibles
+
+### Activité Crawler & Monitoring
+- **Métriques prioritaires** : Fichiers/secondes (pas %), erreurs, état workers
+- **Alertes temps réel** : WebSocket pour légèreté maximale
+- **Historique illimité** : Backup journalier externe, pas de rétention en base
 
 ### Monitoring & Maintenance
 - **Logs structurés** : Suivi des actions utilisateurs
