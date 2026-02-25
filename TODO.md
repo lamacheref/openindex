@@ -23,7 +23,15 @@ Ce fichier contient la liste des tâches à effectuer pour le projet OpenIndex, 
 - [x] 📥 **Ajouter des filtres par date/taille/type** : ✅ Filtres complets et recherche
 - [x] 📤 **Exporter les inventaires en CSV** : ✅ Export des données et statistiques
 
-### Phase 3 : Fonctionnalités Avancées (Date butoir : 2026-02-28) - 🔄 **EN COURS**
+### Phase 3 : Migration Technologique (Date butoir : 2026-03-19) - 🔄 **NOUVELLE APPROCHE**
+- [ ] 🚀 **Analyse de faisabilité** : Évaluer migration Streamlit → React + FastAPI
+- [ ] 🏗️ **Créer l'architecture FastAPI** : Migrer logique SMB vers API REST performante
+- [ ] 🗄️ **Migrer vers PostgreSQL** : Base de données robuste pour multi-utilisateurs
+- [ ] ⚛️ **Développer frontend React** : Interface moderne avec Material-UI
+- [ ] 🐳 **Dockeriser l'application** : Déploiement simplifié et production-ready
+- [ ] 🔄 **Intégration complète** : Tests E2E et validation fonctionnelle
+
+### Phase 4 : Fonctionnalités Avancées (Date butoir : 2026-03-28) - � **REPORTÉE**
 - [x] 🎯 **Interface avec streamlit-tree-select** : ✅ Arborescence interactive professionnelle
 - [x] 👁️ **Visualisation de fichiers intégrée** : ✅ streamlit-elements pour documents, images, Excel
 - [x] 🎨 **Panneau latéral moderne** : ⚠️ **À CORRIGER** : Panneau qui s'affiche en bas au lieu de la droite
