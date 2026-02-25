@@ -7,6 +7,7 @@ Ce fichier contient la liste des tâches à effectuer pour le projet OpenIndex, 
 ### 🔥 URGENT - Semaine 1-5 Mars 2026
 - [ ] 🧪 **Tester le crawler amélioré** : Lancer crawl avec credentials admin (adminsmiden/Us52uK)
 - [ ] 🚀 **Déployer crawler existant** : Mettre en production le crawler SMB fonctionnel
+- [ ] 🐛 **Corriger problème d'accès SMB** : Vérifier pourquoi certains répertoires ne sont pas accessibles malgré les credentials corrects
 - [ ] 🗄️ **Migrer vers PostgreSQL** : Configurer base de données robuste avec scripts de migration
 - [ ] 📊 **Lancer crawl complet** : Collecter données réelles depuis SMB (>2 To)
 - [ ] 🔌 **Créer API FastAPI minimale** : Endpoints de lecture pour les données collectées
@@ -115,3 +116,9 @@ Ce fichier contient la liste des tâches à effectuer pour le projet OpenIndex, 
 1. **Priorité absolue** : Focus sur les 24 tâches avant 19 mars 2026
 2. **Validation continue** : Tester chaque étape avant de passer à la suivante
 3. **Documentation** : Mettre à jour le rapport après chaque jalon majeur
+
+## 🔍 Problème restant dans `src/smb_crawler.py`
+
+- **Problème** : Certains répertoires ne sont pas accessibles malgré les credentials corrects. Le script fonctionne correctement pour certains fichiers, mais rencontre des erreurs `STATUS_ACCESS_DENIED` pour d'autres répertoires comme `ACCUEIL`.
+- **Détails** : Les tests avec `smbclient` montrent que les identifiants sont corrects et que l'accès au partage SMB fonctionne. Cependant, le script rencontre des erreurs d'accès pour certains répertoires. Il est possible que le problème soit lié à la manière dont les chemins UNC sont construits ou à des restrictions spécifiques sur certains répertoires.
+- **À faire** : Vérifier pourquoi certains répertoires ne sont pas accessibles et corriger le script pour gérer ces cas sans bloquer l'exécution.
