@@ -268,6 +268,48 @@ CREATE TABLE backup_config (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Configuration retry et résilience
+CREATE TABLE retry_config (
+    id SERIAL PRIMARY KEY,
+    retry_intervals INTEGER[] DEFAULT ARRAY[1, 2, 5, 15, 30, 60, 120], -- en minutes
+    server_timeout_minutes INTEGER DEFAULT 2, -- timeout détection serveur
+    vm_reboot_min_minutes INTEGER DEFAULT 2, -- temps min reboot VM
+    vm_reboot_max_minutes INTEGER DEFAULT 20, -- temps max reboot VM
+    continue_on_server_error BOOLEAN DEFAULT TRUE, -- continuer scan si possible
+    max_consecutive_failures INTEGER DEFAULT 3, -- arrêt après N échecs consécutifs
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Historique des retries et erreurs
+CREATE TABLE retry_history (
+    id SERIAL PRIMARY KEY,
+    worker_id VARCHAR(100),
+    error_type VARCHAR(50), -- 'server_timeout', 'connection_error', 'scan_error'
+    retry_attempt INTEGER,
+    retry_interval_minutes INTEGER,
+    success BOOLEAN,
+    error_message TEXT,
+    server_downtime_minutes INTEGER, -- durée d'indisponibilité serveur
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- État des workers en temps réel
+CREATE TABLE worker_status (
+    id SERIAL PRIMARY KEY,
+    worker_id VARCHAR(100) UNIQUE NOT NULL,
+    status VARCHAR(20) DEFAULT 'idle', -- 'idle', 'running', 'error', 'retrying'
+    last_activity TIMESTAMP DEFAULT NOW(),
+    current_path VARCHAR(1000),
+    files_processed INTEGER DEFAULT 0,
+    errors_count INTEGER DEFAULT 0,
+    consecutive_failures INTEGER DEFAULT 0,
+    server_reachable BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
 -- Historique des archivages
 CREATE TABLE archive_history (
     id SERIAL PRIMARY KEY,
@@ -312,6 +354,10 @@ CREATE INDEX idx_users_role ON users(role);
 CREATE INDEX idx_archive_history_file ON archive_history(file_id);
 CREATE INDEX idx_archive_history_date ON archive_history(archive_date);
 CREATE INDEX idx_archive_history_reason ON archive_history(archive_reason);
+CREATE INDEX idx_retry_history_worker ON retry_history(worker_id);
+CREATE INDEX idx_retry_history_created ON retry_history(created_at);
+CREATE INDEX idx_worker_status_id ON worker_status(worker_id);
+CREATE INDEX idx_worker_status_status ON worker_status(status);
 ```
 
 ### Docker Configuration
@@ -427,6 +473,14 @@ volumes:
 - **Liens symboliques** : Création automatique pour transparence utilisateur
 - **Infrastructure hybride** : 2To cloud + 23To NAS/SAN locaux
 - **Validation admin** : Optionnelle pour gros volumes critiques
+
+### Retry & Résilience Avancée
+- **Pattern personnalisé** : 1, 2, 5, 15, 30, 60, 120 minutes
+- **Détection intelligente** : Validation base de données (2min timeout)
+- **Reboot serveur** : Adapté aux VMs (2-20min temps de redémarrage)
+- **Continuation scan** : Poursuite si possible, erreur seulement si scan impossible
+- **Workers automatiques** : Relance individuelle des workers en échec
+- **Arrêt gracieux** : Détection serveur actif vs timeout
 
 ## Migration des Données
 

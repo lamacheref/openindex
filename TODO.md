@@ -54,7 +54,12 @@ Ce fichier contient la liste des tâches à effectuer pour le projet OpenIndex, 
 - [ ] 🗄️ **Infrastructure hybride** : 2To cloud + 23To NAS/SAN locaux
 - [ ] ⚠️ **Fichiers non-professionnels** : IA locale pour détecter contenus inappropriés
 - [ ] 👤 **Traçabilité propriétaires** : Intégration SMB owner pour gestion utilisateur
-- [ ] 🔄 **Retry intelligent** : Pattern exponentiel pour scans interrompus (1, 5, 15, 30, 60, 120, 240, 480min)
+- [ ] 🔄 **Retry intelligent personnalisé** : Pattern 1,2,5,15,30,60,120min adapté VM
+- [ ] 🖥️ **Détection serveur intelligent** : Validation BDD (2min timeout)
+- [ ] ⏱️ **Adaptation reboot VM** : Temps 2-20min pour redémarrage
+- [ ] 🔄 **Continuation scan automatique** : Poursuite si possible, erreur si impossible
+- [ ] 👷 **Workers individuels** : Relance automatique workers en échec
+- [ ] 📊 **Monitoring temps réel** : État workers et historique retries
 - [ ] ⏱️ **Timeouts configurables** : Adaptation horaire pour ne pas surcharger serveur
 - [ ] 🚀 **Queue prioritaire gros fichiers** : Traitement séparé >100MB vs <100MB
 - [ ] 📧 **Email digest hebdomadaire** : Résumé post-crawl avec actions requises
