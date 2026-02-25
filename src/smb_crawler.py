@@ -149,12 +149,23 @@ class SMBCrawler:
                     time.sleep(self.delay_between_requests)
                 
                 # Construire le chemin UNC
-                if current_path:
-                    unc_path = f"\\\\{self.server}\\{self.share_name}\\{current_path}"
-                else:
-                    unc_path = f"\\\\{self.server}\\{self.share_name}"
+                # Debug: afficher les variables utilisées
+                print(f"🔧 Debug UNC:")
+                print(f"   - self.server: '{self.server}'")
+                print(f"   - self.share_name: '{self.share_name}'")
+                print(f"   - current_path: '{current_path}'")
                 
-                print(f"🔍 Chemin UNC testé : {unc_path}")
+                # Convertir les slashes du share_name en backslashes
+                share_name_clean = self.share_name.replace('/', '\\')
+                print(f"   - share_name_clean: '{share_name_clean}'")
+                
+                if current_path:
+                    unc_path = f"\\\\{self.server}\\{share_name_clean}\\{current_path}"
+                else:
+                    unc_path = f"\\\\{self.server}\\{share_name_clean}"
+                
+                print(f"🔍 Chemin UNC final : {unc_path}")
+                print(f"🔍 Longueur du chemin: {len(unc_path)} caractères")
                 
                 # Lister les fichiers dans le répertoire courant
                 try:
