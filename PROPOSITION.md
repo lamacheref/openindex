@@ -165,14 +165,35 @@
 
 ### Base de Données PostgreSQL
 ```sql
--- Utilisateurs et permissions
+-- Utilisateurs et permissions (intégration AD)
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
+    domain VARCHAR(50) NOT NULL DEFAULT 'SMIDEN',
+    full_name VARCHAR(100),
     email VARCHAR(100) UNIQUE,
-    password_hash VARCHAR(255) NOT NULL,
-    role VARCHAR(20) DEFAULT 'user',
-    created_at TIMESTAMP DEFAULT NOW()
+    ad_username VARCHAR(100) UNIQUE NOT NULL, -- Format: SMIDEN\flamachere
+    password_hash VARCHAR(255), -- Optionnel si auth AD
+    role VARCHAR(20) DEFAULT 'user', -- 'admin', 'user'
+    is_ad_user BOOLEAN DEFAULT TRUE,
+    last_login TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Configuration Active Directory
+CREATE TABLE ad_config (
+    id SERIAL PRIMARY KEY,
+    server_address VARCHAR(100) NOT NULL DEFAULT '172.16.252.33',
+    domain_name VARCHAR(50) NOT NULL DEFAULT 'SMIDEN',
+    base_dn VARCHAR(200), -- ex: OU=Users,DC=SMIDEN,DC=local
+    bind_user VARCHAR(100), -- Utilisateur de connexion AD
+    bind_password VARCHAR(255), -- Mot de passe connexion AD
+    port INTEGER DEFAULT 389,
+    use_ssl BOOLEAN DEFAULT FALSE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
 );
 
 -- Fichiers (schema amélioré avec IA)
@@ -251,12 +272,16 @@ CREATE INDEX idx_files_path ON files(path);
 CREATE INDEX idx_files_checksum ON files(checksum);
 CREATE INDEX idx_files_duplicate ON files(is_duplicate);
 CREATE INDEX idx_files_ai_processed ON files(ai_processed);
+CREATE INDEX idx_files_owner ON files(file_owner);
 CREATE INDEX idx_ai_tasks_status ON ai_tasks(status);
 CREATE INDEX idx_ai_tasks_type ON ai_tasks(task_type);
 CREATE INDEX idx_notifications_user_status ON user_notifications(user_id, status);
 CREATE INDEX idx_notifications_type ON user_notifications(notification_type);
 CREATE INDEX idx_webhooks_token ON webhooks(token);
 CREATE INDEX idx_webhooks_expires ON webhooks(expires_at);
+CREATE INDEX idx_users_ad_username ON users(ad_username);
+CREATE INDEX idx_users_domain ON users(domain);
+CREATE INDEX idx_users_role ON users(role);
 ```
 
 ### Docker Configuration
@@ -336,10 +361,12 @@ volumes:
 
 ### Multi-Utilisateurs
 - **Authentification JWT** : Sécurisée et stateless
-- **Gestion des rôles** : Admin vs Utilisateurs
-- **Permissions granulaires** : Accès par dossier et fichiers de l'utilisateur
+- **Intégration Active Directory** : Connexion au serveur 172.16.252.33
+- **Format utilisateur** : Domaine\username (ex: SMIDEN\flamachere)
+- **Gestion des rôles** : Admin (technicien SMIDEN, DGS) vs Utilisateurs
+- **Permissions granulaires** : Lecture/écriture sur ses propres fichiers uniquement
 - **Sessions simultanées** : Support 15 utilisateurs
-- **Propriétaires fichiers** : Traçabilité utilisateur SMB
+- **Propriétaires fichiers** : Traçabilité utilisateur SMB + AD
 
 ### Intelligence Artificielle Locale
 - **Ollama intégré** : Modèles spécialisés par type de fichier

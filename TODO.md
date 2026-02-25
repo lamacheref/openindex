@@ -26,6 +26,8 @@ Ce fichier contient la liste des tâches à effectuer pour le projet OpenIndex, 
 - [ ] 🌳 **Arborescence avec vraies données** : Composant tree utilisant données réelles
 - [ ] 📈 **Dashboard avec métriques réelles** : Statistiques et visualisations
 - [ ] 🔍 **Gestion des doublons réels** : Interface avec vrais fichiers doublons
+- [ ] 🔐 **Intégration Active Directory** : Connexion au serveur 172.16.252.33
+- [ ] 👥 **Gestion rôles utilisateurs** : Admin (technicien SMIDEN, DGS) vs utilisateurs
 - [ ] 🤖 **Intégrer service IA Ollama** : Configuration Docker et modèles
 - [ ] 🧠 **Développer API IA** : Endpoints pour résumés et analyse
 - [ ] 📄 **Résumés automatiques PDF/DOCX** : Traitement par lots en nuit
@@ -57,7 +59,7 @@ Ce fichier contient la liste des tâches à effectuer pour le projet OpenIndex, 
 - [ ] 🔗 **Webhooks one-click** : Boutons dans email pour archiver/refuser fichiers
 - [ ] 🏖️ **Configuration vacances** : Périodes flexibles (2 sem. mars, 5 sem. été)
 - [ ] ⚙️ **Workflow validation admin** : Gestion faux-positifs fichiers non-professionnels
-- [ ] �🗂️ **Déployer l'application dans un conteneur Docker** : Configuration Docker pour production
+- [ ] ��️ **Déployer l'application dans un conteneur Docker** : Configuration Docker pour production
 - [ ] 🚀 **Optimisation des performances** : Cache intelligent, indexation progressive
 - [ ] 🔐 **Gestion des utilisateurs** : Authentification et permissions multi-utilisateurs
 - [ ] 📈 **Monitoring avancé** : Logs, métriques, alertes de performance
