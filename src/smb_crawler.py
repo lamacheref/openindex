@@ -154,6 +154,8 @@ class SMBCrawler:
                 else:
                     unc_path = f"\\\\{self.server}\\{self.share_name}"
                 
+                print(f"🔍 Chemin UNC testé : {unc_path}")
+                
                 # Lister les fichiers dans le répertoire courant
                 try:
                     files = list(smbclient.scandir(unc_path))
@@ -178,12 +180,12 @@ class SMBCrawler:
                         continue
                     
                     file_data = {
-                        "path": current_path + '/' + file_info.name if current_path else file_info.name,
+                        "path": current_path + '\\' + file_info.name if current_path else file_info.name,
                         "name": file_info.name,
                         "size": file_info.stat().st_size,
                         "last_modified": datetime.fromtimestamp(file_info.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S'),
                         "is_directory": file_info.is_dir(),
-                        "depth": current_path.count('/') if current_path else 0
+                        "depth": current_path.count('\\') if current_path else 0
                     }
                     
                     if file_data["is_directory"]:
@@ -606,19 +608,25 @@ class SMBCrawler:
         """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO files (path, name, size, checksum, last_modified, is_directory)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (
-            file_data["path"],
-            file_data["name"],
-            file_data["size"],
-            file_data.get("checksum"),
-            file_data["last_modified"],
-            file_data["is_directory"]
-        ))
-        conn.commit()
-        conn.close()
+        
+        try:
+            cursor.execute("""
+                INSERT OR REPLACE INTO files (path, name, size, checksum, last_modified, is_directory)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                file_data["path"],
+                file_data["name"],
+                file_data["size"],
+                file_data.get("checksum"),
+                file_data["last_modified"],
+                file_data["is_directory"]
+            ))
+            conn.commit()
+        except Exception as e:
+            print(f"❌ Erreur lors de l'insertion en base : {e}")
+            print(f"   Path: {file_data.get('path', 'N/A')}")
+        finally:
+            conn.close()
 
 
 if __name__ == "__main__":
