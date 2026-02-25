@@ -28,6 +28,10 @@ Ce fichier contient la liste des tâches à effectuer pour le projet OpenIndex, 
 - [ ] 🔍 **Gestion des doublons réels** : Interface avec vrais fichiers doublons
 - [ ] 🔐 **Intégration Active Directory** : Connexion au serveur 172.16.252.33
 - [ ] 👥 **Gestion rôles utilisateurs** : Admin (technicien SMIDEN, DGS) vs utilisateurs
+- [ ] 📋 **Layout fixe avec onglets** : Structure VanillaJS, pas de personnalisation utilisateur
+- [ ] 🎯 **Mode focus** : Panneau principal + volets latéraux repliables
+- [ ] 🖥️ **Responsive desktop** : Priorité bureau (mobile/tablette plus tard)
+- [ ] 📑 **Navigation par onglets** : Tableau bord, Fichiers, Doublons, Configuration, Export
 - [ ] 🤖 **Intégrer service IA Ollama** : Configuration Docker et modèles
 - [ ] 🧠 **Développer API IA** : Endpoints pour résumés et analyse
 - [ ] 📄 **Résumés automatiques PDF/DOCX** : Traitement par lots en nuit

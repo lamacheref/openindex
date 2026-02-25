@@ -452,7 +452,12 @@ volumes:
 - **Description visuelle** : Images et vidéos analysées
 - **Multi-modèles** : Llama3.2 pour textes, LLaVA pour images, CodeLlama pour données structurées
 
-### Communication Utilisateur & Alertes
+### Interface Utilisateur React
+- **Layout fixe avec onglets** : Structure VanillaJS, pas de personnalisation utilisateur
+- **Mode focus** : Panneau principal + volets latéraux repliables
+- **Responsive desktop** : Priorité bureau (mobile/tablette plus tard)
+- **Navigation par onglets** : Tableau de bord, Fichiers, Doublons, Configuration, Export
+- **Panneaux interactifs** : Tous sur la même page avec communication entre panneaux
 - **Email digest hebdomadaire** : Résumé post-crawl avec actions requises
 - **Notifications in-app** : Alertes temps réel pour actions critiques
 - **Webhooks d'archivage** : Bouton one-click dans email pour archiver/refuser
