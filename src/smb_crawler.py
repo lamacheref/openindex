@@ -10,16 +10,19 @@ import hashlib
 import sqlite3
 import time
 import threading
+import subprocess
 from datetime import datetime
+from pathlib import Path
 from queue import Queue, Empty
 from concurrent.futures import ThreadPoolExecutor
 import smbclient
+from logging_config import get_logger_manager
 
 
 class SMBCrawler:
     """Classe principale pour le crawler SMB."""
 
-    def __init__(self, server, username, password, share_name, domain='', db_path='openindex.db', max_workers=4, delay_between_requests=0.1, max_queue_size=1000, max_depth=None, debug=False):
+    def __init__(self, server, username, password, share_name, domain='', db_path='openindex.db', max_workers=4, delay_between_requests=0.1, max_queue_size=1000, max_depth=None, debug=False, large_file_threshold=104857600):
         """
         Initialise le crawler SMB.
 
@@ -43,6 +46,16 @@ class SMBCrawler:
         self.max_queue_size = max_queue_size
         self.max_depth = max_depth
         self.debug = debug
+        self.large_file_threshold = large_file_threshold
+        
+        # Configuration du logging
+        self.setup_logging()
+        
+        # Patterns de fichiers à exclure
+        self.exclude_patterns = ['~$', '.tmp', '.lock', '.lnk', 'Thumbs.db', 'desktop.ini']
+        
+        # Cache des répertoires avec accès refusé pour éviter de réessayer
+        self.denied_directories = set()
         
         # Queues pour la gestion des tâches
         self.directory_queue = Queue(maxsize=max_queue_size)
@@ -64,34 +77,153 @@ class SMBCrawler:
         self.stop_event = threading.Event()
         self.pause_event = threading.Event()
         
-        self.load_credentials()
-        self.configure_smbclient()
-
-    def load_credentials(self):
+        # Configuration du logging
+        self.setup_logging()
+    
+    def setup_logging(self):
+        """Configure le logging structuré pour le crawler"""
+        # Utiliser le gestionnaire de logging centralisé
+        logger_manager = get_logger_manager()
+        self.logger = logger_manager.setup_crawler_logger(self.debug)
+    
+    def configure_smbclient(self, username, password, domain):
         """
-        Charge les informations d'identification depuis le fichier .smb-credential.
-        """
-        try:
-            with open('.smb-credential', 'r') as f:
-                for line in f:
-                    if line.startswith('username='):
-                        self.username = line.split('=')[1].strip()
-                    elif line.startswith('password='):
-                        self.password = line.split('=')[1].strip()
-                    elif line.startswith('domain='):
-                        self.domain = line.split('=')[1].strip()
-        except FileNotFoundError:
-            print("Aucun fichier .smb-credential trouvé, utilisation des informations fournies.")
-
-    def configure_smbclient(self):
-        """
-        Configure smbclient avec les informations d'identification.
+        Configure smbclient avec les informations d'identification fournies.
         """
         smbclient.ClientConfig(
-            username=self.username,
-            password=self.password,
-            domain=self.domain
+            username=username,
+            password=password,
+            domain=domain
         )
+    
+    def list_directory_fallback(self, unc_path):
+        """
+        Méthode de secours utilisant smbclient en ligne de commande
+        quand la bibliothèque Python échoue.
+        """
+        try:
+            # Extraire les composants du chemin UNC
+            # \\172.16.252.34\Public\SEPM\ACCUEIL
+            parts = unc_path.replace('\\\\', '').split('\\')
+            server = parts[0]
+            share = parts[1]
+            subdir = '\\'.join(parts[2:]) if len(parts) > 2 else ''
+            
+            # Construire la commande smbclient
+            if subdir:
+                cmd = f'cd "{subdir}" && ls'
+            else:
+                cmd = 'ls'
+            
+            smb_cmd = [
+                'smbclient',
+                f'//{server}/{share}',
+                '-U', f'{self.username}%{self.password}',
+                '-W', self.domain,
+                '-c', cmd
+            ]
+            
+            # Exécuter la commande
+            result = subprocess.run(
+                smb_cmd,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode == 0:
+                return self._parse_smbclient_output(result.stdout, unc_path)
+            else:
+                self.logger.error(f"smbclient fallback failed: {result.stderr}")
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"Fallback method error: {e}")
+            return None
+    
+    def _parse_smbclient_output(self, output, base_path):
+        """
+        Parse la sortie de smbclient pour créer des objets FileInfo-like
+        """
+        files = []
+        current_path = base_path
+        
+        for line in output.split('\n'):
+            line = line.strip()
+            if not line or line.startswith('Try') or line.startswith('blocks of size'):
+                continue
+                
+            # Parser la ligne de listing smbclient
+            # Format: filename    A/D/S    size    date
+            parts = line.split()
+            if len(parts) >= 4:
+                name = parts[0]
+                if name in ['.', '..']:
+                    continue
+                    
+                # Déterminer le type
+                type_char = parts[1] if len(parts) > 1 else ''
+                is_directory = 'D' in type_char
+                
+                # Extraire la taille
+                try:
+                    size = int(parts[2]) if not is_directory else 0
+                except (ValueError, IndexError):
+                    size = 0
+                
+                # Créer un objet FileInfo-like
+                class FileInfo:
+                    def __init__(self, name, is_dir, size):
+                        self.name = name
+                        self._is_dir = is_dir
+                        self._size = size
+                    
+                    def is_dir(self):
+                        return self._is_dir
+                    
+                    def stat(self):
+                        class Stat:
+                            def __init__(self, size):
+                                self.st_size = size
+                                self.st_mtime = time.time()
+                        return Stat(size)
+                
+                files.append(FileInfo(name, is_directory, size))
+        
+        return files
+    
+    def should_exclude_file(self, file_name):
+        """Vérifie si un fichier doit être exclu"""
+        file_name_lower = file_name.lower()
+        
+        # Vérifier les patterns d'exclusion
+        for pattern in self.exclude_patterns:
+            if pattern.lower() in file_name_lower:
+                return True, f"Pattern d'exclusion: {pattern}"
+        
+        # Vérifier les fichiers temporaires Office
+        if file_name.startswith('~$'):
+            return True, "Fichier temporaire Office"
+        
+        # Vérifier les fichiers système Windows
+        if file_name in ['Thumbs.db', 'desktop.ini']:
+            return True, "Fichier système Windows"
+        
+        return False, None
+    
+    def should_exclude_directory(self, dir_name, dir_path=None):
+        """Vérifie si un répertoire doit être exclu"""
+        # Vérifier si le répertoire est déjà connu comme ayant l'accès refusé
+        if dir_path and dir_path in self.denied_directories:
+            return True, f"Répertoire déjà identifié comme inaccessible: {dir_name}"
+        
+        # Vérifier les patterns d'exclusion pour les répertoires
+        dir_name_lower = dir_name.lower()
+        for pattern in self.exclude_patterns:
+            if pattern.lower() in dir_name_lower:
+                return True, f"Pattern d'exclusion répertoire: {pattern}"
+        
+        return False, None
 
     def get_stats(self):
         """
@@ -173,20 +305,36 @@ class SMBCrawler:
                     print(f"🔍 Longueur du chemin: {len(unc_path)} caractères")
                 
                 # Lister les fichiers dans le répertoire courant
+                files = None
                 try:
+                    # Essayer d'abord avec la bibliothèque Python
                     files = list(smbclient.scandir(unc_path))
                     self.stats['processed_directories'] += 1
+                    self.logger.debug(f"📁 Répertoire traité (bibliothèque): {unc_path} ({len(files)} éléments)")
                 except Exception as e:
                     error_msg = f"Erreur lors de l'accès au répertoire {unc_path}: {e}"
-                    print(error_msg)
+                    self.logger.error(error_msg)
                     
-                    # Si erreur d'accès, continuer sans arrêter le crawler
-                    if "NtStatus error returned" in str(e):
-                        print(f"⚠️  Erreur d'accès détectée : {e}")
-                        print("   Continuation du crawl...")
+                    # Si erreur d'accès, essayer avec la méthode fallback
+                    if "STATUS_ACCESS_DENIED" in str(e) or "NtStatus 0xc0000022" in str(e):
+                        self.logger.warning(f"� Tentative avec méthode fallback pour: {current_path}")
+                        files = self.list_directory_fallback(unc_path)
+                        
+                        if files:
+                            self.logger.info(f"✅ Fallback réussi: {len(files)} éléments trouvés")
+                            self.stats['processed_directories'] += 1
+                        else:
+                            self.logger.error(f"❌ Fallback échoué pour: {current_path}")
+                            self.denied_directories.add(current_path)
+                            self.stats['errors'] += 1
+                            continue
+                    elif "NtStatus error returned" in str(e):
+                        self.logger.warning(f"⚠️  Erreur d'accès détectée : {e}")
+                        self.logger.info("   Continuation du crawl...")
                     
-                    self.stats['errors'] += 1
-                    continue
+                    if not files:
+                        self.stats['errors'] += 1
+                        continue
                 
                 # Traiter les fichiers et sous-répertoires
                 for file_info in files:
@@ -203,6 +351,12 @@ class SMBCrawler:
                     }
                     
                     if file_data["is_directory"]:
+                        # Vérifier si le répertoire doit être exclu (cache des accès refusés)
+                        should_exclude, exclude_reason = self.should_exclude_directory(file_info.name, file_data["path"])
+                        if should_exclude:
+                            self.logger.info(f"🚫 Répertoire exclu: {file_info.name} - {exclude_reason}")
+                            continue
+                        
                         # Vérifier la profondeur maximale
                         if self.max_depth is None or file_data["depth"] < self.max_depth:
                             # Ajouter le sous-répertoire à la queue pour exploration
@@ -225,7 +379,7 @@ class SMBCrawler:
             except Empty:
                 continue
             except Exception as e:
-                print(f"Erreur dans le directory worker: {e}")
+                self.logger.error(f"Erreur dans le directory worker: {e}")
                 self.stats['errors'] += 1
     
     def _file_worker(self):
@@ -246,36 +400,51 @@ class SMBCrawler:
                 # Temporisation entre les requêtes
                 time.sleep(self.delay_between_requests)
                 
-                # Calculer le checksum
+                # Vérifier si le fichier doit être exclu
+                should_exclude, exclude_reason = self.should_exclude_file(file_data['name'])
+                if should_exclude:
+                    self.logger.info(f"⏭️  Fichier exclu: {file_data['name']} - {exclude_reason}")
+                    self.stats['processed_files'] += 1
+                    self.file_queue.task_done()
+                    continue
+                
+                # Calculer le checksum avec gestion des erreurs améliorée
                 try:
                     if file_data['path']:
                         file_unc_path = rf"\\{self.server}\{self.share_name}\{file_data['path']}"
                     else:
                         file_unc_path = rf"\\{self.server}\{self.share_name}"
-                    with smbclient.open_file(file_unc_path, mode='rb') as f:
-                        sha256_hash = hashlib.sha256()
-                        for byte_block in iter(lambda: f.read(4096), b""):
-                            sha256_hash.update(byte_block)
-                        file_data["checksum"] = sha256_hash.hexdigest()
+                    
+                    # Traitement spécial pour les gros fichiers
+                    if file_data['size'] > self.large_file_threshold:
+                        file_data["checksum"] = self._calculate_partial_checksum(file_unc_path)
+                        self.logger.info(f"🔧 Checksum partiel calculé pour gros fichier: {file_data['name']} ({file_data['size']} bytes)")
+                    else:
+                        file_data["checksum"] = self._calculate_full_checksum(file_unc_path)
                     
                     self.stats['processed_files'] += 1
-                    print(f"✅ Fichier traité: {file_data['path']}")
+                    self.logger.debug(f"✅ Fichier traité: {file_data['path']}")
                     
                 except Exception as e:
                     error_msg = f"Erreur lors du calcul du checksum pour {file_data['path']}: {e}"
-                    print(f"❌ {error_msg}")
+                    self.logger.error(f"❌ {error_msg}")
                     
-                    # Si erreur d'accès au fichier, continuer sans arrêter le crawler
-                    if "NtStatus error returned" in str(e):
-                        print(f"⚠️  Erreur d'accès fichier détectée : {e}")
-                        print("   Continuation du crawl...")
+                    # Catégoriser l'erreur
+                    if "STATUS_FILE_CLOSED" in str(e) or "file object that had already been closed" in str(e):
+                        self.logger.warning(f"🔒 Fichier verrouillé/fermé: {file_data['name']} - Utilisation d'un checksum de secours")
+                        file_data["checksum"] = self._generate_fallback_checksum(file_data)
+                    elif "NtStatus error returned" in str(e):
+                        self.logger.warning(f"🚫 Erreur d'accès SMB: {file_data['name']} - {e}")
+                        file_data["checksum"] = None
+                        file_data["error"] = f"SMB access error: {e}"
+                    else:
+                        self.logger.error(f"❌ Erreur inattendue: {file_data['name']} - {e}")
+                        file_data["checksum"] = None
+                        file_data["error"] = str(e)
                     
                     # Continuer le traitement même en cas d'erreur
                     self.stats['processed_files'] += 1
-                    print(f"❌ {error_msg}")
                     self.stats['errors'] += 1
-                    file_data["checksum"] = None
-                    file_data["error"] = str(e)
                 
                 # Mettre le résultat dans la queue
                 self.result_queue.put(file_data)
@@ -284,8 +453,49 @@ class SMBCrawler:
             except Empty:
                 continue
             except Exception as e:
-                print(f"Erreur dans le file worker: {e}")
+                self.logger.error(f"Erreur dans le file worker: {e}")
                 self.stats['errors'] += 1
+    
+    def _calculate_full_checksum(self, file_unc_path):
+        """Calcule le checksum SHA256 complet d'un fichier"""
+        with smbclient.open_file(file_unc_path, mode='rb') as f:
+            sha256_hash = hashlib.sha256()
+            for byte_block in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(byte_block)
+            return sha256_hash.hexdigest()
+    
+    def _calculate_partial_checksum(self, file_unc_path):
+        """Calcule un checksum partiel pour les gros fichiers"""
+        try:
+            with smbclient.open_file(file_unc_path, mode='rb') as f:
+                sha256_hash = hashlib.sha256()
+                
+                # Lire les premiers 64KB
+                f.seek(0)
+                first_chunk = f.read(65536)
+                if first_chunk:
+                    sha256_hash.update(first_chunk)
+                
+                # Lire les derniers 64KB
+                if f.seek(0, 2) > 65536:  # Si le fichier fait plus de 64KB
+                    f.seek(-65536, 2)
+                    last_chunk = f.read(65536)
+                    if last_chunk:
+                        sha256_hash.update(last_chunk)
+                
+                # Ajouter la taille du fichier pour l'unicité
+                size_info = f"size:{f.seek(0, 2)}".encode()
+                sha256_hash.update(size_info)
+                
+                return f"partial_{sha256_hash.hexdigest()}"
+        except Exception as e:
+            self.logger.warning(f"Échec du checksum partiel, utilisation du fallback: {e}")
+            return self._generate_fallback_checksum({'name': file_unc_path, 'size': 0})
+    
+    def _generate_fallback_checksum(self, file_data):
+        """Génère un checksum de secours basé sur les métadonnées"""
+        fallback_string = f"{file_data['name']}_{file_data['size']}_{file_data.get('last_modified', '')}"
+        return f"fallback_{hashlib.md5(fallback_string.encode()).hexdigest()}"
 
     def crawl(self, base_path="", progress_callback=None):
         """
@@ -543,7 +753,7 @@ class SMBCrawler:
                 should_skip, skip_reason = self._should_skip_file(file_data, cursor)
                 
                 if should_skip:
-                    print(f"⏭️  Ignoré: {file_data['name']} - {skip_reason}")
+                    self.logger.info(f"⏭️  Ignoré: {file_data['name']} - {skip_reason}")
                     continue
                 
                 # Vérifier les doublons par checksum
@@ -551,9 +761,9 @@ class SMBCrawler:
                 
                 if duplicates:
                     # C'est un doublon de contenu mais à un endroit différent
-                    print(f"🔄 Doublon détecté: {file_data['name']}")
-                    print(f"   Nouvel emplacement: {file_data['path']}")
-                    print(f"   Déjà présent à: {', '.join(duplicates[:3])}{'...' if len(duplicates) > 3 else ''}")
+                    self.logger.info(f"🔄 Doublon détecté: {file_data['name']}")
+                    self.logger.info(f"   Nouvel emplacement: {file_data['path']}")
+                    self.logger.info(f"   Déjà présent à: {', '.join(duplicates[:3])}{'...' if len(duplicates) > 3 else ''}")
                     
                     # Marquer comme doublon mais quand même l'insérer
                     file_data["is_duplicate"] = True
@@ -562,10 +772,10 @@ class SMBCrawler:
                     file_data["is_duplicate"] = False
                     file_data["duplicate_of"] = None
                 
-                # Insérer le fichier
+                # Insérer le fichier avec gestion des doublons simplifiée
                 cursor.execute("""
-                    INSERT INTO files (path, name, size, checksum, last_modified, is_directory, is_duplicate, duplicate_of)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT OR REPLACE INTO files (path, name, size, checksum, last_modified, is_directory, is_duplicate, duplicate_of, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 """, (
                     file_data["path"],
                     file_data["name"],
@@ -581,7 +791,7 @@ class SMBCrawler:
             conn.close()
             
         except Exception as e:
-            print(f"Erreur lors de la sauvegarde du batch: {e}")
+            self.logger.error(f"Erreur lors de la sauvegarde du batch: {e}")
             self.stats['errors'] += 1
 
     def init_db(self):
@@ -684,17 +894,30 @@ if __name__ == "__main__":
         delay_between_requests=crawler_config["delay_between_requests"],
         max_queue_size=crawler_config["max_queue_size"],
         max_depth=crawler_config["max_depth"],
+        large_file_threshold=crawler_config["large_file_threshold"],
         debug=debug_mode
+    )
+    
+    # Configurer smbclient avec les credentials admin
+    crawler.configure_smbclient(
+        username=smb_config["username"],
+        password=smb_config["password"],
+        domain=smb_config["domain"]
     )
 
     print("Initialisation de la base de données...")
     crawler.init_db()
     
+    # Afficher la configuration du logging
+    print(f"📝 Logs configurés dans: logs/openindex.log")
+    print(f"🔧 Seuil des gros fichiers: {crawler_config['large_file_threshold'] / 1024 / 1024:.1f} MB")
+    
     print("\nDémarrage du crawl récursif complet...")
     print("Appuyez sur Ctrl+C pour arrêter")
     
     try:
-        crawler.crawl(base_path="", progress_callback=progress_callback)
+        # Commencer par le dossier SEPM dans le share Public
+        crawler.crawl(base_path="SEPM", progress_callback=progress_callback)
         print("\n\nCrawl terminé!")
         
         # Afficher les statistiques finales

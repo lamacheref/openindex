@@ -1,0 +1,35 @@
+# Dockerfile pour le service Frontend VanillaJS
+FROM nginx:alpine
+
+# Métadonnées
+LABEL maintainer="OpenIndex Team"
+LABEL description="OpenIndex Frontend Service"
+LABEL version="0.1.0"
+
+# Installation des utilitaires
+RUN apk add --no-cache \
+    curl \
+    && rm -rf /var/cache/apk/*
+
+# Copier les sources du frontend
+COPY frontend/ /usr/share/nginx/html/
+
+# Configuration Nginx optimisée
+COPY nginx/nginx.conf /etc/nginx/nginx.conf
+
+# Créer les répertoires nécessaires
+RUN mkdir -p /var/cache/nginx /var/log/nginx
+
+# Variables d'environnement
+ENV NGINX_HOST=0.0.0.0
+ENV NGINX_PORT=3000
+
+# Health check pour le frontend
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:3000/health || exit 1
+
+# Exposer le port
+EXPOSE 3000
+
+# Point d'entrée
+CMD ["nginx", "-g", "daemon off;"]

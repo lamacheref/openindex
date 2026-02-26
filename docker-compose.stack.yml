@@ -1,0 +1,157 @@
+# Docker Stack OpenIndex - Architecture Microservices
+# Crawler Python + Web UI + PostgreSQL
+
+version: '3.8'
+
+services:
+  # Base de données PostgreSQL
+  postgres:
+    image: postgres:17-alpine
+    container_name: openindex-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: openindex
+      POSTGRES_USER: openindex_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-openindex_secure_password}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - openindex-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openindex_user -d openindex"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # Service Crawler Python
+  crawler:
+    build:
+      context: .
+      dockerfile: Dockerfile.crawler
+    container_name: openindex-crawler
+    restart: unless-stopped
+    environment:
+      # Configuration PostgreSQL
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: openindex
+      POSTGRES_USER: openindex_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-openindex_secure_password}
+      
+      # Configuration SMB
+      SMB_SERVER: ${SMB_SERVER:-172.16.252.34}
+      SMB_SHARE: ${SMB_SHARE:-Public\\SEPM}
+      SMB_DOMAIN: ${SMB_DOMAIN:-SMIDEN}
+      SMB_USERNAME: ${SMB_USERNAME:-adminsmiden}
+      SMB_PASSWORD: ${SMB_PASSWORD}
+      
+      # Configuration Crawler
+      CRAWLER_WORKERS: ${CRAWLER_WORKERS:-4}
+      CRAWLER_DELAY: ${CRAWLER_DELAY:-0.1}
+      CRAWLER_MAX_DEPTH: ${CRAWLER_MAX_DEPTH:-}
+      LARGE_FILE_THRESHOLD: ${LARGE_FILE_THRESHOLD:-104857600}
+      DEBUG_MODE: ${DEBUG_MODE:-false}
+    volumes:
+      - ./logs:/app/logs
+      - ./archives:/app/archives
+      - ./data:/app/data
+    networks:
+      - openindex-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - crawler  # Optionnel, peut être lancé séparément
+
+  # Service Web UI
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: openindex-web
+    restart: unless-stopped
+    environment:
+      # Configuration PostgreSQL
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: openindex
+      POSTGRES_USER: openindex_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-openindex_secure_password}
+      
+      # Configuration Streamlit
+      STREAMLIT_SERVER_PORT: 8502
+      STREAMLIT_SERVER_ADDRESS: 0.0.0.0
+      LOG_LEVEL: info
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    ports:
+      - "8502:8502"
+    networks:
+      - openindex-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8502/_stcore/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Interface pgAdmin (optionnel)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: openindex-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@openindex.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin123}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      - "5050:80"
+    networks:
+      - openindex-network
+    depends_on:
+      - postgres
+    profiles:
+      - admin  # Optionnel, pour l'administration
+
+  # Monitoring avec Grafana (optionnel)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: openindex-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin123}
+      GF_USERS_ALLOW_SIGN_UP: false
+      GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    ports:
+      - "3000:3000"
+    networks:
+      - openindex-network
+    profiles:
+      - monitoring  # Optionnel, pour le monitoring
+
+volumes:
+  postgres_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  openindex-network:
+    driver: bridge

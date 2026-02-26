@@ -1,0 +1,38 @@
+# Dockerfile pour le service Crawler Python
+FROM python:3.11-slim
+
+# Métadonnées
+LABEL maintainer="OpenIndex Team"
+LABEL description="OpenIndex Crawler Service"
+LABEL version="0.1.0"
+
+# Configuration
+WORKDIR /app
+
+# Installation des dépendances système
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Installation des dépendances Python
+COPY requirements.crawler.txt .
+RUN pip install --no-cache-dir -r requirements.crawler.txt
+
+# Copier les sources du crawler
+COPY src/ ./src/
+COPY config/ ./config/
+COPY database/ ./database/
+COPY scripts/ ./scripts/
+
+# Créer les répertoires nécessaires
+RUN mkdir -p logs archives data
+
+# Variables d'environnement
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Point d'entrée par défaut
+ENTRYPOINT ["python", "src/smb_crawler_postgresql.py"]
+CMD ["--help"]

@@ -1,0 +1,130 @@
+# Configuration pour les runners Gitea
+# Fichier à placer dans .gitea/workflows/ci.yml
+
+name: OpenIndex CI/CD
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'release/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  # Build et test du crawler
+  build-and-test-crawler:
+    runs-on: ubuntu-latest
+    container: docker:24.0.5
+    services:
+      docker:
+        image: docker:24.0.5-dind
+    env:
+      DOCKER_DRIVER: overlay2
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+        
+      - name: Build de l'image crawler
+        run: |
+          echo "🐳 Build de l'image crawler..."
+          docker build -f Dockerfile.crawler -t ${CI_REGISTRY}/openindex-crawler:${{ github.sha }} .
+          docker tag ${CI_REGISTRY}/openindex-crawler:${{ github.sha }} ${CI_REGISTRY}/openindex-crawler:latest
+          
+      - name: Test de l'image crawler
+        run: |
+          echo "🧪 Test de l'image crawler..."
+          docker run --rm \
+            -e POSTGRES_HOST=postgres-test \
+            -e POSTGRES_PORT=5432 \
+            -e POSTGRES_DB=test_openindex \
+            -e POSTGRES_USER=test_user \
+            -e POSTGRES_PASSWORD=test_password \
+            ${CI_REGISTRY}/openindex-crawler:${{ github.sha }} \
+            --help
+
+  # Build et test de l'interface web
+  build-and-test-web:
+    runs-on: ubuntu-latest
+    container: docker:24.0.5
+    services:
+      docker:
+        image: docker:24.0.5-dind
+    env:
+      DOCKER_DRIVER: overlay2
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+        
+      - name: Build de l'image web
+        run: |
+          echo "🌐 Build de l'image web UI..."
+          docker build -f Dockerfile.web -t ${CI_REGISTRY}/openindex-web:${{ github.sha }} .
+          docker tag ${CI_REGISTRY}/openindex-web:${{ github.sha }} ${CI_REGISTRY}/openindex-web:latest
+          
+      - name: Test de l'image web
+        run: |
+          echo "🌐 Test de l'image web UI..."
+          timeout 30s docker run --rm \
+            -e POSTGRES_HOST=postgres-test \
+            -e POSTGRES_PORT=5432 \
+            -e POSTGRES_DB=test_openindex \
+            -e POSTGRES_USER=test_user \
+            -e POSTGRES_PASSWORD=test_password \
+            -p 8502:8502 \
+            ${CI_REGISTRY}/openindex-web:${{ github.sha }} &
+          sleep 10
+          curl -f http://localhost:8502/_stcore/health || exit 1
+
+  # Déploiement en staging
+  deploy-staging:
+    needs: [build-and-test-crawler, build-and-test-web]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop'
+    steps:
+      - name: Login au registre
+        run: |
+          echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login ${CI_REGISTRY} -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
+          
+      - name: Push des images en staging
+        run: |
+          echo "🚀 Push des images en staging..."
+          docker push ${CI_REGISTRY}/openindex-crawler:${{ github.sha }}
+          docker push ${CI_REGISTRY}/openindex-web:${{ github.sha }}
+          docker push ${CI_REGISTRY}/openindex-crawler:latest
+          docker push ${CI_REGISTRY}/openindex-web:latest
+
+  # Déploiement en production
+  deploy-production:
+    needs: [build-and-test-crawler, build-and-test-web]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Login au registre
+        run: |
+          echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login ${CI_REGISTRY} -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
+          
+      - name: Push des images en production
+        run: |
+          echo "🏭 Déploiement en production..."
+          docker push ${CI_REGISTRY}/openindex-crawler:${{ github.sha }}
+          docker push ${CI_REGISTRY}/openindex-web:${{ github.sha }}
+          docker push ${CI_REGISTRY}/openindex-crawler:latest
+          docker push ${CI_REGISTRY}/openindex-web:latest
+          
+      - name: Création des tags de release
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          echo "🏷️ Création du tag de release..."
+          TAG=${GITHUB_REF#refs/tags/}
+          docker tag ${CI_REGISTRY}/openindex-crawler:${{ github.sha }} ${CI_REGISTRY}/openindex-crawler:${TAG}
+          docker tag ${CI_REGISTRY}/openindex-web:${{ github.sha }} ${CI_REGISTRY}/openindex-web:${TAG}
+          docker push ${CI_REGISTRY}/openindex-crawler:${TAG}
+          docker push ${CI_REGISTRY}/openindex-web:${TAG}
+          echo "✅ Tags de release créés: ${TAG}"
+
+env:
+  CI_REGISTRY: git.example.com:5000

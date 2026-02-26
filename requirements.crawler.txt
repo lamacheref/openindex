@@ -1,0 +1,17 @@
+# Requirements pour le service Crawler
+# Version optimisée pour les builds Docker
+
+# Core dependencies
+psycopg2-binary==2.9.10
+smbprotocol==1.10.1
+python-dotenv==1.0.0
+configparser==6.0.0
+
+# Logging
+colorlog==6.8.0
+
+# Development and testing
+pytest==7.4.0
+
+# Hashlib et crypto
+hashlib

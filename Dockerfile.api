@@ -1,0 +1,46 @@
+# Dockerfile pour le service API FastAPI
+FROM python:3.11-slim
+
+# Métadonnées
+LABEL maintainer="OpenIndex Team"
+LABEL description="OpenIndex FastAPI Service"
+LABEL version="0.1.0"
+
+# Configuration
+WORKDIR /app
+
+# Installation des dépendances système
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Installation des dépendances Python
+COPY requirements.api.txt .
+RUN pip install --no-cache-dir -r requirements.api.txt
+
+# Copier les sources de l'API
+COPY src/api/ ./src/
+COPY src/postgres_adapter.py ./src/
+COPY src/config_manager.py ./src/
+COPY src/logging_config.py ./src/
+COPY config/ ./config/
+
+# Créer les répertoires nécessaires
+RUN mkdir -p logs data
+
+# Variables d'environnement
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV FASTAPI_HOST=0.0.0.0
+ENV FASTAPI_PORT=8000
+
+# Health check pour l'API
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Point d'entrée
+ENTRYPOINT ["uvicorn", "src.main:app"]
+CMD ["--host", "0.0.0.0", "--port", "8000", "--workers", "4"]

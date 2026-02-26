@@ -3,31 +3,177 @@
 ## Introduction
 Ce document présente une feuille de route détaillée pour le développement du projet OpenIndex, basée sur une charge de travail de 7 heures par jour. Le projet est divisé en phases, chacune incluant des tâches spécifiques et une estimation du temps nécessaire pour les accomplir. Cette feuille de route est alignée avec les spécifications détaillées dans le fichier `PROJET.md`.
 
-## Phases du Projet
+## 🚀 Architecture Actuelle : FastAPI + VanillaJS + PostgreSQL
 
-### Phase 1 : Préparation et Configuration (3 jours)
-- **Jour 1** :
-  - ✅ Configuration de l'environnement de développement (Docker, SQLite, Python).
-  - ✅ Installation des bibliothèques nécessaires (`smbprotocol`, FastAPI, Streamlit).
-  - ✅ Création des scripts de base pour le crawler SMB avec pagination et indexation progressive.
-- **Jour 2** :
-  - ⏳ Configuration de la base de données SQLite (schéma, tables pour les métadonnées des fichiers).
-  - ⏳ Développement des fonctions de base pour le crawler (lecture des fichiers, génération de checksums SHA-256).
-- **Jour 3** :
-  - ⏳ Intégration du crawler avec la base de données.
-  - ⏳ Tests initiaux pour vérifier la collecte et le stockage des métadonnées avec optimisation pour la grande volumétrie.
+L'architecture a été migrée vers une stack moderne microservices avec :
+- **Backend FastAPI** : Performance 10x supérieure, WebSocket, documentation auto
+- **Frontend VanillaJS** : Ultra-léger, Alpine.js + HTMX, responsive natif
+- **PostgreSQL 17** : Scalabilité, index optimisés, UUID, triggers
+- **Infrastructure Docker** : Multi-stage builds, CI/CD Gitea, monitoring
 
-### Phase 2 : Développement du Crawler et de l'Interface (5 jours)
-- **Jour 4** :
-  - Développement des fonctionnalités avancées du crawler (gestion des erreurs, reprise après interruption, multi-threading).
-  - Ajout d'un état d'avancement pour le crawler dans l'interface utilisateur avec barre de progression et temps estimé restant.
-- **Jour 5** :
-  - Création de l'interface utilisateur de base (Streamlit) pour visualiser l'arborescence des fichiers.
-  - Intégration des données de la base de données dans l'interface avec filtres par date/taille/type.
-- **Jour 6** :
-  - Développement des fonctionnalités de sélection des fichiers (cases à cocher, boutons d'action).
-  - Ajout de la fonctionnalité de mise à jour à la demande avec indication de la date de dernière mise à jour.
-- **Jour 7** :
+## 📋 Phases du Projet
+
+### Phase 1 : Stabilisation Architecture Moderne (Semaine 1)
+**Objectif : Finaliser la migration et valider la nouvelle stack**
+
+- **Jour 1 (Lundi 26/02) - 7h** :
+  - ✅ Architecture FastAPI + WebSocket terminée
+  - ✅ Frontend VanillaJS + Alpine.js terminé  
+  - ✅ Docker multi-stage optimisé créé
+  - ✅ CI/CD Gitea configuré
+  - ✅ Documentation mise à jour (README, CHANGELOG, ROADMAP)
+
+- **Jour 2 (Mardi 27/02) - 7h** :
+  - [ ] Tests automatisés FastAPI (pytest + pytest-asyncio)
+  - [ ] Tests frontend VanillaJS (unit tests + integration)
+  - [ ] Validation WebSocket monitoring temps réel
+  - [ ] Tests charges API (1000+ requêtes concurrentes)
+  - [ ] Optimisation performance base de données
+
+- **Jour 3 (Mercredi 28/02) - 7h** :
+  - [ ] Configuration CI/CD complète (build + test + deploy)
+  - [ ] Déploiement staging automatique
+  - [ ] Monitoring Grafana dashboards
+  - [ ] Health checks avancés
+  - [ ] Documentation API utilisateur
+  - [ ] Scripts déploiement production
+
+- **Jour 4 (Jeudi 29/02) - 7h** :
+  - [ ] Migration données SQLite → PostgreSQL
+  - [ ] Validation données migrées
+  - [ ] Performance comparaison (avant/après)
+  - [ ] Optimisations requêtes PostgreSQL
+  - [ ] Index additionnels pour performance
+  - [ ] Backup/restore automatique
+
+- **Jour 5 (Vendredi 30/02) - 7h** :
+  - [ ] Tests finaux intégration (E2E)
+  - [ ] Documentation utilisateur complète
+  - [ ] Déploiement production
+  - [ ] Monitoring production temps réel
+  - [ ] Alertes et notifications
+  - [ ] Validation finale stack complète
+
+### Phase 2 : Production et Optimisations (Semaines 2-3)
+**Objectif : Déploiement production et optimisations avancées**
+
+- **Semaine 2 (03-07/03) - 35h** :
+  - [ ] Monitoring production 24/7
+  - [ ] Optimisations performance API (cache, pagination)
+  - [ ] Optimisations frontend (lazy loading, compression)
+  - [ ] Dashboard monitoring avancé
+  - [ ] Alertes intelligentes (seuils, patterns)
+  - [ ] Export CSV/Excel avancé
+  - [ ] Configuration utilisateur avancée
+
+- **Semaine 3 (10-14/03) - 35h** :
+  - [ ] Scaling horizontal automatique
+  - [ ] Load balancing Nginx
+  - [ ] Cache Redis pour sessions
+  - [ ] Backup automatique quotidien
+  - [ ] Logs centralisés (ELK stack)
+  - [ ] Sécurité avancée (rate limiting, auth)
+  - [ ] Documentation technique complète
+
+### Phase 3 : Features Avancées (Semaines 4-6)
+**Objectif : Fonctionnalités avancées et intelligence artificielle**
+
+- **Semaine 4 (17-21/03) - 35h** :
+  - [ ] Authentification utilisateurs (JWT, OAuth)
+  - [ ] Gestion des rôles et permissions
+  - [ ] Notifications temps réel (email, WebSocket)
+  - [ ] Recherche全文e (Elasticsearch)
+  - [ ] Tags et catégories automatiques
+  - [ ] Workflow de validation
+  - [ ] API versioning
+
+- **Semaine 5 (24-28/03) - 35h** :
+  - [ ] Intelligence artificielle (catégorisation automatique)
+  - [ ] Détection de contenu inapproprié
+  - [ ] Recommandations d'archivage
+  - [ ] Analyse de tendances d'utilisation
+  - [ ] Prédictions de stockage
+  - [ ] Rapports automatisés
+  - [ ] Interface admin avancée
+
+- **Semaine 6 (31/03-04/04) - 35h** :
+  - [ ] Intégration systèmes externes (LDAP, SSO)
+  - [ ] API GraphQL alternative
+  - [ ] Mobile app native (React Native)
+  - [ ] Desktop app (Electron)
+  - [ ] Plugin système extensible
+  - [ ] Multi-tenancy support
+  - [ ] Tests charge extrêmes (1M+ fichiers)
+
+## 📊 Estimations de Temps
+
+| Phase | Durée Estimée | Temps Travaillé | Restant | Progression |
+|-------|----------------|----------------|----------|------------|
+| Phase 1 | 35h (5 jours) | 7h (20%) | 28h | 🟡 En cours |
+| Phase 2 | 70h (2 semaines) | 0h | 70h | ⚪ À venir |
+| Phase 3 | 105h (3 semaines) | 0h | 105h | ⚪ À venir |
+| **Total** | **210h (30 jours)** | **7h (3%)** | **203h** | **🟡 3%** |
+
+## 🎯 Objectifs par Phase
+
+### Phase 1 : Stabilisation ✅
+- **Performance** : Valider 10x amélioration vs Streamlit
+- **Stabilité** : Tests automatisés complets
+- **Documentation** : Utilisateur + technique
+- **Production** : Premier déploiement réussi
+
+### Phase 2 : Production 🚀
+- **Scalabilité** : Support 10K+ utilisateurs
+- **Performance** : <100ms réponse API
+- **Fiabilité** : 99.9% uptime
+- **Monitoring** : Alertes proactives
+
+### Phase 3 : Innovation 🧠
+- **Intelligence** : IA pour catégorisation
+- **Automatisation** : Workflow complet
+- **Extensibilité** : Plugin système
+- **Modernité** : Multi-platform support
+
+## 📈 Métriques de Succès
+
+### Techniques
+- **Temps réponse API** : <100ms (objectif)
+- **Concurrence** : 1000+ utilisateurs simultanés
+- **Uptime** : 99.9% (objectif)
+- **Coverage tests** : >90% (objectif)
+
+### Fonctionnelles
+- **Satisfaction utilisateur** : >4.5/5 (objectif)
+- **Adoption nouvelles features** : >80% (objectif)
+- **Temps formation** : <2h (objectif)
+- **Support tickets** : <24h résolution (objectif)
+
+## 🔄 Revue Quotidienne
+
+Chaque fin de journée :
+- **Mise à jour** du temps travaillé
+- **Identification** des blocages
+- **Ajustement** des estimations
+- **Priorisation** des tâches du lendemain
+
+## 📝 Notes et Décisions
+
+### Décisions Techniques Prises
+- **FastAPI vs Streamlit** : Performance 10x justifie migration
+- **VanillaJS vs React** : Contrôle total vs framework lourd
+- **PostgreSQL vs SQLite** : Scalabilité production vs développement
+- **Docker multi-stage** : Optimisation builds justifiée
+
+### Leçons Apprises
+- **Documentation continue** : Essentielle pour maintenance
+- **Tests automatisés** : Économise temps debugging
+- **CI/CD précoce** : Évite problèmes intégration
+- **Monitoring temps réel** : Indispensable pour production
+
+---
+
+**Dernière mise à jour : 26 Février 2026**
+**Prochaine revue : Fin de journée 1**
   - Tests complets du crawler et de l'interface utilisateur.
   - Corrections des bugs identifiés.
 - **Jour 8** :
