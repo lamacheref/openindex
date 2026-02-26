@@ -11,13 +11,13 @@ Ce fichier contient la liste des tâches à effectuer pour le projet OpenIndex, 
 ### � **Phase 1 : Stabilisation Architecture Moderne (Semaine 26 Février - 5 Mars 2026)**
 
 #### ✅ **Terminées - 26 Février 2026**
-- [x] 🏗️ **Architecture FastAPI + WebSocket** : Backend moderne avec async/await (commit: 488dc27)
-- [x] 🎨 **Frontend VanillaJS + Alpine.js** : Interface ultra-légère et responsive (commit: 488dc27)
-- [x] 🐳 **Docker multi-stage optimisé** : Builds optimisés pour tous les services (commit: 488dc27)
-- [x] 🔄 **CI/CD Gitea configuré** : Pipeline automatisé complet (commit: 488dc27)
-- [x] 🗄️ **PostgreSQL 17 avec schema optimisé** : Base de données production-ready (commit: 488dc27)
-- [x] 🔧 **Crawler avec queues séparées** : Workers dédiés (répertoires, fichiers, gros fichiers) (commit: 488dc27)
-- [x] 📝 **Documentation migration** : README, CHANGELOG, ROADMAP mis à jour (commit: 488dc27)
+- [x] 🏗️ **Architecture FastAPI + WebSocket** : Backend moderne avec async/await (commit: 93a81a4)
+- [x] 🎨 **Frontend VanillaJS + Alpine.js** : Interface ultra-légère et responsive (commit: 93a81a4)
+- [x] 🐳 **Docker multi-stage optimisé** : Builds optimisés pour tous les services (commit: 93a81a4)
+- [x] 🔄 **CI/CD Gitea configuré** : Pipeline automatisé complet (commit: 93a81a4)
+- [x] 🗄️ **PostgreSQL 17 avec schema optimisé** : Base de données production-ready (commit: 93a81a4)
+- [x] 🔧 **Crawler avec queues séparées** : Workers dédiés (répertoires, fichiers, gros fichiers) (commit: 93a81a4)
+- [x] 📝 **Documentation migration** : README, CHANGELOG, ROADMAP mis à jour (commit: 93a81a4)
 
 #### 🔄 **En Cours - 27 Février au 5 Mars 2026**
 - [ ] 🧪 **Tests automatisés FastAPI** : pytest + pytest-asyncio avec coverage >90%
