@@ -24,7 +24,6 @@ RUN pip install --no-cache-dir -r requirements.crawler.txt
 COPY src/ ./src/
 COPY config/ ./config/
 COPY database/ ./database/
-COPY scripts/ ./scripts/
 
 # Créer les répertoires nécessaires
 RUN mkdir -p logs archives data

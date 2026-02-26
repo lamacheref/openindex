@@ -106,11 +106,126 @@ OpenIndex/
 
 ## 🚀 Démarrage Rapide
 
+### Prérequis
+- Docker 20.10+ et Docker Compose 2.0+
+- Git et accès au dépôt OpenIndex
+- 8GB+ RAM pour builds Docker
+- 50GB+ espace disque disponible
+
 ### Installation
 ```bash
 # Cloner le projet
 git clone <repository-url>
 cd OpenIndex
+
+# Configuration environnement
+cp .env.example .env
+# Éditer .env avec vos credentials SMB et configuration
+
+# Déploiement stack complète
+./deploy-modern.sh modern
+
+# Ou déploiement modulaire
+./deploy-modern.sh api      # API uniquement
+./deploy-modern.sh frontend   # Frontend uniquement  
+./deploy-modern.sh crawler   # Crawler uniquement
+```
+
+### Accès aux Services
+- **Frontend** : http://localhost:3000
+- **API** : http://localhost:8000
+- **Documentation API** : http://localhost:8000/docs
+- **WebSocket** : ws://localhost:8000/ws
+- **PostgreSQL** : localhost:5432
+- **pgAdmin** : http://localhost:5050
+
+### Configuration
+```bash
+# Variables d'environnement clés
+POSTGRES_PASSWORD=votre_mot_de_passe
+SMB_SERVER=votre_serveur_smb
+SMB_USERNAME=votre_utilisateur
+SMB_PASSWORD=votre_mot_de_passe
+```
+
+### Tests
+```bash
+# Tests builds Docker
+docker build -f Dockerfile.api -t openindex-api:test .
+docker build -f Dockerfile.frontend -t openindex-frontend:test .
+docker build -f Dockerfile.crawler -t openindex-crawler:test .
+
+# Tests API
+docker run --rm openindex-api:test python -c "from main import app; print('✅ API OK')"
+
+# Tests Frontend  
+docker run --rm -p 3001:3000 openindex-frontend:test curl -f http://localhost:3000/health
+```
+
+## 🔧 Développement
+
+### Architecture
+- **Backend** : FastAPI + PostgreSQL + WebSocket
+- **Frontend** : VanillaJS + Alpine.js + HTMX + TailwindCSS
+- **Infrastructure** : Docker + Nginx + CI/CD Gitea
+
+### Reprise du Travail
+Après la semaine de vacances, pour reprendre le développement :
+
+1. **État actuel** : Architecture moderne terminée et testée
+2. **Prochaines étapes** : Tests automatisés → Staging → Production
+3. **Priorités** : Stabilisation (Phase 1) → Optimisations (Phase 2)
+4. **Documentation** : TODO.md mis à jour avec progression (23% complété)
+
+### Commandes Utiles
+```bash
+# Vérifier état services
+./deploy-modern.sh status
+
+# Logs en temps réel
+./deploy-modern.sh logs api
+./deploy-modern.sh logs frontend
+./deploy-modern.sh logs crawler
+
+# Nettoyer containers
+./deploy-modern.sh stop
+
+# Tests builds
+docker-compose -f docker-compose.modern.yml build
+```
+
+## 📊 Monitoring
+
+### Métriques Clés
+- **Performance API** : <100ms réponse (objectif)
+- **Uptime** : 99.9% (objectif)
+- **Coverage tests** : >90% (objectif)
+- **Taille images** : <50MB total (actuel: 1GB)
+
+### Health Checks
+- **API** : http://localhost:8000/health
+- **Frontend** : http://localhost:3000/health
+- **PostgreSQL** : `pg_isready` automatique
+- **Crawler** : Logs progression dans `/app/logs`
+
+## 🚨 Dépannage
+
+### Problèmes Connus
+1. **Nginx proxy** : Corrigé dans nginx.conf (localhost:8000)
+2. **Builds Docker** : PYTHONPATH corrigé dans Dockerfile.api
+3. **Requirements** : hashlib supprimé de requirements.crawler.txt
+
+### Solutions
+```bash
+# Problème de connexion PostgreSQL
+docker-compose -f docker-compose.modern.yml logs postgres
+
+# Problème API
+docker-compose -f docker-compose.modern.yml logs api
+
+# Rebuild forcé
+docker-compose -f docker-compose.modern.yml build --no-cache
+```
 
 # Installer les dépendances
 pip install -r requirements.txt

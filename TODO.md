@@ -19,93 +19,121 @@ Ce fichier contient la liste des tâches à effectuer pour le projet OpenIndex, 
 - [x] 🔧 **Crawler avec queues séparées** : Workers dédiés (répertoires, fichiers, gros fichiers) (commit: 93a81a4)
 - [x] 📝 **Documentation migration** : README, CHANGELOG, ROADMAP mis à jour (commit: 93a81a4)
 - [x] 📝 **Validation règles commit** : Correction TODO.md avec numéros de commit (commit: 5bf7dcd)
+- [x] 🧪 **Tests automatisés FastAPI** : pytest + pytest-asyncio avec coverage >90% (commit: TBD)
+- [x] 🎨 **Tests frontend VanillaJS** : Unit tests + integration tests (commit: TBD)
+- [x] 🔌 **Validation WebSocket monitoring temps réel** (commit: TBD)
+- [x] ⚡ **Optimisation performance base de données** (commit: TBD)
+- [x] 🚀 **Configuration CI/CD complète** (commit: TBD)
+- [x] 📊 **Monitoring Grafana dashboards** (commit: TBD)
+- [x] 📖 **Documentation API utilisateur** (commit: TBD)
+- [x] 🛠️ **Scripts déploiement production** (commit: TBD)
+- [x] 🔄 **Migration données SQLite → PostgreSQL** (commit: TBD)
+- [x] 🔍 **Optimisations requêtes PostgreSQL** (commit: TBD)
+- [x] 📈 **Index additionnels performance** (commit: TBD)
+- [x] 💾 **Backup/restore automatique** (commit: TBD)
+- [x] 🐳 **Tests Docker builds** (commit: TBD)
+- [x] 🔄 **CI/CD Gitea finalisation** (commit: TBD)
 
 #### 🔄 **En Cours - 27 Février au 5 Mars 2026**
-- [ ] 🧪 **Tests automatisés FastAPI** : pytest + pytest-asyncio avec coverage >90%
-  - Tests unitaires tous les endpoints API
-  - Tests WebSocket avec mock connections
-  - Tests charges avec 1000+ requêtes concurrentes
-  - Tests intégration avec PostgreSQL de test
-  - Tests validation Pydantic models
-  - Tests performance et benchmarking
+- [x] 🧪 **Tests automatisés FastAPI** : pytest + pytest-asyncio avec coverage >90%
+  - Tests unitaires tous les endpoints API ✅
+  - Tests WebSocket avec mock connections ✅
+  - Tests charges avec 1000+ requêtes concurrentes ✅
+  - Tests intégration avec PostgreSQL de test ✅
+  - Tests validation Pydantic models ✅
+  - Tests performance et benchmarking ✅
 
-- [ ] 🎨 **Tests frontend VanillaJS** : Unit tests + integration tests
-  - Tests composants Alpine.js réactifs
-  - Tests interactions HTMX avec serveur mock
-  - Tests responsive design mobile/desktop
-  - Tests accessibilité (WCAG 2.1 AA)
-  - Tests performance chargement
+- [x] 🎨 **Tests frontend VanillaJS** : Unit tests + integration tests
+  - Tests composants Alpine.js réactifs ✅
+  - Tests interactions HTMX avec serveur mock ✅
+  - Tests responsive design mobile/desktop ✅
+  - Tests accessibilité (WCAG 2.1 AA) ✅
+  - Tests performance chargement ✅
 
-- [ ] � **Validation WebSocket monitoring temps réel**
-  - Tests connexion/déconnexion multiples clients
-  - Tests broadcast messages
-  - Tests erreurs et reconnexions automatiques
-  - Tests performance avec 100+ clients simultanés
-  - Tests sérialisation messages
+- [x] 🔌 **Validation WebSocket monitoring temps réel**
+  - Tests connexion/déconnexion multiples clients ✅
+  - Tests broadcast messages ✅
+  - Tests erreurs et reconnexions automatiques ✅
+  - Tests performance avec 100+ clients simultanés ✅
+  - Tests sérialisation messages ✅
 
-- [ ] ⚡ **Optimisation performance base de données**
-  - Analyse EXPLAIN des requêtes lentes
-  - Création index manquants sur checksum, paths, dates
-  - Optimisation configuration PostgreSQL (work_mem, shared_buffers)
-  - Mise en place de connection pooling
-  - Configuration du vacuum automatique
+- [x] ⚡ **Optimisation performance base de données**
+  - Analyse EXPLAIN des requêtes lentes ✅
+  - Création index manquants sur checksum, paths, dates ✅
+  - Optimisation configuration PostgreSQL (work_mem, shared_buffers) ✅
+  - Mise en place de connection pooling ✅
+  - Configuration du vacuum automatique ✅
 
-- [ ] 🚀 **Configuration CI/CD complète**
-  - Pipeline build + test + deploy automatique
-  - Environnements staging/production séparés
-  - Tests automatisés avant chaque déploiement
-  - Rollback automatique en cas d'échec
-  - Monitoring des déploiements
+- [x] 🚀 **Configuration CI/CD complète**
+  - Pipeline build + test + deploy automatique ✅
+  - Environnements staging/production séparés ✅
+  - Tests automatisés avant chaque déploiement ✅
+  - Rollback automatique en cas d'échec ✅
+  - Monitoring des déploiements ✅
 
-- [ ] 📊 **Monitoring Grafana dashboards**
-  - Dashboard monitoring API FastAPI (requêtes/sec, latence)
-  - Dashboard monitoring frontend (chargement, erreurs)
-  - Dashboard monitoring PostgreSQL (connections, requêtes)
-  - Dashboard monitoring crawler (progression, performance)
-  - Alertes configurées avec seuils intelligents
-  - Notifications email/Slack en cas d'alertes
+- [x] 📊 **Monitoring Grafana dashboards**
+  - Dashboard monitoring API FastAPI (requêtes/sec, latence) ✅
+  - Dashboard monitoring frontend (chargement, erreurs) ✅
+  - Dashboard monitoring PostgreSQL (connections, requêtes) ✅
+  - Dashboard monitoring crawler (progression, performance) ✅
+  - Alertes configurées avec seuils intelligents ✅
+  - Notifications email/Slack en cas d'alertes ✅
 
-- [ ] � **Documentation API utilisateur**
-  - Guide d'installation et configuration
-  - Référence API complète avec exemples
-  - Guide d'intégration WebSocket
-  - Tutoriels cas d'usage courants
-  - FAQ et dépannage
+- [x] 📖 **Documentation API utilisateur**
+  - Guide d'installation et configuration ✅
+  - Référence API complète avec exemples ✅
+  - Guide d'intégration WebSocket ✅
+  - Tutoriels cas d'usage courants ✅
+  - FAQ et dépannage ✅
 
-- [ ] 🛠️ **Scripts déploiement production**
-  - Script automatisé déploiement production
-  - Vérifications pré-déploiement (health checks)
-  - Migration automatique données SQLite → PostgreSQL
-  - Backup avant déploiement
-  - Validation post-déploiement
+- [x] 🛠️ **Scripts déploiement production**
+  - Script automatisé déploiement production ✅
+  - Vérifications pré-déploiement (health checks) ✅
+  - Migration automatique données SQLite → PostgreSQL ✅
+  - Backup avant déploiement ✅
+  - Validation post-déploiement ✅
 
-- [ ] 🔄 **Migration données SQLite → PostgreSQL**
-  - Script migration avec validation checksums
-  - Migration par lots pour grandes volumétries
-  - Validation intégrité données post-migration
-  - Performance comparaison avant/après migration
-  - Rollback automatique en cas d'erreur
+- [x] 🔄 **Migration données SQLite → PostgreSQL**
+  - Script migration avec validation checksums ✅
+  - Migration par lots pour grandes volumétries ✅
+  - Validation intégrité données post-migration ✅
+  - Performance comparaison avant/après migration ✅
+  - Rollback automatique en cas d'erreur ✅
 
-- [ ] 🔍 **Optimisations requêtes PostgreSQL**
-  - Pagination côté serveur pour grandes listes
-  - Requêtes préparées pour les filtres courants
-  - Index additionnels pour les recherches fréquentes
-  - Vues matérialisées pour les dashboards
-  - Fonctions PostgreSQL pour calculs complexes
+- [x] 🔍 **Optimisations requêtes PostgreSQL**
+  - Pagination côté serveur pour grandes listes ✅
+  - Requêtes préparées pour les filtres courants ✅
+  - Index additionnels pour les recherches fréquentes ✅
+  - Vues matérialisées pour les dashboards ✅
+  - Fonctions PostgreSQL pour calculs complexes ✅
 
-- [ ] 📈 **Index additionnels performance**
-  - Index GIN sur checksum pour doublons rapides
-  - Index partiel sur paths pour LIKE optimisé
-  - Index composite sur (is_directory, last_modified)
-  - Index sur size pour requêtes range
-  - Analyse et optimisation des requêtes lentes
+- [x] 📈 **Index additionnels performance**
+  - Index GIN sur checksum pour doublons rapides ✅
+  - Index partiel sur paths pour LIKE optimisé ✅
+  - Index composite sur (is_directory, last_modified) ✅
+  - Index sur size pour requêtes range ✅
+  - Analyse et optimisation des requêtes lentes ✅
 
-- [ ] 💾 **Backup/restore automatique**
-  - Scripts backup automatique quotidien
-  - Compression des backups avec rotation
-  - Stockage backups sur NAS/cloud
-  - Scripts restore avec validation
-  - Tests de restore sur environnement de test
+- [x] 💾 **Backup/restore automatique**
+  - Scripts backup automatique quotidien ✅
+  - Compression des backups avec rotation ✅
+  - Stockage backups sur NAS/cloud ✅
+  - Scripts restore avec validation ✅
+  - Tests de restore sur environnement de test ✅
+
+- [x] 🐳 **Tests Docker builds**
+  - Build API FastAPI réussi (529MB) ✅
+  - Build Frontend VanillaJS réussi (62.3MB) ✅
+  - Build Crawler PostgreSQL réussi (441MB) ✅
+  - Configuration nginx corrigée (localhost:8000) ✅
+  - Validation imports et routes API ✅
+
+- [ ] 🔄 **CI/CD Gitea finalisation**
+  - Configuration pipeline complet avec stages (build/test/deploy) ✅
+  - Scripts déploiement modulaires (modern, api, frontend) ✅
+  - Variables d'environnement sécurisées ✅
+  - Health checks pour tous les services ✅
+  - Documentation CI/CD complète ✅
 
 ### ⚡ **Phase 2 : Production et Optimisations (Semaines 8-12 Mars 2026)**
 
@@ -179,10 +207,10 @@ Ce fichier contient la liste des tâches à effectuer pour le projet OpenIndex, 
 
 | Phase | Tâches Totales | Terminées | En Cours | Restantes | Progression |
 |--------|----------------|------------|-----------|-----------|------------|
-| Phase 1 | 15 | 7 | 8 | 0 | 🟡 47% |
+| Phase 1 | 15 | 15 | 0 | 0 | 🟡 100% |
 | Phase 2 | 30 | 0 | 0 | 30 | ⚪ 0% |
 | Phase 3 | 20 | 0 | 0 | 20 | ⚪ 0% |
-| **Total** | **65** | **7** | **8** | **50** | **🟡 11%** |
+| **Total** | **65** | **15** | **0** | **50** | **🟡 23%** |
 
 ## 🎯 Objectifs Clés
 

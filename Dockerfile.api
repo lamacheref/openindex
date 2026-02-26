@@ -32,7 +32,7 @@ COPY config/ ./config/
 RUN mkdir -p logs data
 
 # Variables d'environnement
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app/src
 ENV PYTHONUNBUFFERED=1
 ENV FASTAPI_HOST=0.0.0.0
 ENV FASTAPI_PORT=8000
