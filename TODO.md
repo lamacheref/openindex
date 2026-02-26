@@ -18,6 +18,7 @@ Ce fichier contient la liste des tâches à effectuer pour le projet OpenIndex, 
 - [x] 🗄️ **PostgreSQL 17 avec schema optimisé** : Base de données production-ready (commit: 93a81a4)
 - [x] 🔧 **Crawler avec queues séparées** : Workers dédiés (répertoires, fichiers, gros fichiers) (commit: 93a81a4)
 - [x] 📝 **Documentation migration** : README, CHANGELOG, ROADMAP mis à jour (commit: 93a81a4)
+- [x] 📝 **Validation règles commit** : Correction TODO.md avec numéros de commit (commit: 5bf7dcd)
 
 #### 🔄 **En Cours - 27 Février au 5 Mars 2026**
 - [ ] 🧪 **Tests automatisés FastAPI** : pytest + pytest-asyncio avec coverage >90%
