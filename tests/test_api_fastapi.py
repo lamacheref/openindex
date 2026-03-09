@@ -16,6 +16,14 @@ import main as api_main
 class DummyDB:
     def execute_query(self, query, params=None):
         params = params or []
+        if query.strip() == "ANALYZE":
+            return []
+
+        if "EXPLAIN QUERY PLAN" in query:
+            return [
+                (3, 0, 0, "SCAN files"),
+            ]
+
         if "FROM files" in query and "JOIN files f2" in query:
             return [
                 (
@@ -132,3 +140,17 @@ async def test_connection_manager_broadcast_removes_dead_connection():
     await manager.broadcast('{"type":"test"}')
 
     assert manager.active_connections == [ok]
+
+
+def test_get_db_explain_endpoint(client):
+    response = client.get('/api/db-explain', params={'query_name': 'files_list', 'analyze': True})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload['query_name'] == 'files_list'
+    assert payload['analyze'] is True
+    assert any('SCAN files' in line for line in payload['plan'])
+
+
+def test_get_db_explain_invalid_query(client):
+    response = client.get('/api/db-explain', params={'query_name': 'not_allowed'})
+    assert response.status_code == 400
