@@ -1,99 +1,42 @@
-# OpenIndex Stack - Architecture de référence
+# OpenIndex Stack — Référence actuelle
 
-> Statut : **document de référence actuel** (stack moderne FastAPI + Frontend statique, avec variante J3 en SQLite).
->
-> Les éléments basés sur Streamlit / `deploy-stack.sh` / `docker-compose.stack.yml` sont désormais considérés comme **legacy** et ne doivent plus être utilisés pour les nouveaux déploiements.
+## Stack active (à utiliser)
 
-## 🧭 Clarification de stack
+| Domaine | Composant actuel |
+|---|---|
+| API | FastAPI (`src/api/main.py`) |
+| Frontend | HTML/JS statique (`frontend/index.html`) via Nginx |
+| Base J3 | SQLite (`OPENINDEX_DB_PATH`) |
+| Orchestration J3 | `docker-compose.j3.yml` |
+| Image J3 | `Dockerfile.j3` + `OPENINDEX_J3_IMAGE` |
 
-| Domaine | Stack actuelle (à utiliser) | Stack legacy (historique) |
-|---|---|---|
-| API backend | FastAPI (`src/api/main.py`) | Intégration directe via UI Streamlit |
-| Frontend | HTML/JS statique (`frontend/index.html`) servi par Nginx | Streamlit (`src/web_interface_v2.py`) |
-| Orchestration | `docker-compose.modern.yml` + `deploy-modern.sh` | `docker-compose.stack.yml` + `deploy-stack.sh` |
-| Dockerfiles principaux | `Dockerfile.api`, `Dockerfile.frontend`, `Dockerfile.crawler` | `Dockerfile.web` |
-| Documentation de démarrage | `README.md` | anciens guides de stack microservices |
+## Stack legacy (historique)
 
-## 🏗️ Architecture actuelle
+Les éléments ci-dessous restent disponibles pour historique/migration mais ne sont plus la voie recommandée :
 
-```mermaid
-graph TB
-    subgraph "OpenIndex Moderne"
-        API[FastAPI<br/>Port: 8000]
-        FE[Frontend statique<br/>Nginx<br/>Port: 3000]
-        DB[PostgreSQL 17<br/>Port: 5432]
-        CR[Crawler Python<br/>Workers]
-        PG[pgAdmin<br/>Port: 5050]
-    end
+- `docker-compose.stack.yml`
+- `deploy-stack.sh`
+- `Dockerfile.web`
+- ancienne UI Streamlit
 
-    FE --> API
-    API --> DB
-    CR --> DB
-    PG --> DB
+## Architecture fonctionnelle J3
+
+```text
+Frontend (3000) -> API FastAPI (8000) -> SQLite (fichier local monté)
+                                 \-> WebSocket /ws
 ```
 
-### Services
+## Endpoints clés
 
-| Service | Fichier clé | Port | Rôle |
-|---|---|---:|---|
-| Frontend | `frontend/index.html` + `nginx/nginx.conf` | 3000 | UI utilisateur |
-| API | `src/api/main.py` | 8000 | Endpoints REST + WebSocket |
-| Crawler | `src/smb_crawler_postgresql.py` | - | Indexation SMB |
-| PostgreSQL | `database/init.sql` | 5432 | Stockage principal |
-| pgAdmin (optionnel) | `docker-compose.modern.yml` | 5050 | Administration BDD |
+- `GET /health`
+- `GET /api/files`
+- `GET /api/stats`
+- `GET /api/duplicates`
+- `GET /api/db-explain`
+- `GET /docs`
 
-## 🚀 Déploiement recommandé
+## Transition J4 (prévue)
 
-### Démarrage complet
-```bash
-./deploy-modern.sh modern
-```
-
-### Démarrage par composant
-```bash
-./deploy-modern.sh api
-./deploy-modern.sh frontend
-./deploy-modern.sh crawler
-```
-
-### Vérification rapide
-```bash
-./deploy-modern.sh status
-```
-
-## 🧹 Nettoyage docs legacy
-
-- Les anciennes références de stack Streamlit doivent rester cantonnées à :
-  - `archives/`
-  - `Archives/`
-- Toute nouvelle documentation technique doit pointer vers :
-  - `docker-compose.modern.yml`
-  - `deploy-modern.sh`
-  - `Dockerfile.api` / `Dockerfile.frontend` / `Dockerfile.crawler`
-
-## 📌 Règle éditoriale
-
-Avant toute mise à jour de documentation, vérifier la cohérence de la stack sur ces trois fichiers :
-- `README.md`
-- `README.stack.md`
-- `ROADMAP.md`
-
-Cela évite la réintroduction de consignes legacy dans le parcours de démarrage.
-
-
-## 🔁 Variante J3 (SQLite + image GHCR)
-
-La variante J3 est un mode temporaire orienté stabilisation :
-- API FastAPI sur SQLite (`OPENINDEX_DB_PATH`) ;
-- endpoint `/api/db-explain` pour l'analyse de plans SQL ;
-- exécution via `docker-compose.j3.yml` en **image-first** (`OPENINDEX_J3_IMAGE`) ;
-- build/push automatique de l'image via `.github/workflows/docker-j3.yml`.
-
-### Lancement J3
-```bash
-cp .env.example .env
-docker compose -f docker-compose.j3.yml pull
-docker compose -f docker-compose.j3.yml up -d
-```
-
-> La migration vers PostgreSQL reste planifiée en J4.
+- Basculer vers PostgreSQL comme backend principal.
+- Conserver l’API FastAPI et le frontend actuel.
+- Adapter la CI pour image applicative cible J4.

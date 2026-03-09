@@ -1,33 +1,27 @@
-# Interface Utilisateur
+# UI OpenIndex — état actuel
 
-## Vue d'ensemble
+## Technologie
 
-L'interface utilisateur est une application web qui permet de visualiser et de gérer les fichiers indexés par OpenIndex.
+- Frontend statique unique : `frontend/index.html`.
+- Bibliothèques côté client : Alpine.js, HTMX, TailwindCSS, Chart.js.
 
-## Fonctionnalités
+## Vues principales
 
-- Affichage des fichiers indexés
-- Recherche de fichiers
-- Visualisation des métadonnées
-- Gestion des fichiers (suppression, renommage, etc.)
-- Statistiques et analyses
-- Configuration de l'application
+- Tableau de bord
+- Fichiers
+- Doublons
+- Monitoring
+- Analyse DB (plan SQL)
 
-## Panneaux
-Les panneaux de l'interface utilisateur sont les suivants :
+## Intégration API
 
-- Panneau de navigation
-- Panneau de recherche
-- Panneau de visualisation
-- Panneau de gestion
-- Panneau de statistiques
-- Panneau de configuration
-- Panneau d'activité du Crawler (Ex. : nombre de fichiers traités, nombre de fichiers volumineux, nombre de fichiers anciens, nombre de fichiers potentiellement non professionnels, queues, retry, etc.)
+L’interface interroge principalement :
+- `/api/stats`
+- `/api/files`
+- `/api/duplicates`
+- `/api/db-explain`
+- WebSocket `/ws`
 
-Ils doivent être sur la même page et être interactifs.
+## Note
 
-Ils doivent être liés à une authentication native. (il faut laisser un porte ouvert pour la mise en place d'un sso)
-
-Seul l'administrateur peut accéder à la partie "panneau de configuration". il doit aussi être le seul à pouvoir créer des utilisateurs, stopper le crawler, etc.
-
-Les utilisateurs normaux ne doivent pouvoir alterer que leurs propres données. (sur la base de l'utilisateur du fichier identifié par le crawler)
+Le frontend Streamlit historique est considéré comme legacy.

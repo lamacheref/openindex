@@ -1,104 +1,34 @@
-# Configuration Gitea CI/CD pour OpenIndex
-# Automatisation du build, test et déploiement des images Docker
+# CI/CD OpenIndex — état actuel
 
-## 🔄 **Pipeline CI/CD**
+## Pipelines actifs
 
-### 🏗️ **Stages**
-1. **build** : Compilation des images Docker
-2. **test** : Tests des images
-3. **deploy** : Push dans le registre
-4. **cleanup** : Nettoyage des anciennes images
+### 1) GitHub Actions (J3)
+Fichier : `.github/workflows/docker-j3.yml`
 
-### 📦 **Images construites**
-- `openindex-crawler` : Service crawler Python
-- `openindex-web` : Interface web Streamlit
-- `openindex-stack` : Stack complète (optionnel)
+- Déclencheurs : push/PR sur `main` et `develop`, tags `v*`, dispatch manuel.
+- Build de l’image `Dockerfile.j3`.
+- Push vers GHCR hors pull request.
+- Tags gérés : branch, tag, sha, latest (branche par défaut).
 
-## 🚀 **Déploiement automatisé**
+### 2) Gitea workflow (legacy)
+Fichier : `.gitea/workflows/ci.yml`
 
-### Branches et environnements
-- **`develop`** → Staging automatique
-- **`main`** → Production automatique  
-- **`release/*`** → Production avec tags
+- Pipeline historique centré crawler + web legacy.
+- Référence maintenue pour compatibilité, mais non alignée J3/J4.
 
-### Tags
-- **`latest`** : Dernier commit de main/develop
-- **`vX.Y.Z`** : Releases officielles
+## Recommandation opérationnelle
 
-## 📋 **Variables requises**
+Pour l’état actuel du projet, la référence CI est le workflow GitHub J3.
 
-Dans les paramètres de votre projet Gitea :
+## Variables clés
 
-### 🔐 **Registre Docker**
+- `OPENINDEX_J3_IMAGE` : image à déployer via `docker-compose.j3.yml`.
+- `OPENINDEX_DB_PATH` : chemin SQLite côté API.
+
+## Commandes de validation locale
+
 ```bash
-CI_REGISTRY=git.example.com:5000/openindex
-CI_REGISTRY_USER=deploy_token
-CI_REGISTRY_PASSWORD=glpat-xxxxxxxxxxxxxxxxxxxxxxx
+docker build -f Dockerfile.j3 -t openindex-j3:local .
+docker compose -f docker-compose.j3.yml up -d
+curl -f http://localhost:8000/health
 ```
-
-### 🔧 **Configuration CI/CD**
-```bash
-# Activer les variables CI/CD
-Settings → Repository → Settings → Actions → Variables
-```
-
-## 📊 **Monitoring et notifications**
-
-### ✅ **Tests automatisés**
-- Connexion PostgreSQL pour chaque image
-- Healthcheck de l'interface web
-- Validation des dépendances
-
-### 📧 **Déploiement conditionnel**
-- Tests requis avant le déploiement
-- Validation des branches
-- Tags automatiques pour les releases
-
-## 🛠️ **Utilisation locale**
-
-### Tests locaux
-```bash
-# Lancer les tests localement
-docker-compose -f docker-compose.test.yml up --abort-on-container-exit
-```
-
-### Build manuel
-```bash
-# Build manuel des images
-docker build -f Dockerfile.crawler -t openindex-crawler:dev .
-docker build -f Dockerfile.web -t openindex-web:dev .
-```
-
-## 📝 **Workflow de développement**
-
-1. **Développer** sur la branche `develop`
-2. **Commit** et push → Build + Test automatiques
-3. **Merge** dans `main` → Déploiement production
-4. **Tag** pour les releases → Tags versionnés
-
-## 🔄 **Intégration continue**
-
-### Triggers automatiques
-- Push sur `develop` → Staging
-- Push sur `main` → Production
-- Création de tags → Release
-
-### Sécurité
-- Tokens d'accès limités
-- Variables protégées
-- Isolation des environnements
-
-## 📈 **Performance**
-
-### Optimisations
-- Cache Docker multi-stage
-- Parallélisation des builds
-- Tests rapides en headless
-- Nettoyage automatique
-
-### Monitoring
-- Durées des builds
-- Taux de succès
-- Taille des images
-
-Cette configuration CI/CD assure une livraison continue et fiable pour OpenIndex !
