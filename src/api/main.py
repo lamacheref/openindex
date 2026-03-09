@@ -71,6 +71,12 @@ class WebSocketMessage(BaseModel):
     timestamp: datetime
 
 
+class ExplainPlan(BaseModel):
+    query_name: str
+    analyze: bool
+    plan: List[str]
+
+
 # Connexion à la base de données
 def get_db_adapter():
     """Récupère l'adaptateur PostgreSQL"""
@@ -116,6 +122,35 @@ class ConnectionManager:
 
 
 manager = ConnectionManager()
+
+EXPLAIN_QUERIES = {
+    "files_list": """
+        SELECT id, path, name, size, checksum, last_modified,
+               is_directory, is_duplicate, duplicate_of,
+               created_at, updated_at
+        FROM files
+        ORDER BY is_directory DESC, name ASC
+        LIMIT 100
+    """,
+    "duplicates": """
+        SELECT f1.id, f1.path, f1.name, f1.size, f1.checksum,
+               f2.path as duplicate_of_path
+        FROM files f1
+        JOIN files f2 ON f1.checksum = f2.checksum AND f1.id != f2.id
+        WHERE f1.is_duplicate = TRUE
+        ORDER BY f1.size DESC
+        LIMIT 100
+    """,
+    "stats": """
+        SELECT
+            COUNT(*) as total_files,
+            COUNT(CASE WHEN is_directory = FALSE THEN 1 END) as files_only,
+            COUNT(CASE WHEN is_directory = TRUE THEN 1 END) as directories,
+            COUNT(CASE WHEN is_duplicate = TRUE THEN 1 END) as duplicates,
+            COALESCE(SUM(CASE WHEN is_directory = FALSE THEN size END), 0) as total_size
+        FROM files
+    """,
+}
 
 
 # Routes API
@@ -243,6 +278,29 @@ async def get_duplicates():
     except Exception as e:
         logger.error(f"Erreur get_duplicates: {e}")
         raise HTTPException(status_code=500, detail="Erreur lors de la récupération des doublons")
+
+
+@app.get("/api/db-explain", response_model=ExplainPlan)
+async def get_db_explain(query_name: str = "files_list", analyze: bool = True):
+    """Récupérer un plan EXPLAIN (ANALYZE) pour les requêtes clés."""
+    if query_name not in EXPLAIN_QUERIES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"query_name invalide. Valeurs autorisées: {', '.join(EXPLAIN_QUERIES.keys())}",
+        )
+
+    try:
+        db = get_db_adapter()
+        explain_mode = "EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)" if analyze else "EXPLAIN (FORMAT TEXT)"
+        explain_query = f"{explain_mode} {EXPLAIN_QUERIES[query_name]}"
+
+        results = db.execute_query(explain_query)
+        plan_lines = [row[0] for row in results]
+
+        return ExplainPlan(query_name=query_name, analyze=analyze, plan=plan_lines)
+    except Exception as e:
+        logger.error(f"Erreur get_db_explain: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la récupération du plan EXPLAIN")
 
 
 @app.websocket("/ws")
