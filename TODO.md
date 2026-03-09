@@ -13,10 +13,10 @@ Ce fichier contient la liste des tâches à effectuer pour le projet OpenIndex, 
 Objectif J2 : verrouiller un plan réaliste et partagé pour les tests de stabilisation de la stack moderne, avec une trace unique dans README / ROADMAP / TODO.
 
 - [x] Aligner les objectifs J2 entre les 3 documents de pilotage
-- [ ] Exécuter les tests API prioritaires (smoke + régression endpoints critiques)
-- [ ] Exécuter les tests frontend prioritaires (navigation, dashboard, doublons)
-- [ ] Valider le monitoring WebSocket en conditions multi-clients
-- [ ] Publier le bilan J2 en fin de journée (résultats, blocages, arbitrages)
+- [x] Exécuter les tests API prioritaires (smoke + régression endpoints critiques)
+- [x] Exécuter les tests frontend prioritaires (navigation, dashboard, doublons)
+- [x] Valider le monitoring WebSocket en conditions multi-clients
+- [x] Publier le bilan J2 en fin de journée (résultats, blocages, arbitrages)
 
 ## 🗓️ Proposition J3 (clarification stack + nettoyage docs legacy)
 
