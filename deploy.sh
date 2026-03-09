@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Script unique de déploiement Docker pour OpenIndex
+# Stack canonique: postgres + crawler + ui (nginx)
 
 set -euo pipefail
 
@@ -20,17 +21,16 @@ ensure_env() {
     else
       cat > .env <<EOT
 POSTGRES_PASSWORD=openindex_secure_password
-PGADMIN_EMAIL=admin@openindex.local
-PGADMIN_PASSWORD=admin123
+DEBUG=false
 EOT
     fi
-    echo "✅ .env créé. Vérifiez les variables avant production."
+    echo "✅ .env créé. Complétez vos identifiants SMB dans config/admin_credentials.ini."
   fi
 }
 
 up() {
   ensure_env
-  echo "🚀 Démarrage des services..."
+  echo "🚀 Démarrage des services (postgres + crawler + ui)..."
   $COMPOSE_CMD up -d --build
 }
 
@@ -61,6 +61,7 @@ case "${1:-help}" in
   help|-h|--help)
     cat <<EOT
 Usage: ./deploy.sh [up|down|restart|status|logs [service]|help]
+Services démarrés: postgres, crawler, ui
 EOT
     ;;
   *)
