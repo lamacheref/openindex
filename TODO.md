@@ -8,6 +8,16 @@ Ce fichier contient la liste des tâches à effectuer pour le projet OpenIndex, 
 
 ## 🎯 Priorités Avant 19 Mars 2026 (Deadline DGS)
 
+## 🗓️ Proposition J2 (mise à jour synchronisée)
+
+Objectif J2 : verrouiller un plan réaliste et partagé pour les tests de stabilisation de la stack moderne, avec une trace unique dans README / ROADMAP / TODO.
+
+- [x] Aligner les objectifs J2 entre les 3 documents de pilotage
+- [ ] Exécuter les tests API prioritaires (smoke + régression endpoints critiques)
+- [ ] Exécuter les tests frontend prioritaires (navigation, dashboard, doublons)
+- [ ] Valider le monitoring WebSocket en conditions multi-clients
+- [ ] Publier le bilan J2 en fin de journée (résultats, blocages, arbitrages)
+
 ### � **Phase 1 : Stabilisation Architecture Moderne (Semaine 26 Février - 5 Mars 2026)**
 
 #### ✅ **Terminées - 26 Février 2026**

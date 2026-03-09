@@ -299,3 +299,5 @@ Ce projet est sous licence [MIT](LICENSE).
 ---
 
 **Développé avec ❤️ pour l'archivage professionnel efficace**
+
+Paragraphe de mise à jour J2 : cette révision documente une proposition J2 commune entre README, ROADMAP et TODO afin d'assurer un suivi synchronisé des priorités, des critères de validation et du reporting quotidien.
