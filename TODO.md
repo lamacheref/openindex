@@ -18,6 +18,15 @@ Objectif J2 : verrouiller un plan réaliste et partagé pour les tests de stabil
 - [ ] Valider le monitoring WebSocket en conditions multi-clients
 - [ ] Publier le bilan J2 en fin de journée (résultats, blocages, arbitrages)
 
+## 🗓️ Proposition J3 (clarification stack + nettoyage docs legacy)
+
+Objectif J3 : supprimer toute ambiguïté entre stack actuelle et historique afin d'éviter les erreurs de déploiement.
+
+- [x] Établir une table "stack actuelle vs stack legacy" dans `README.stack.md`
+- [x] Basculer `README.stack.md` en document de référence moderne
+- [x] Expliciter la règle de nettoyage documentaire (legacy cantonné à `archives/` et `Archives/`)
+- [ ] Vérifier que les prochaines docs techniques ne réintroduisent pas `deploy-stack.sh` en parcours par défaut
+
 ### � **Phase 1 : Stabilisation Architecture Moderne (Semaine 26 Février - 5 Mars 2026)**
 
 #### ✅ **Terminées - 26 Février 2026**

@@ -33,6 +33,8 @@ L'architecture a été migrée vers une stack moderne microservices avec :
   - [ ] Livraison de fin de journée : état d'avancement, risques et décisions documentées
 
 - **Jour 3 (Mercredi 28/02) - 7h** :
+  - [x] Clarification de la stack officielle (README/README.stack/ROADMAP alignés)
+  - [x] Nettoyage documentaire legacy (références Streamlit déplacées en historique)
   - [ ] Configuration CI/CD complète (build + test + deploy)
   - [ ] Déploiement staging automatique
   - [ ] Monitoring Grafana dashboards

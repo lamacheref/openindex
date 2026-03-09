@@ -238,26 +238,10 @@ docker-compose -f docker-compose.modern.yml logs api
 docker-compose -f docker-compose.modern.yml build --no-cache
 ```
 
-# Installer les dépendances
-pip install -r requirements.txt
+### Clarification documentation
+- La stack de référence est décrite dans `README.stack.md` (FastAPI + frontend statique + PostgreSQL).
+- Les instructions Streamlit historiques sont considérées **legacy** et ne doivent plus être utilisées pour un nouveau déploiement.
 
-# Lancer l'interface web
-streamlit run src/web_interface_v2.py
-```
-
-### Configuration du Logging
-Le système utilise une rotation automatique des logs avec compression :
-- **Rotation** : Fichiers tournés à 5MB (10MB par défaut)
-- **Compression** : Fichiers de rotation compressés en GZIP
-- **Rétention** : 10 rotations conservées (configurable)
-- **Emplacement** : Tous les logs sont stockés dans le répertoire `/logs/`
-
-Les logs sont automatiquement gérés sans intervention manuelle.
-
-### Accès
-- **Interface Web** : http://localhost:8502
-- **Documentation** : [PROJET.md](PROJET.md)
-- **Tâches en cours** : [TODO.md](TODO.md)
 
 ## 📋 État du Projet
 
