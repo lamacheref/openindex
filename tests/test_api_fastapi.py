@@ -39,6 +39,12 @@ class DummyDB:
                 )
             ]
 
+        if "SELECT path FROM files WHERE path IS NOT NULL" in query:
+            return [
+                ("/share/docs",),
+                ("/share/original/a.txt",),
+            ]
+
         # /api/files
         return [
             (
@@ -69,7 +75,7 @@ class DummyDB:
             ),
         ]
 
-    def get_statistics(self):
+    def get_statistics(self, space=None):
         return {
             "total_files": 2,
             "total_directories": 1,
@@ -110,6 +116,14 @@ def test_get_duplicates_endpoint(client):
     assert response.status_code == 200
     payload = response.json()
     assert payload[0]["duplicate_of"] == "/share/original/a.txt"
+
+
+def test_get_spaces_endpoint(client):
+    response = client.get("/api/spaces")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload[0]["path_prefix"] == "/share"
+    assert payload[0]["file_count"] == 2
 
 
 @pytest.mark.asyncio
