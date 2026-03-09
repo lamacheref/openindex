@@ -6,6 +6,15 @@
 
 OpenIndex permet de crawler, indexer, et gérer efficacement des partages SMB de grande volumétrie (>2 To) avec déduplication automatique et interface de visualisation interactive basée sur une architecture microservices moderne.
 
+
+## 🆕 Mise à jour J3 (variant en cours)
+
+- **Base de données J3** : SQLite (variable `OPENINDEX_DB_PATH`) pour l'API `src/api/main.py`.
+- **Analyse DB** : endpoint `GET /api/db-explain` + vue frontend **DB Explain** pour inspecter les plans (`EXPLAIN QUERY PLAN`).
+- **Container J3** : `docker-compose.j3.yml` est en mode **image-first** via `OPENINDEX_J3_IMAGE`.
+- **CI GitHub** : build/push automatique de l'image J3 vers GHCR via `.github/workflows/docker-j3.yml`.
+- **Note planning** : la migration PostgreSQL est reportée à J4.
+
 ## ✅ Fonctionnalités Actuelles
 
 ### 🚀 **Crawler SMB Haute Performance**
@@ -13,7 +22,8 @@ OpenIndex permet de crawler, indexer, et gérer efficacement des partages SMB de
 - **Robustesse exceptionnelle** : Gestion des erreurs, reprise après interruption, fallback smbclient
 - **Performance optimisée** : Temporisation adaptative, queues séparées, traitement parallèle
 - **Déduplication intelligente** : Détection automatique des doublons par checksum SHA-256
-- **PostgreSQL 17** : Base de données robuste avec UUID, index et triggers
+- **SQLite (J3)** : Base locale légère pour itération rapide
+- **PostgreSQL (J4)** : migration prévue
 
 ### 🌐 **API FastAPI Moderne**
 - **Performance extrême** : 10x plus rapide que Streamlit avec async/await
@@ -32,7 +42,7 @@ OpenIndex permet de crawler, indexer, et gérer efficacement des partages SMB de
 ### 📊 **Architecture Microservices**
 - **API FastAPI** : Service backend indépendant (port 8000)
 - **Frontend Nginx** : Service web statique optimisé (port 3000)
-- **PostgreSQL 17** : Base de données partagée (port 5432)
+- **SQLite (J3)** : base locale montée en volume Docker (`/data/openindex.db`)
 - **Crawler Docker** : Service d'indexation isolé et scalable
 - **Communication** : Proxy Nginx + WebSocket entre services
 
@@ -40,7 +50,7 @@ OpenIndex permet de crawler, indexer, et gérer efficacement des partages SMB de
 
 ### Backend (FastAPI)
 - **Python 3.11+** avec async/await et Pydantic
-- **PostgreSQL 17** avec psycopg2-binary et SQLAlchemy
+- **SQLite (J3)** via `sqlite3`
 - **WebSocket** pour monitoring temps réel
 - **Uvicorn** comme serveur ASGI
 
@@ -51,10 +61,9 @@ OpenIndex permet de crawler, indexer, et gérer efficacement des partages SMB de
 - **Chart.js** pour les visualisations
 
 ### Base de Données
-- **PostgreSQL 17** avec UUID primary keys
-- **Index optimisés** sur checksum, paths et dates
-- **Triggers** pour updated_at automatique
-- **Vues matérialisées** pour les doublons et statistiques
+- **SQLite (J3)** pour stockage local
+- **Plans d'exécution** exposés via `/api/db-explain`
+- **Préparation migration J4** vers PostgreSQL
 
 ### Infrastructure
 - **Docker multi-stage** pour builds optimisés
@@ -134,21 +143,28 @@ cp .env.example .env
 ./deploy-modern.sh crawler   # Crawler uniquement
 ```
 
+### Option J3 (recommandée pour l’état actuel)
+```bash
+cp .env.example .env
+# Adapter OPENINDEX_J3_IMAGE si nécessaire (GHCR)
+
+docker compose -f docker-compose.j3.yml pull
+docker compose -f docker-compose.j3.yml up -d
+```
+
 ### Accès aux Services
 - **Frontend** : http://localhost:3000
 - **API** : http://localhost:8000
 - **Documentation API** : http://localhost:8000/docs
 - **WebSocket** : ws://localhost:8000/ws
-- **PostgreSQL** : localhost:5432
-- **pgAdmin** : http://localhost:5050
+- **DB SQLite (J3)** : fichier local monté dans le conteneur (`OPENINDEX_DB_PATH`)
 
 ### Configuration
 ```bash
-# Variables d'environnement clés
-POSTGRES_PASSWORD=votre_mot_de_passe
-SMB_SERVER=votre_serveur_smb
-SMB_USERNAME=votre_utilisateur
-SMB_PASSWORD=votre_mot_de_passe
+# Variables d'environnement clés (J3)
+OPENINDEX_J3_IMAGE=ghcr.io/<owner>/openindex-j3:latest
+OPENINDEX_DB_PATH=/data/openindex.db
+OPENINDEX_API_PORT=8000
 ```
 
 ### Tests
@@ -168,9 +184,9 @@ docker run --rm -p 3001:3000 openindex-frontend:test curl -f http://localhost:30
 ## 🔧 Développement
 
 ### Architecture
-- **Backend** : FastAPI + PostgreSQL + WebSocket
+- **Backend** : FastAPI + SQLite (J3) + WebSocket
 - **Frontend** : VanillaJS + Alpine.js + HTMX + TailwindCSS
-- **Infrastructure** : Docker + Nginx + CI/CD Gitea
+- **Infrastructure** : Docker + CI/CD Gitea/GitHub Actions
 
 ### Dépôts Git
 - **GitHub (principal)** : https://github.com/lamacheref/openindex.git
@@ -203,6 +219,8 @@ git push github main    # GitHub
 
 # Tests builds
 docker-compose -f docker-compose.modern.yml build
+# Image J3 (image-first)
+docker compose -f docker-compose.j3.yml pull
 ```
 
 ## 📊 Monitoring
@@ -216,7 +234,6 @@ docker-compose -f docker-compose.modern.yml build
 ### Health Checks
 - **API** : http://localhost:8000/health
 - **Frontend** : http://localhost:3000/health
-- **PostgreSQL** : `pg_isready` automatique
 - **Crawler** : Logs progression dans `/app/logs`
 
 ## 🚨 Dépannage
@@ -228,18 +245,16 @@ docker-compose -f docker-compose.modern.yml build
 
 ### Solutions
 ```bash
-# Problème de connexion PostgreSQL
-docker-compose -f docker-compose.modern.yml logs postgres
+# Problème API J3
+docker compose -f docker-compose.j3.yml logs openindex-j3
 
-# Problème API
-docker-compose -f docker-compose.modern.yml logs api
-
-# Rebuild forcé
-docker-compose -f docker-compose.modern.yml build --no-cache
+# Redémarrage J3
+docker compose -f docker-compose.j3.yml down
+docker compose -f docker-compose.j3.yml up -d
 ```
 
 ### Clarification documentation
-- La stack de référence est décrite dans `README.stack.md` (FastAPI + frontend statique + PostgreSQL).
+- La stack de référence est décrite dans `README.stack.md` (Modern + variante J3 SQLite).
 - Les instructions Streamlit historiques sont considérées **legacy** et ne doivent plus être utilisées pour un nouveau déploiement.
 
 

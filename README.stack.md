@@ -1,6 +1,6 @@
 # OpenIndex Stack - Architecture de référence
 
-> Statut : **document de référence actuel** (stack moderne FastAPI + Frontend statique + PostgreSQL).
+> Statut : **document de référence actuel** (stack moderne FastAPI + Frontend statique, avec variante J3 en SQLite).
 >
 > Les éléments basés sur Streamlit / `deploy-stack.sh` / `docker-compose.stack.yml` sont désormais considérés comme **legacy** et ne doivent plus être utilisés pour les nouveaux déploiements.
 
@@ -79,3 +79,21 @@ Avant toute mise à jour de documentation, vérifier la cohérence de la stack s
 - `ROADMAP.md`
 
 Cela évite la réintroduction de consignes legacy dans le parcours de démarrage.
+
+
+## 🔁 Variante J3 (SQLite + image GHCR)
+
+La variante J3 est un mode temporaire orienté stabilisation :
+- API FastAPI sur SQLite (`OPENINDEX_DB_PATH`) ;
+- endpoint `/api/db-explain` pour l'analyse de plans SQL ;
+- exécution via `docker-compose.j3.yml` en **image-first** (`OPENINDEX_J3_IMAGE`) ;
+- build/push automatique de l'image via `.github/workflows/docker-j3.yml`.
+
+### Lancement J3
+```bash
+cp .env.example .env
+docker compose -f docker-compose.j3.yml pull
+docker compose -f docker-compose.j3.yml up -d
+```
+
+> La migration vers PostgreSQL reste planifiée en J4.
