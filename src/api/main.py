@@ -62,6 +62,12 @@ class CrawlStats(BaseModel):
     status: str
 
 
+class SpaceInfo(BaseModel):
+    name: str
+    path_prefix: str
+    file_count: int
+
+
 class WebSocketMessage(BaseModel):
     type: str
     data: Dict[str, Any]
@@ -87,19 +93,23 @@ class SQLiteAdapter:
             cursor.execute(query, params)
             return cursor.fetchall()
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self, space: Optional[str] = None) -> Dict[str, Any]:
+        query = """
+            SELECT
+                COUNT(*) as total_files,
+                SUM(CASE WHEN is_directory = 1 THEN 1 ELSE 0 END) as total_directories,
+                COALESCE(SUM(CASE WHEN is_directory = 0 THEN size ELSE 0 END), 0) as total_size,
+                SUM(CASE WHEN is_duplicate = 1 THEN 1 ELSE 0 END) as duplicate_files
+            FROM files
+        """
+        params: List[Any] = []
+        if space:
+            query += " WHERE path LIKE ?"
+            params.append(f"{space}%")
+
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT
-                    COUNT(*) as total_files,
-                    SUM(CASE WHEN is_directory = 1 THEN 1 ELSE 0 END) as total_directories,
-                    COALESCE(SUM(CASE WHEN is_directory = 0 THEN size ELSE 0 END), 0) as total_size,
-                    SUM(CASE WHEN is_duplicate = 1 THEN 1 ELSE 0 END) as duplicate_files
-                FROM files
-                """
-            )
+            cursor.execute(query, params)
             row = cursor.fetchone() or (0, 0, 0, 0)
             return {
                 "total_files": row[0] or 0,
@@ -108,6 +118,53 @@ class SQLiteAdapter:
                 "duplicate_files": row[3] or 0,
                 "crawl_duration": None,
             }
+
+    def get_spaces(self) -> List[Dict[str, Any]]:
+        paths = self.execute_query("SELECT path FROM files WHERE path IS NOT NULL")
+        spaces: Dict[str, Dict[str, Any]] = {}
+
+        for row in paths:
+            path = row[0]
+            if not path:
+                continue
+
+            prefix = self._extract_space_prefix(path)
+            if not prefix:
+                continue
+
+            if prefix not in spaces:
+                spaces[prefix] = {
+                    "name": prefix.replace("/", "").replace("\\", "") or prefix,
+                    "path_prefix": prefix,
+                    "file_count": 0,
+                }
+            spaces[prefix]["file_count"] += 1
+
+        return sorted(spaces.values(), key=lambda item: item["name"].lower())
+
+    @staticmethod
+    def _extract_space_prefix(path: str) -> Optional[str]:
+        normalized = path.strip()
+        if not normalized:
+            return None
+
+        if normalized.startswith("\\"):
+            parts = [part for part in normalized.split("\\") if part]
+            if len(parts) >= 2:
+                return f"\\{parts[0]}\\{parts[1]}"
+            return None
+
+        if normalized.startswith("/"):
+            parts = [part for part in normalized.split("/") if part]
+            if parts:
+                return f"/{parts[0]}"
+            return "/"
+
+        parts = [part for part in normalized.replace("\\", "/").split("/") if part]
+        if parts:
+            return parts[0]
+
+        return None
 
 
 # Connexion à la base de données
@@ -182,7 +239,7 @@ async def health_check():
 
 
 @app.get("/api/files", response_model=List[FileInfo])
-async def get_files(path: Optional[str] = None, limit: int = 100, offset: int = 0, search: Optional[str] = None):
+async def get_files(path: Optional[str] = None, limit: int = 100, offset: int = 0, search: Optional[str] = None, space: Optional[str] = None):
     try:
         db = get_db_adapter()
         where_clause = "1=1"
@@ -195,6 +252,10 @@ async def get_files(path: Optional[str] = None, limit: int = 100, offset: int = 
         if path:
             where_clause += " AND path LIKE ?"
             params.append(f"{path}%")
+
+        if space:
+            where_clause += " AND path LIKE ?"
+            params.append(f"{space}%")
 
         query = f"""
             SELECT id, path, name, size, checksum, last_modified,
@@ -231,10 +292,10 @@ async def get_files(path: Optional[str] = None, limit: int = 100, offset: int = 
 
 
 @app.get("/api/stats", response_model=CrawlStats)
-async def get_crawl_stats():
+async def get_crawl_stats(space: Optional[str] = None):
     try:
         db = get_db_adapter()
-        stats = db.get_statistics()
+        stats = db.get_statistics(space=space)
         return CrawlStats(
             total_files=stats.get("total_files", 0),
             total_directories=stats.get("total_directories", 0),
@@ -249,7 +310,7 @@ async def get_crawl_stats():
 
 
 @app.get("/api/duplicates")
-async def get_duplicates():
+async def get_duplicates(space: Optional[str] = None):
     try:
         db = get_db_adapter()
         query = """
@@ -259,9 +320,13 @@ async def get_duplicates():
             FROM files f1
             JOIN files f2 ON f1.checksum = f2.checksum AND f1.id != f2.id
             WHERE f1.is_duplicate = 1
-            ORDER BY f1.size DESC
         """
-        results = db.execute_query(query)
+        params: List[Any] = []
+        if space:
+            query += " AND f1.path LIKE ?"
+            params.append(f"{space}%")
+        query += " ORDER BY f1.size DESC"
+        results = db.execute_query(query, params)
         return [
             {
                 "id": str(row[0]),
@@ -279,6 +344,16 @@ async def get_duplicates():
     except Exception as e:
         logger.error(f"Erreur get_duplicates: {e}")
         raise HTTPException(status_code=500, detail="Erreur lors de la récupération des doublons")
+
+
+@app.get("/api/spaces", response_model=List[SpaceInfo])
+async def get_spaces():
+    try:
+        db = get_db_adapter()
+        return [SpaceInfo(**space) for space in db.get_spaces()]
+    except Exception as e:
+        logger.error(f"Erreur get_spaces: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la récupération des espaces")
 
 
 @app.get("/api/db-explain", response_model=ExplainPlan)
