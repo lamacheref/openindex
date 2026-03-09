@@ -7,7 +7,7 @@ on:
     paths:
       - 'Dockerfile.crawler'
       - 'Dockerfile.frontend'
-      - 'requirements.txt'
+      - 'Archives/legacy/requirements/requirements.crawler.txt'
       - 'src/**'
       - 'config/**'
       - 'database/**'
@@ -19,7 +19,7 @@ on:
     paths:
       - 'Dockerfile.crawler'
       - 'Dockerfile.frontend'
-      - 'requirements.txt'
+      - 'Archives/legacy/requirements/requirements.crawler.txt'
       - 'src/**'
       - 'config/**'
       - 'database/**'
@@ -27,6 +27,10 @@ on:
       - 'nginx/**'
       - '.github/workflows/docker-j3.yml'
   workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
 
 env:
   REGISTRY: ghcr.io
@@ -50,7 +54,7 @@ jobs:
           filters: |
             crawler:
               - 'Dockerfile.crawler'
-              - 'requirements.txt'
+              - 'Archives/legacy/requirements/requirements.crawler.txt'
               - 'src/**'
               - 'config/**'
               - 'database/**'
