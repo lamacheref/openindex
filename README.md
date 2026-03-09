@@ -108,14 +108,17 @@ OpenIndex/
 
 ### Prérequis
 - Docker 20.10+ et Docker Compose 2.0+
-- Git et accès au dépôt OpenIndex
+- Git et accès aux dépôts OpenIndex
 - 8GB+ RAM pour builds Docker
 - 50GB+ espace disque disponible
 
 ### Installation
 ```bash
-# Cloner le projet
-git clone <repository-url>
+# Cloner le projet (depuis GitHub ou Gitea)
+git clone https://github.com/lamacheref/openindex.git
+# ou
+git clone ssh://git@gitea.smiden.eu:2255/flamachere/openindex.git
+
 cd OpenIndex
 
 # Configuration environnement
@@ -169,6 +172,10 @@ docker run --rm -p 3001:3000 openindex-frontend:test curl -f http://localhost:30
 - **Frontend** : VanillaJS + Alpine.js + HTMX + TailwindCSS
 - **Infrastructure** : Docker + Nginx + CI/CD Gitea
 
+### Dépôts Git
+- **GitHub (principal)** : https://github.com/lamacheref/openindex.git
+- **Gitea (backup)** : ssh://git@gitea.smiden.eu:2255/flamachere/openindex.git
+
 ### Reprise du Travail
 Après la semaine de vacances, pour reprendre le développement :
 
@@ -179,6 +186,10 @@ Après la semaine de vacances, pour reprendre le développement :
 
 ### Commandes Utiles
 ```bash
+# Synchronisation dépôts
+git push origin main    # Gitea
+git push github main    # GitHub
+
 # Vérifier état services
 ./deploy-modern.sh status
 
