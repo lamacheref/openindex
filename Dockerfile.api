@@ -18,8 +18,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Installation des dépendances Python
-COPY requirements.api.txt .
-RUN pip install --no-cache-dir -r requirements.api.txt
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copier les sources de l'API
 COPY src/api/ ./src/

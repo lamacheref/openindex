@@ -12,7 +12,7 @@ services:
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
       - "5432:5432"
     networks:
@@ -24,27 +24,43 @@ services:
       retries: 5
       start_period: 30s
 
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: openindex-pgadmin
+  crawler:
+    build:
+      context: .
+      dockerfile: Dockerfile.crawler
+    container_name: openindex-crawler
     restart: unless-stopped
     environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@openindex.local}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin123}
-      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: openindex
+      POSTGRES_USER: openindex_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-openindex_secure_password}
+      DEBUG: ${DEBUG:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    ports:
-      - "5050:80"
+      - ./logs:/app/logs
+      - ./config:/app/config:ro
     networks:
       - openindex-network
+
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: openindex-ui
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
     depends_on:
-      - postgres
+      - crawler
+    networks:
+      - openindex-network
 
 volumes:
   postgres_data:
-    driver: local
-  pgadmin_data:
     driver: local
 
 networks:

@@ -18,8 +18,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Installation des dépendances Python
-COPY requirements.web.txt .
-RUN pip install --no-cache-dir -r requirements.web.txt
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copier les sources de l'interface web
 COPY src/web_interface_v2.py ./src/

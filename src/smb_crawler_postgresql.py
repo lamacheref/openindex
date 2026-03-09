@@ -50,10 +50,10 @@ class SMBCrawlerPostgreSQL:
         self.share_name = share_name
         self.domain = domain
         self.postgres_config = postgres_config or {
-            'host': 'localhost',
-            'port': 5432,
-            'database': 'openindex',
-            'user': 'openindex_user',
+            'host': os.getenv('POSTGRES_HOST', 'localhost'),
+            'port': int(os.getenv('POSTGRES_PORT', '5432')),
+            'database': os.getenv('POSTGRES_DB', 'openindex'),
+            'user': os.getenv('POSTGRES_USER', 'openindex_user'),
             'password': os.getenv('POSTGRES_PASSWORD', 'openindex_secure_password')
         }
         self.max_workers = max_workers
@@ -857,10 +857,10 @@ def main():
         share_name=smb_config["share_name"],
         domain=smb_config["domain"],
         postgres_config={
-            'host': 'localhost',
-            'port': 5432,
-            'database': 'openindex',
-            'user': 'openindex_user',
+            'host': os.getenv('POSTGRES_HOST', 'localhost'),
+            'port': int(os.getenv('POSTGRES_PORT', '5432')),
+            'database': os.getenv('POSTGRES_DB', 'openindex'),
+            'user': os.getenv('POSTGRES_USER', 'openindex_user'),
             'password': os.getenv('POSTGRES_PASSWORD', 'openindex_secure_password')
         },
         max_workers=crawler_config["max_workers"],
