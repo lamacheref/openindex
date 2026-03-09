@@ -118,6 +118,12 @@
                         <i class="fas fa-chart-line mr-3"></i>
                         Monitoring
                     </a>
+                    <a href="#" @click="currentView = 'dbAnalysis'; loadDbExplain()" 
+                       class="flex items-center px-4 py-2 text-sm font-medium rounded-lg hover:bg-gray-100"
+                       :class="currentView === 'dbAnalysis' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'">
+                        <i class="fas fa-database mr-3"></i>
+                        DB Explain
+                    </a>
                 </nav>
             </div>
         </aside>
@@ -336,6 +342,37 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Vue Analyse DB -->
+                <div x-show="currentView === 'dbAnalysis'" class="fade-in">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold text-gray-900">🧠 Explain / Analyze DB</h2>
+                        <div class="flex items-center space-x-3">
+                            <select x-model="selectedExplainQuery" class="px-3 py-2 border border-gray-300 rounded-lg">
+                                <option value="files_list">Liste des fichiers</option>
+                                <option value="duplicates">Doublons</option>
+                                <option value="stats">Statistiques globales</option>
+                            </select>
+                            <label class="flex items-center text-sm text-gray-700">
+                                <input type="checkbox" x-model="explainAnalyze" class="mr-2">ANALYZE
+                            </label>
+                            <button @click="loadDbExplain()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">Lancer</button>
+                        </div>
+                    </div>
+                    <div class="card p-6">
+                        <div x-show="loadingDbExplain" class="text-center py-4">
+                            <div class="loading"></div>
+                            <p class="mt-2 text-gray-600">Exécution du plan SQL...</p>
+                        </div>
+                        <template x-if="dbExplainError">
+                            <p class="text-red-600" x-text="dbExplainError"></p>
+                        </template>
+                        <template x-if="!loadingDbExplain && dbExplainPlan.length > 0">
+                            <pre class="bg-gray-900 text-green-200 p-4 rounded-lg overflow-x-auto text-sm" x-text="dbExplainPlan.join('\n')"></pre>
+                        </template>
+                    </div>
+                </div>
+                </div>
             </div>
         </main>
     </div>
@@ -356,6 +393,11 @@
                 ws: null,
                 showNotifications: false,
                 unreadNotifications: 0,
+                selectedExplainQuery: 'files_list',
+                explainAnalyze: true,
+                dbExplainPlan: [],
+                loadingDbExplain: false,
+                dbExplainError: '',
                 
                 init() {
                     this.loadStats();
@@ -367,6 +409,8 @@
                         this.loadFiles();
                     } else if (this.currentView === 'duplicates') {
                         this.loadDuplicates();
+                    } else if (this.currentView === 'dbAnalysis') {
+                        this.loadDbExplain();
                     }
                 },
                 
@@ -410,6 +454,31 @@
                         console.error('Erreur doublons:', error);
                     } finally {
                         this.loading = false;
+                    }
+                },
+                
+
+                async loadDbExplain() {
+                    this.loadingDbExplain = true;
+                    this.dbExplainError = '';
+                    try {
+                        const params = new URLSearchParams({
+                            query_name: this.selectedExplainQuery,
+                            analyze: this.explainAnalyze
+                        });
+                        const response = await fetch(`/api/db-explain?${params}`);
+                        if (!response.ok) {
+                            const details = await response.json();
+                            throw new Error(details.detail || 'Erreur API');
+                        }
+                        const payload = await response.json();
+                        this.dbExplainPlan = payload.plan || [];
+                    } catch (error) {
+                        this.dbExplainError = error.message;
+                        this.dbExplainPlan = [];
+                        console.error('Erreur Explain:', error);
+                    } finally {
+                        this.loadingDbExplain = false;
                     }
                 },
                 
