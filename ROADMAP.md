@@ -24,11 +24,13 @@ L'architecture a été migrée vers une stack moderne microservices avec :
   - ✅ Documentation mise à jour (README, CHANGELOG, ROADMAP)
 
 - **Jour 2 (Mardi 27/02) - 7h** :
+  - [x] Proposition J2 validée : plan de test et critères d'acceptation synchronisés (README / ROADMAP / TODO)
   - [ ] Tests automatisés FastAPI (pytest + pytest-asyncio)
   - [ ] Tests frontend VanillaJS (unit tests + integration)
   - [ ] Validation WebSocket monitoring temps réel
   - [ ] Tests charges API (1000+ requêtes concurrentes)
   - [ ] Optimisation performance base de données
+  - [ ] Livraison de fin de journée : état d'avancement, risques et décisions documentées
 
 - **Jour 3 (Mercredi 28/02) - 7h** :
   - [ ] Configuration CI/CD complète (build + test + deploy)
