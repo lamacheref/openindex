@@ -17,6 +17,7 @@ def test_frontend_has_expected_views_and_bindings():
         "files": "Fichiers",
         "duplicates": "Doublons",
         "monitoring": "Monitoring",
+        "implementation": "Implémentation rapide",
     }
 
     for view_key, view_label in expected_views.items():
@@ -37,12 +38,12 @@ def test_frontend_nav_switches_cover_all_main_views():
     html = read_frontend_html()
 
     view_switches = set(re.findall(r"currentView\s*=\s*'([a-z_]+)'", html))
-    assert {"dashboard", "files", "duplicates", "monitoring"}.issubset(view_switches)
+    assert {"dashboard", "files", "duplicates", "monitoring", "implementation"}.issubset(view_switches)
 
 
 def test_frontend_main_views_are_declared_once_each():
     html = read_frontend_html()
 
-    for view_key in ("dashboard", "files", "duplicates", "monitoring"):
+    for view_key in ("dashboard", "files", "duplicates", "monitoring", "implementation"):
         occurrences = len(re.findall(rf"x-show=\"currentView === '{view_key}'\"", html))
         assert occurrences == 1, f"La vue {view_key} doit être déclarée exactement une fois"

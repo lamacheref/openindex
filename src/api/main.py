@@ -12,6 +12,7 @@ import asyncio
 import logging
 import os
 from datetime import datetime
+from uuid import uuid4
 
 try:
     import psycopg2
@@ -82,6 +83,44 @@ class ExplainPlan(BaseModel):
     query_name: str
     analyze: bool
     plan: List[str]
+
+
+class CrawlConnectionConfig(BaseModel):
+    username: str
+    password: str
+    domain: Optional[str] = None
+
+
+class CrawlConfigCreate(BaseModel):
+    name: str
+    domain_zone: str
+    start_path: str
+    include_paths: List[str] = []
+    exclude_paths: List[str] = []
+    connection: CrawlConnectionConfig
+
+
+class CrawlConfigPublic(BaseModel):
+    id: str
+    name: str
+    domain_zone: str
+    start_path: str
+    include_paths: List[str]
+    exclude_paths: List[str]
+    connection_username: str
+    connection_domain: Optional[str] = None
+    created_at: str
+
+
+class CrawlStartRequest(BaseModel):
+    config_id: str
+
+
+class CrawlRun(BaseModel):
+    run_id: str
+    config_id: str
+    status: str
+    triggered_at: str
 
 
 def extract_space_prefix(path: str) -> Optional[str]:
@@ -257,6 +296,9 @@ EXPLAIN_QUERIES = {
     """,
 }
 
+CRAWL_CONFIGS: List[Dict[str, Any]] = []
+CRAWL_RUNS: List[Dict[str, Any]] = []
+
 
 @app.get("/health")
 async def health_check():
@@ -421,6 +463,47 @@ async def get_db_explain(query_name: str = "files_list", analyze: bool = True):
     except Exception as e:
         logger.error(f"Erreur get_db_explain: {e}")
         raise HTTPException(status_code=500, detail="Erreur lors de la récupération du plan EXPLAIN")
+
+
+@app.get("/api/crawl-configs", response_model=List[CrawlConfigPublic])
+async def list_crawl_configs():
+    return [CrawlConfigPublic(**config) for config in CRAWL_CONFIGS]
+
+
+@app.post("/api/crawl-configs", response_model=CrawlConfigPublic)
+async def create_crawl_config(payload: CrawlConfigCreate):
+    config_id = str(uuid4())
+    config = {
+        "id": config_id,
+        "name": payload.name,
+        "domain_zone": payload.domain_zone,
+        "start_path": payload.start_path,
+        "include_paths": payload.include_paths,
+        "exclude_paths": payload.exclude_paths,
+        "connection_username": payload.connection.username,
+        "connection_domain": payload.connection.domain,
+        "created_at": datetime.now().isoformat(),
+        "_secret_password": payload.connection.password,
+    }
+    CRAWL_CONFIGS.append(config)
+    public_config = {key: value for key, value in config.items() if not key.startswith("_secret_")}
+    return CrawlConfigPublic(**public_config)
+
+
+@app.post("/api/crawls/start", response_model=CrawlRun)
+async def start_crawl(payload: CrawlStartRequest):
+    config = next((cfg for cfg in CRAWL_CONFIGS if cfg["id"] == payload.config_id), None)
+    if not config:
+        raise HTTPException(status_code=404, detail="Configuration de crawl introuvable")
+
+    run = {
+        "run_id": str(uuid4()),
+        "config_id": payload.config_id,
+        "status": "queued",
+        "triggered_at": datetime.now().isoformat(),
+    }
+    CRAWL_RUNS.append(run)
+    return CrawlRun(**run)
 
 
 @app.websocket("/ws")
