@@ -446,7 +446,31 @@ async def get_duplicates(space: Optional[str] = None):
 async def get_spaces():
     try:
         db = get_db_adapter()
-        return [SpaceInfo(**space) for space in db.get_spaces()]
+
+        if hasattr(db, "get_spaces"):
+            spaces = db.get_spaces()
+        else:
+            # Compatibilité rétroactive: certains doubles de test/anciens adaptateurs
+            # n'exposent que execute_query. On reconstruit alors la liste des espaces.
+            paths = db.execute_query("SELECT path FROM files WHERE path IS NOT NULL")
+            spaces_map: Dict[str, Dict[str, Any]] = {}
+            for row in paths:
+                raw_path = row[0] if row else None
+                if not raw_path:
+                    continue
+                prefix = SQLiteAdapter._extract_space_prefix(raw_path)
+                if not prefix:
+                    continue
+                if prefix not in spaces_map:
+                    spaces_map[prefix] = {
+                        "name": prefix.replace("/", "").replace("\\", "") or prefix,
+                        "path_prefix": prefix,
+                        "file_count": 0,
+                    }
+                spaces_map[prefix]["file_count"] += 1
+            spaces = sorted(spaces_map.values(), key=lambda item: item["name"].lower())
+
+        return [SpaceInfo(**space) for space in spaces]
     except Exception as e:
         logger.error(f"Erreur get_spaces: {e}")
         raise HTTPException(status_code=500, detail="Erreur lors de la récupération des espaces")
