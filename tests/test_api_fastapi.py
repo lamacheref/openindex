@@ -173,3 +173,61 @@ def test_get_db_explain_endpoint(client):
 def test_get_db_explain_invalid_query(client):
     response = client.get('/api/db-explain', params={'query_name': 'not_allowed'})
     assert response.status_code == 400
+
+
+def test_create_and_list_crawl_configs(client):
+    api_main.CRAWL_CONFIGS.clear()
+    payload = {
+        "name": "Crawl Finance",
+        "domain_zone": "EMEA",
+        "start_path": "\\\\srv\\finance",
+        "include_paths": ["\\\\srv\\finance\\public"],
+        "exclude_paths": ["\\\\srv\\finance\\temp"],
+        "connection": {
+            "username": "svc_finance",
+            "password": "secret",
+            "domain": "CORP",
+        },
+    }
+
+    create_response = client.post('/api/crawl-configs', json=payload)
+    assert create_response.status_code == 200
+    created = create_response.json()
+    assert created['name'] == 'Crawl Finance'
+    assert 'connection_username' in created
+    assert '_secret_password' not in created
+
+    list_response = client.get('/api/crawl-configs')
+    assert list_response.status_code == 200
+    listed = list_response.json()
+    assert len(listed) == 1
+    assert listed[0]['domain_zone'] == 'EMEA'
+
+
+def test_start_crawl_requires_existing_config(client):
+    api_main.CRAWL_CONFIGS.clear()
+
+    missing = client.post('/api/crawls/start', json={'config_id': 'missing'})
+    assert missing.status_code == 404
+
+    created = client.post(
+        '/api/crawl-configs',
+        json={
+            "name": "Crawl RH",
+            "domain_zone": "FR",
+            "start_path": "\\\\srv\\rh",
+            "include_paths": [],
+            "exclude_paths": [],
+            "connection": {
+                "username": "svc_rh",
+                "password": "secret",
+                "domain": "CORP",
+            },
+        },
+    ).json()
+
+    started = client.post('/api/crawls/start', json={'config_id': created['id']})
+    assert started.status_code == 200
+    payload = started.json()
+    assert payload['status'] == 'queued'
+    assert payload['config_id'] == created['id']
