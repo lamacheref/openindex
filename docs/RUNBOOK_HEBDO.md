@@ -27,7 +27,10 @@ docker compose -f docker-compose.j3.yml up -d
 # 3) Jeu de tests API critique reproductible
 pytest -q tests/test_api_smoke_critical.py
 
-# 4) Smoke runtime (optionnel mais recommandé)
+# 4) Test incident SQLite (simulation absence/corruption + temps de recovery)
+python3 scripts/test_sqlite_incident_runbook.py
+
+# 5) Smoke runtime (optionnel mais recommandé)
 curl -s http://localhost:8000/health
 curl -s http://localhost:8000/api/stats
 curl -s "http://localhost:8000/api/files?limit=5&offset=0"
@@ -57,7 +60,7 @@ curl -s "http://localhost:8000/api/db-explain?query_name=files_list"
 6. **Valider le service**
    - Vérifier `/health`, `/api/stats`, `/api/files`, `/api/db-explain`.
 7. **Si reconstruction impossible**
-   - Recréer une base saine via `database/init.sql` puis relancer un crawl.
+   - Recréer une base SQLite saine (fichier neuf) puis relancer un crawl complet pour réindexation.
 8. **Documenter l'incident**
    - Date, impact, cause probable, action corrective et action préventive dans `docs/`.
 
@@ -89,3 +92,11 @@ Le démarrage hebdo est validé si :
 - Le test `tests/test_api_smoke_critical.py` passe sans modification locale.
 - Les 4 endpoints critiques répondent en 2xx.
 - Aucun incident bloquant SQLite n'est ouvert.
+
+## Validation testée du runbook incident
+
+Une simulation locale est disponible via `scripts/test_sqlite_incident_runbook.py` pour vérifier:
+- création/reprise depuis DB absente,
+- détection de corruption,
+- récupération depuis sauvegarde,
+- mesure de temps de recovery.
