@@ -54,7 +54,8 @@ ensure_ghcr_auth() {
   fi
 
   if [ -n "${GHCR_USERNAME:-}" ] && [ -n "${GHCR_TOKEN:-}" ]; then
-    echo "🔐 Authentification GHCR avec GHCR_USERNAME/GHCR_TOKEN..."
+    echo "🔐 Forçage re-login GHCR avec GHCR_USERNAME/GHCR_TOKEN..."
+    docker logout ghcr.io >/dev/null 2>&1 || true
     if ! printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin >/dev/null 2>&1; then
       echo "❌ Échec docker login ghcr.io. Vérifiez GHCR_USERNAME/GHCR_TOKEN (scope package read)."
       exit 1
@@ -78,12 +79,6 @@ EOT
 pull_images() {
   ensure_env
   ensure_ghcr_auth
-  echo "📦 Pull des images GHCR (api + crawler + ui + postgres)..."
-  $COMPOSE_CMD pull
-}
-
-pull_images() {
-  ensure_env
   echo "📦 Pull des images GHCR (api + crawler + ui + postgres)..."
   $COMPOSE_CMD pull
 }
@@ -125,7 +120,7 @@ case "${1:-help}" in
     cat <<EOT
 Usage: ./deploy.sh [pull|up|down|restart|status|logs [service]|help]
 Services: postgres, api, crawler, ui
-Note GHCR: si images privées, renseigner GHCR_USERNAME/GHCR_TOKEN dans .env.
+Note GHCR: re-login forcé si GHCR_USERNAME/GHCR_TOKEN sont définis dans .env.
 EOT
     ;;
   *)
