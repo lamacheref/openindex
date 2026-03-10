@@ -2,33 +2,32 @@
 
 ## Objectif de phase
 
-Passer de la readiness documentée à une migration contrôlée, avec critères go/no-go vérifiables.
+Passer de la readiness documentée à une exécution PostgreSQL contrôlée, avec critères go/no-go vérifiables.
 
-## Critères go/no-go J3 -> J4
+## Critères go/no-go pour exécution J4 PostgreSQL
 
 ### Go (tous requis)
-- P95 `/api/stats` et `/api/files` en PostgreSQL <= +10% vs SQLite (3 runs).
-- Dry-run migration sans erreur bloquante avec journal.
+- P95 `/api/stats` et `/api/files` en PostgreSQL stables sur 3 runs successifs.
+- Initialisation PostgreSQL + recrawl complet sans erreur bloquante avec journal.
 - Procédure rollback testée et validée par un pair.
-- CI verte en matrice `sqlite` + `postgresql`.
+- CI verte sur le backend `postgresql` (parcours de référence).
 
 ### No-go (un seul suffit)
-- Régression P95 > 10% sur endpoint critique.
-- Échec du journal dry-run.
+- Régression P95 significative et répétable sur endpoint critique.
+- Échec du journal d'initialisation/recrawl.
 - Rollback incomplet/non reproductible.
-- CI rouge sur un backend DB.
+- CI rouge sur le backend PostgreSQL de référence.
 
 ## Commandes de référence
 
 ```bash
-python scripts/migration_dry_run_j3_j4.py --dry-run --journal docs/artifacts/migration_dry_run_j3_j4.json
-python scripts/benchmark_dual_db.py --samples 30 --output docs/artifacts/bench_sqlite_vs_postgresql.json
+python scripts/benchmark_dual_db.py --samples 30 --output docs/artifacts/bench_sqlite_vs_postgresql.json  # comparaison vs baseline historique SQLite
 ```
 
 ## Checklist release J4
 
-- [ ] CI verte sur `sqlite` et `postgresql`
-- [ ] Dry-run migration versionné
+- [ ] CI verte sur `postgresql`
+- [ ] Rapport d'initialisation + recrawl versionné
 - [ ] Benchmark comparatif publié
 - [ ] Rollback relu/testé
 - [ ] `CHANGELOG.md` à jour

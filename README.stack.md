@@ -6,9 +6,9 @@
 |---|---|
 | API | FastAPI (`src/api/main.py`) |
 | Frontend | HTML/JS statique (`frontend/index.html`) via Nginx |
-| Base J3 | SQLite (`OPENINDEX_DB_PATH`) |
-| Orchestration J3 | `docker-compose.j3.yml` |
-| Image J3 | `Dockerfile.j3` + `OPENINDEX_J3_IMAGE` |
+| Base active | PostgreSQL (`OPENINDEX_DB_BACKEND=postgresql`) |
+| Orchestration | `docker-compose.yml` |
+| Images runtime | `OPENINDEX_API_IMAGE`, `OPENINDEX_CRAWLER_IMAGE`, `OPENINDEX_UI_IMAGE` (GHCR) |
 
 ## Stack legacy (historique)
 
@@ -16,13 +16,13 @@ Les éléments ci-dessous restent disponibles pour historique/migration mais ne 
 
 - `docker-compose.stack.yml`
 - `deploy-stack.sh`
-- `Dockerfile.web`
-- ancienne UI Streamlit
+- `Archives/legacy/dockerfiles/Dockerfile.web`
+- `Archives/legacy/dockerfiles/Dockerfile.legacy` et ancienne UI Streamlit
 
-## Architecture fonctionnelle J3
+## Architecture fonctionnelle active
 
 ```text
-Frontend (3000) -> API FastAPI (8000) -> SQLite (fichier local monté)
+Frontend (3000) -> API FastAPI (8000) -> PostgreSQL (service dédié)
                                  \-> WebSocket /ws
 ```
 
@@ -35,8 +35,8 @@ Frontend (3000) -> API FastAPI (8000) -> SQLite (fichier local monté)
 - `GET /api/db-explain`
 - `GET /docs`
 
-## Transition J4 (prévue)
+## Décision J4 (actée)
 
-- Basculer vers PostgreSQL comme backend principal.
-- Conserver l’API FastAPI et le frontend actuel.
-- Adapter la CI pour image applicative cible J4.
+- PostgreSQL est le backend principal et unique du parcours cible.
+- La migration SQLite est abandonnée sur zone de test: recrawl complet systématique.
+- L’API FastAPI et le frontend actuel sont conservés.
