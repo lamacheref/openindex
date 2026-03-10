@@ -14,6 +14,7 @@ on:
       - 'database/**'
       - 'frontend/**'
       - 'nginx/**'
+      - 'requirements/dev.txt'
       - '.github/workflows/docker-stack.yml'
   pull_request:
     branches: [main, develop]
@@ -27,6 +28,7 @@ on:
       - 'database/**'
       - 'frontend/**'
       - 'nginx/**'
+      - 'requirements/dev.txt'
       - '.github/workflows/docker-stack.yml'
   workflow_dispatch:
 
@@ -104,6 +106,7 @@ jobs:
               - 'src/config_manager.py'
               - 'src/logging_config.py'
               - 'config/**'
+              - 'requirements/dev.txt'
             crawler:
               - 'Dockerfile.crawler'
               - 'Archives/legacy/requirements/requirements.crawler.txt'
