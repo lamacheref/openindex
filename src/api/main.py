@@ -12,6 +12,7 @@ import asyncio
 import logging
 import os
 from datetime import datetime
+from uuid import uuid4
 
 try:
     import psycopg2
@@ -422,6 +423,9 @@ EXPLAIN_QUERIES = {
         FROM files
     """,
 }
+
+CRAWL_CONFIGS: List[Dict[str, Any]] = []
+CRAWL_RUNS: List[Dict[str, Any]] = []
 
 
 
