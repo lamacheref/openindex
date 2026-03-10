@@ -4,7 +4,7 @@
 
 ### Par phase
 
-1. **J3 — Stabilisation** : `docs/phases/J3_STABILISATION.md`
+1. **Stabilisation initiale (historique)** : `docs/phases/J3_STABILISATION.md`
 2. **J4 — Migration PostgreSQL** : `docs/phases/J4_MIGRATION.md`
 3. **J5 — Qualité & observabilité** : `docs/phases/J5_QUALITE_OBSERVABILITE.md`
 

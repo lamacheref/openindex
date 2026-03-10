@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Script unique de déploiement Docker pour OpenIndex
-# Stack canonique: postgres + crawler + ui (nginx)
+# Stack canonique: postgres + api + crawler + ui
 
 set -euo pipefail
 
@@ -20,18 +20,32 @@ ensure_env() {
       cp .env.example .env
     else
       cat > .env <<EOT
+OPENINDEX_API_IMAGE=ghcr.io/lamacheref/openindex-api:latest
+OPENINDEX_CRAWLER_IMAGE=ghcr.io/lamacheref/openindex-crawler:latest
+OPENINDEX_UI_IMAGE=ghcr.io/lamacheref/openindex-ui:latest
+POSTGRES_DB=openindex
+POSTGRES_USER=openindex_user
 POSTGRES_PASSWORD=openindex_secure_password
+POSTGRES_PORT=5432
+OPENINDEX_API_PORT=8000
+OPENINDEX_UI_PORT=3000
 DEBUG=false
 EOT
     fi
-    echo "✅ .env créé. Complétez vos identifiants SMB dans config/admin_credentials.ini."
+    echo "✅ .env créé. Vérifiez les images GHCR et les identifiants DB avant déploiement."
   fi
+}
+
+pull_images() {
+  ensure_env
+  echo "📦 Pull des images GHCR (api + crawler + ui + postgres)..."
+  $COMPOSE_CMD pull
 }
 
 up() {
   ensure_env
-  echo "🚀 Démarrage des services (postgres + crawler + ui)..."
-  $COMPOSE_CMD up -d --build
+  echo "🚀 Déploiement complet de la stack (postgres + api + crawler + ui)..."
+  $COMPOSE_CMD up -d
 }
 
 down() {
@@ -41,6 +55,7 @@ down() {
 
 restart() {
   down
+  pull_images
   up
 }
 
@@ -53,6 +68,7 @@ logs() {
 }
 
 case "${1:-help}" in
+  pull) pull_images ;;
   up) up ;;
   down) down ;;
   restart) restart ;;
@@ -60,8 +76,8 @@ case "${1:-help}" in
   logs) logs "${2:-}" ;;
   help|-h|--help)
     cat <<EOT
-Usage: ./deploy.sh [up|down|restart|status|logs [service]|help]
-Services démarrés: postgres, crawler, ui
+Usage: ./deploy.sh [pull|up|down|restart|status|logs [service]|help]
+Services: postgres, api, crawler, ui
 EOT
     ;;
   *)

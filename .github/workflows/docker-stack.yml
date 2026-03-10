@@ -1,10 +1,11 @@
-name: Docker Images CI
+name: Docker Stack CI
 
 on:
   push:
     branches: [main, develop]
     tags: ['v*']
     paths:
+      - 'Dockerfile.api'
       - 'Dockerfile.crawler'
       - 'Dockerfile.frontend'
       - 'Archives/legacy/requirements/requirements.crawler.txt'
@@ -13,10 +14,12 @@ on:
       - 'database/**'
       - 'frontend/**'
       - 'nginx/**'
-      - '.github/workflows/docker-j3.yml'
+      - 'requirements/dev.txt'
+      - '.github/workflows/docker-stack.yml'
   pull_request:
     branches: [main, develop]
     paths:
+      - 'Dockerfile.api'
       - 'Dockerfile.crawler'
       - 'Dockerfile.frontend'
       - 'Archives/legacy/requirements/requirements.crawler.txt'
@@ -25,7 +28,8 @@ on:
       - 'database/**'
       - 'frontend/**'
       - 'nginx/**'
-      - '.github/workflows/docker-j3.yml'
+      - 'requirements/dev.txt'
+      - '.github/workflows/docker-stack.yml'
   workflow_dispatch:
 
 permissions:
@@ -34,20 +38,16 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
+  IMAGE_API: ${{ github.repository_owner }}/openindex-api
   IMAGE_CRAWLER: ${{ github.repository_owner }}/openindex-crawler
   IMAGE_UI: ${{ github.repository_owner }}/openindex-ui
 
 jobs:
-
-  api-tests-dual-db:
+  api-tests-postgresql:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        db_backend: [sqlite, postgresql]
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17-alpine
         env:
           POSTGRES_DB: openindex
           POSTGRES_USER: openindex_user
@@ -60,7 +60,7 @@ jobs:
           --health-timeout=5s
           --health-retries=5
     env:
-      OPENINDEX_DB_BACKEND: ${{ matrix.db_backend }}
+      OPENINDEX_DB_BACKEND: postgresql
       POSTGRES_HOST: localhost
       POSTGRES_PORT: 5432
       POSTGRES_DB: openindex
@@ -80,18 +80,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements/dev.txt
 
-      - name: Prepare SQLite fixture
-        if: matrix.db_backend == 'sqlite'
-        run: |
-          python - <<'PY'
-          import sqlite3
-          conn = sqlite3.connect('openindex.db')
-          cur = conn.cursor()
-          cur.execute('CREATE TABLE IF NOT EXISTS files (id TEXT, path TEXT, name TEXT, size INTEGER, checksum TEXT, last_modified TEXT, is_directory INTEGER, is_duplicate INTEGER, duplicate_of TEXT, created_at TEXT, updated_at TEXT)')
-          conn.commit()
-          conn.close()
-          PY
-        
       - name: Run API tests
         run: |
           pytest -q tests/test_api_fastapi.py tests/test_api_smoke_critical.py tests/test_db_backend_feature_flag.py
@@ -99,6 +87,7 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
+      api: ${{ steps.filter.outputs.api }}
       crawler: ${{ steps.filter.outputs.crawler }}
       ui: ${{ steps.filter.outputs.ui }}
     steps:
@@ -110,6 +99,14 @@ jobs:
         uses: dorny/paths-filter@v3
         with:
           filters: |
+            api:
+              - 'Dockerfile.api'
+              - 'src/api/**'
+              - 'src/postgres_adapter.py'
+              - 'src/config_manager.py'
+              - 'src/logging_config.py'
+              - 'config/**'
+              - 'requirements/dev.txt'
             crawler:
               - 'Dockerfile.crawler'
               - 'Archives/legacy/requirements/requirements.crawler.txt'
@@ -120,6 +117,50 @@ jobs:
               - 'Dockerfile.frontend'
               - 'frontend/**'
               - 'nginx/**'
+
+  docker-build-api:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.api == 'true' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (api)
+        id: meta-api
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_API }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha
+
+      - name: Build and push api image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.api
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta-api.outputs.tags }}
+          labels: ${{ steps.meta-api.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   docker-build-crawler:
     runs-on: ubuntu-latest

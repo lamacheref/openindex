@@ -11,7 +11,6 @@ from typing import List, Optional, Dict, Any
 import asyncio
 import logging
 import os
-import sqlite3
 from datetime import datetime
 
 try:
@@ -85,92 +84,28 @@ class ExplainPlan(BaseModel):
     plan: List[str]
 
 
-class SQLiteAdapter:
-    """Adaptateur SQLite minimal pour l'API."""
-
-    def __init__(self, db_path: str):
-        self.db_path = db_path
-
-    def execute_query(self, query: str, params: Optional[List[Any]] = None) -> List[tuple]:
-        params = params or []
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(query, params)
-            return cursor.fetchall()
-
-    def get_statistics(self, space: Optional[str] = None) -> Dict[str, Any]:
-        query = """
-            SELECT
-                COUNT(*) as total_files,
-                SUM(CASE WHEN is_directory = 1 THEN 1 ELSE 0 END) as total_directories,
-                COALESCE(SUM(CASE WHEN is_directory = 0 THEN size ELSE 0 END), 0) as total_size,
-                SUM(CASE WHEN is_duplicate = 1 THEN 1 ELSE 0 END) as duplicate_files
-            FROM files
-        """
-        params: List[Any] = []
-        if space:
-            query += " WHERE path LIKE ?"
-            params.append(f"{space}%")
-
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(query, params)
-            row = cursor.fetchone() or (0, 0, 0, 0)
-            return {
-                "total_files": row[0] or 0,
-                "total_directories": row[1] or 0,
-                "total_size": row[2] or 0,
-                "duplicate_files": row[3] or 0,
-                "crawl_duration": None,
-            }
-
-    def get_spaces(self) -> List[Dict[str, Any]]:
-        paths = self.execute_query("SELECT path FROM files WHERE path IS NOT NULL")
-        spaces: Dict[str, Dict[str, Any]] = {}
-
-        for row in paths:
-            path = row[0]
-            if not path:
-                continue
-
-            prefix = self._extract_space_prefix(path)
-            if not prefix:
-                continue
-
-            if prefix not in spaces:
-                spaces[prefix] = {
-                    "name": prefix.replace("/", "").replace("\\", "") or prefix,
-                    "path_prefix": prefix,
-                    "file_count": 0,
-                }
-            spaces[prefix]["file_count"] += 1
-
-        return sorted(spaces.values(), key=lambda item: item["name"].lower())
-
-    @staticmethod
-    def _extract_space_prefix(path: str) -> Optional[str]:
-        normalized = path.strip()
-        if not normalized:
-            return None
-
-        if normalized.startswith("\\"):
-            parts = [part for part in normalized.split("\\") if part]
-            if len(parts) >= 2:
-                return f"\\{parts[0]}\\{parts[1]}"
-            return None
-
-        if normalized.startswith("/"):
-            parts = [part for part in normalized.split("/") if part]
-            if parts:
-                return f"/{parts[0]}"
-            return "/"
-
-        parts = [part for part in normalized.replace("\\", "/").split("/") if part]
-        if parts:
-            return parts[0]
-
+def extract_space_prefix(path: str) -> Optional[str]:
+    normalized = path.strip()
+    if not normalized:
         return None
 
+    if normalized.startswith("\\"):
+        parts = [part for part in normalized.split("\\") if part]
+        if len(parts) >= 2:
+            return f"\\{parts[0]}\\{parts[1]}"
+        return None
+
+    if normalized.startswith("/"):
+        parts = [part for part in normalized.split("/") if part]
+        if parts:
+            return f"/{parts[0]}"
+        return "/"
+
+    parts = [part for part in normalized.replace("\\", "/").split("/") if part]
+    if parts:
+        return parts[0]
+
+    return None
 
 class PostgreSQLAdapter:
     """Adaptateur PostgreSQL minimal pour l'API."""
@@ -224,7 +159,7 @@ class PostgreSQLAdapter:
             if not path:
                 continue
 
-            prefix = SQLiteAdapter._extract_space_prefix(path)
+            prefix = extract_space_prefix(path)
             if not prefix:
                 continue
 
@@ -241,8 +176,8 @@ class PostgreSQLAdapter:
 
 # Connexion à la base de données
 def get_db_adapter():
-    """Récupère un adaptateur DB selon le feature flag OPENINDEX_DB_BACKEND."""
-    backend = os.getenv("OPENINDEX_DB_BACKEND", "sqlite").strip().lower()
+    """Récupère l'adaptateur PostgreSQL (backend unique)."""
+    backend = os.getenv("OPENINDEX_DB_BACKEND", "postgresql").strip().lower()
 
     if backend == "postgresql":
         if psycopg2 is None:
@@ -263,13 +198,7 @@ def get_db_adapter():
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Base PostgreSQL indisponible: {exc}") from exc
 
-    if backend != "sqlite":
-        raise HTTPException(status_code=500, detail=f"Backend OPENINDEX_DB_BACKEND invalide: {backend}")
-
-    db_path = os.getenv("OPENINDEX_DB_PATH", "openindex.db")
-    if not os.path.exists(db_path):
-        raise HTTPException(status_code=500, detail=f"Base SQLite introuvable: {db_path}")
-    return SQLiteAdapter(db_path)
+    raise HTTPException(status_code=500, detail=f"Backend OPENINDEX_DB_BACKEND invalide: {backend}")
 
 
 # Gestionnaire WebSocket pour le monitoring
@@ -458,7 +387,7 @@ async def get_spaces():
                 raw_path = row[0] if row else None
                 if not raw_path:
                     continue
-                prefix = SQLiteAdapter._extract_space_prefix(raw_path)
+                prefix = extract_space_prefix(raw_path)
                 if not prefix:
                     continue
                 if prefix not in spaces_map:
