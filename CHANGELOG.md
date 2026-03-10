@@ -1,5 +1,14 @@
 # Changelog OpenIndex
 
+## 2026-03-10 — Stack runtime unifiée GHCR + déploiement complet
+
+- Refonte de `docker-compose.yml` vers une stack complète `postgres:17-alpine` + `api` + `crawler` + `ui`.
+- Runtime configuré sur images GHCR (`OPENINDEX_API_IMAGE`, `OPENINDEX_CRAWLER_IMAGE`, `OPENINDEX_UI_IMAGE`) pour une base d’artefacts unique.
+- Workflow CI renommé en `.github/workflows/docker-stack.yml` avec build/push des trois images (API, crawler, UI).
+- Mise à jour de `.env.example` et `deploy.sh` pour un déploiement complet (`pull`, `up`, `restart`) basé sur les images publiées.
+- Archivage des Dockerfiles legacy inutilisés dans `Archives/legacy/dockerfiles/`.
+- Suppression des références actives à `J3` dans la documentation opératoire principale.
+
 ## 2026-03-10 — T-01 TODO exécuté (J4 PostgreSQL only)
 
 - Clôture de T-01 dans `TODO.md` avec adaptation de la checklist commando au mode PostgreSQL unique.

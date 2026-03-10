@@ -7,8 +7,8 @@
 | API | FastAPI (`src/api/main.py`) |
 | Frontend | HTML/JS statique (`frontend/index.html`) via Nginx |
 | Base active | PostgreSQL (`OPENINDEX_DB_BACKEND=postgresql`) |
-| Orchestration J3 | `docker-compose.j3.yml` |
-| Image J3 | `Dockerfile.j3` + `OPENINDEX_J3_IMAGE` |
+| Orchestration | `docker-compose.yml` |
+| Images runtime | `OPENINDEX_API_IMAGE`, `OPENINDEX_CRAWLER_IMAGE`, `OPENINDEX_UI_IMAGE` (GHCR) |
 
 ## Stack legacy (historique)
 
@@ -16,8 +16,8 @@ Les éléments ci-dessous restent disponibles pour historique/migration mais ne 
 
 - `docker-compose.stack.yml`
 - `deploy-stack.sh`
-- `Dockerfile.web`
-- ancienne UI Streamlit
+- `Archives/legacy/dockerfiles/Dockerfile.web`
+- `Archives/legacy/dockerfiles/Dockerfile.legacy` et ancienne UI Streamlit
 
 ## Architecture fonctionnelle active
 

@@ -22,9 +22,9 @@ Industrialiser OpenIndex pour un usage régulier en environnement SMB volumineux
 - Formaliser procédures d’incident sur la base active.
 - Clarifier les workflows CI utiles et déprécier les parcours legacy.
 
-## Phase J3 — Stabilisation technique
+## Phase de stabilisation initiale (historique)
 
-- Exploitation robuste de la stack active (FastAPI + frontend + SQLite).
+- Exploitation robuste initiale de la stack API + frontend avant bascule PostgreSQL.
 - Optimisation des performances de consultation.
 - Durcissement des exécutions longues côté crawler.
 
