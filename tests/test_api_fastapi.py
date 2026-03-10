@@ -84,6 +84,11 @@ class DummyDB:
             "crawl_duration": 4.2,
         }
 
+    def get_spaces(self):
+        return [
+            {"name": "share", "path_prefix": "/share", "file_count": 2},
+        ]
+
 
 @pytest.fixture
 def client(monkeypatch):
