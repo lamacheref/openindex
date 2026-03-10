@@ -45,7 +45,7 @@ curl -f http://localhost:8000/health
 
 ### Sortie J1 (DoD)
 
-- Documentation de pilotage alignée (`README`, `ROADMAP`, `TODO`, `CI-CD`, `docs/WORKFLOW`).
+- Documentation de pilotage alignée (`README`, `ROADMAP`, `TODO`, `CI-CD`, `docs/phases/J3_STABILISATION`).
 - Contrôles critiques automatisés disponibles (API smoke + non-régression frontend structurelle).
 - Distinction explicite entre workflows CI actifs et legacy actée dans la documentation.
 
@@ -57,4 +57,4 @@ curl -f http://localhost:8000/health
 
 ## Convention de merge J3
 
-La convention opérationnelle de merge et la référence CI unique sont détaillées dans `docs/CI_REFERENCE_J3.md`.
+La convention opérationnelle de merge et la référence CI unique sont détaillées dans `docs/phases/J3_STABILISATION.md`.
