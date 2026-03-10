@@ -1,0 +1,18 @@
+{
+  "timestamp_utc": "2026-03-10T11:41:43.567275+00:00",
+  "mode": "dry-run",
+  "sqlite": {
+    "total_files": 1,
+    "duplicate_files": 0
+  },
+  "postgres_before": {
+    "error": "psycopg2 non disponible"
+  },
+  "delta_estimate": null,
+  "rollback_plan": [
+    "1) Stopper l'API et figer les écritures.",
+    "2) Rebasculer OPENINDEX_DB_BACKEND=sqlite.",
+    "3) Restaurer le fichier SQLite depuis la dernière sauvegarde.",
+    "4) Vérifier /health et /api/stats."
+  ]
+}

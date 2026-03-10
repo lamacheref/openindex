@@ -1,0 +1,26 @@
+{
+  "sqlite": {
+    "/api/stats": {
+      "samples": 10,
+      "mean_ms": 15.19,
+      "p95_ms": 18.17
+    },
+    "/api/files": {
+      "samples": 10,
+      "mean_ms": 22.22,
+      "p95_ms": 26.21
+    }
+  },
+  "postgresql": {
+    "/api/stats": {
+      "samples": 10,
+      "mean_ms": 12.6,
+      "p95_ms": 14.99
+    },
+    "/api/files": {
+      "samples": 10,
+      "mean_ms": 18.4,
+      "p95_ms": 21.6
+    }
+  }
+}

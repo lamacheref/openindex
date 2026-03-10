@@ -38,6 +38,64 @@ env:
   IMAGE_UI: ${{ github.repository_owner }}/openindex-ui
 
 jobs:
+
+  api-tests-dual-db:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        db_backend: [sqlite, postgresql]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: openindex
+          POSTGRES_USER: openindex_user
+          POSTGRES_PASSWORD: openindex_secure_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U openindex_user -d openindex"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      OPENINDEX_DB_BACKEND: ${{ matrix.db_backend }}
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: openindex
+      POSTGRES_USER: openindex_user
+      POSTGRES_PASSWORD: openindex_secure_password
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements/dev.txt
+
+      - name: Prepare SQLite fixture
+        if: matrix.db_backend == 'sqlite'
+        run: |
+          python - <<'PY'
+          import sqlite3
+          conn = sqlite3.connect('openindex.db')
+          cur = conn.cursor()
+          cur.execute('CREATE TABLE IF NOT EXISTS files (id TEXT, path TEXT, name TEXT, size INTEGER, checksum TEXT, last_modified TEXT, is_directory INTEGER, is_duplicate INTEGER, duplicate_of TEXT, created_at TEXT, updated_at TEXT)')
+          conn.commit()
+          conn.close()
+          PY
+        
+      - name: Run API tests
+        run: |
+          pytest -q tests/test_api_fastapi.py tests/test_api_smoke_critical.py tests/test_db_backend_feature_flag.py
+
   changes:
     runs-on: ubuntu-latest
     outputs:
