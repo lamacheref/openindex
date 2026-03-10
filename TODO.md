@@ -31,12 +31,12 @@
 
 ### Semaine 2 — Readiness J4 sans big bang
 
-- [ ] CMD-07 — Définir les critères go/no-go J3 -> J4 (perf, rollback, migration).
-- [ ] CMD-08 — Introduire l'adaptateur PostgreSQL en mode parallèle (feature flag).
-- [ ] CMD-09 — Écrire et valider le dry-run de migration J3 -> J4.
-- [ ] CMD-10 — Publier un bench comparatif SQLite vs PostgreSQL (P95 endpoints critiques).
-- [ ] CMD-11 — Étendre la CI pour couvrir SQLite + PostgreSQL (matrice dual DB).
-- [ ] CMD-12 — Préparer la checklist de release commando.
+- [x] CMD-07 — Définir les critères go/no-go J3 -> J4 (perf, rollback, migration).
+- [x] CMD-08 — Introduire l'adaptateur PostgreSQL en mode parallèle (feature flag).
+- [x] CMD-09 — Écrire et valider le dry-run de migration J3 -> J4.
+- [x] CMD-10 — Publier un bench comparatif SQLite vs PostgreSQL (P95 endpoints critiques).
+- [x] CMD-11 — Étendre la CI pour couvrir SQLite + PostgreSQL (matrice dual DB).
+- [x] CMD-12 — Préparer la checklist de release commando.
 
 ## Fait (lancement J1)
 

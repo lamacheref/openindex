@@ -14,6 +14,11 @@ import os
 import sqlite3
 from datetime import datetime
 
+try:
+    import psycopg2
+except ModuleNotFoundError:  # pragma: no cover
+    psycopg2 = None
+
 
 # Configuration du logging
 logging.basicConfig(level=logging.INFO)
@@ -167,9 +172,100 @@ class SQLiteAdapter:
         return None
 
 
+class PostgreSQLAdapter:
+    """Adaptateur PostgreSQL minimal pour l'API."""
+
+    def __init__(self, config: Dict[str, Any]):
+        self.config = config
+
+    def execute_query(self, query: str, params: Optional[List[Any]] = None) -> List[tuple]:
+        params = params or []
+        pg_query = query.replace("?", "%s")
+        if pg_query.startswith("EXPLAIN QUERY PLAN"):
+            pg_query = pg_query.replace("EXPLAIN QUERY PLAN", "EXPLAIN", 1)
+
+        with psycopg2.connect(**self.config) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(pg_query, params)
+                return cursor.fetchall()
+
+    def get_statistics(self, space: Optional[str] = None) -> Dict[str, Any]:
+        query = """
+            SELECT
+                COUNT(*) as total_files,
+                SUM(CASE WHEN is_directory = TRUE THEN 1 ELSE 0 END) as total_directories,
+                COALESCE(SUM(CASE WHEN is_directory = FALSE THEN size ELSE 0 END), 0) as total_size,
+                SUM(CASE WHEN is_duplicate = TRUE THEN 1 ELSE 0 END) as duplicate_files
+            FROM files
+        """
+        params: List[Any] = []
+        if space:
+            query += " WHERE path LIKE %s"
+            params.append(f"{space}%")
+
+        with psycopg2.connect(**self.config) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, params)
+                row = cursor.fetchone() or (0, 0, 0, 0)
+                return {
+                    "total_files": row[0] or 0,
+                    "total_directories": row[1] or 0,
+                    "total_size": row[2] or 0,
+                    "duplicate_files": row[3] or 0,
+                    "crawl_duration": None,
+                }
+
+    def get_spaces(self) -> List[Dict[str, Any]]:
+        paths = self.execute_query("SELECT path FROM files WHERE path IS NOT NULL")
+        spaces: Dict[str, Dict[str, Any]] = {}
+
+        for row in paths:
+            path = row[0]
+            if not path:
+                continue
+
+            prefix = SQLiteAdapter._extract_space_prefix(path)
+            if not prefix:
+                continue
+
+            if prefix not in spaces:
+                spaces[prefix] = {
+                    "name": prefix.replace("/", "").replace("\\", "") or prefix,
+                    "path_prefix": prefix,
+                    "file_count": 0,
+                }
+            spaces[prefix]["file_count"] += 1
+
+        return sorted(spaces.values(), key=lambda item: item["name"].lower())
+
+
 # Connexion à la base de données
 def get_db_adapter():
-    """Récupère l'adaptateur SQLite"""
+    """Récupère un adaptateur DB selon le feature flag OPENINDEX_DB_BACKEND."""
+    backend = os.getenv("OPENINDEX_DB_BACKEND", "sqlite").strip().lower()
+
+    if backend == "postgresql":
+        if psycopg2 is None:
+            raise HTTPException(status_code=500, detail="psycopg2 non disponible pour le backend PostgreSQL")
+
+        pg_config = {
+            "host": os.getenv("POSTGRES_HOST", "localhost"),
+            "port": int(os.getenv("POSTGRES_PORT", "5432")),
+            "dbname": os.getenv("POSTGRES_DB", "openindex"),
+            "user": os.getenv("POSTGRES_USER", "openindex_user"),
+            "password": os.getenv("POSTGRES_PASSWORD", "openindex_secure_password"),
+        }
+        try:
+            with psycopg2.connect(**pg_config) as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT 1")
+            return PostgreSQLAdapter(pg_config)
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Base PostgreSQL indisponible: {exc}") from exc
+
+    if backend != "sqlite":
+        raise HTTPException(status_code=500, detail=f"Backend OPENINDEX_DB_BACKEND invalide: {backend}")
+
     db_path = os.getenv("OPENINDEX_DB_PATH", "openindex.db")
     if not os.path.exists(db_path):
         raise HTTPException(status_code=500, detail=f"Base SQLite introuvable: {db_path}")
@@ -350,7 +446,31 @@ async def get_duplicates(space: Optional[str] = None):
 async def get_spaces():
     try:
         db = get_db_adapter()
-        return [SpaceInfo(**space) for space in db.get_spaces()]
+
+        if hasattr(db, "get_spaces"):
+            spaces = db.get_spaces()
+        else:
+            # Compatibilité rétroactive: certains doubles de test/anciens adaptateurs
+            # n'exposent que execute_query. On reconstruit alors la liste des espaces.
+            paths = db.execute_query("SELECT path FROM files WHERE path IS NOT NULL")
+            spaces_map: Dict[str, Dict[str, Any]] = {}
+            for row in paths:
+                raw_path = row[0] if row else None
+                if not raw_path:
+                    continue
+                prefix = SQLiteAdapter._extract_space_prefix(raw_path)
+                if not prefix:
+                    continue
+                if prefix not in spaces_map:
+                    spaces_map[prefix] = {
+                        "name": prefix.replace("/", "").replace("\\", "") or prefix,
+                        "path_prefix": prefix,
+                        "file_count": 0,
+                    }
+                spaces_map[prefix]["file_count"] += 1
+            spaces = sorted(spaces_map.values(), key=lambda item: item["name"].lower())
+
+        return [SpaceInfo(**space) for space in spaces]
     except Exception as e:
         logger.error(f"Erreur get_spaces: {e}")
         raise HTTPException(status_code=500, detail="Erreur lors de la récupération des espaces")
