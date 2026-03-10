@@ -14,6 +14,10 @@ import main as api_main
 
 
 class DummyDB:
+    def __init__(self):
+        self.crawl_configs = []
+        self.crawl_runs = []
+
     def execute_query(self, query, params=None):
         params = params or []
         if query.strip() == "ANALYZE":
@@ -90,9 +94,41 @@ class DummyDB:
         ]
 
 
+    def list_crawl_configs(self):
+        return list(self.crawl_configs)
+
+    def create_crawl_config(self, payload):
+        item = {
+            "id": "cfg-1",
+            "name": payload.name,
+            "domain_zone": payload.domain_zone,
+            "start_path": payload.start_path,
+            "include_paths": payload.include_paths,
+            "exclude_paths": payload.exclude_paths,
+            "connection_username": payload.connection.username,
+            "connection_domain": payload.connection.domain,
+            "created_at": "2026-03-10T12:00:00+00:00",
+        }
+        self.crawl_configs = [item]
+        return item
+
+    def start_crawl(self, config_id):
+        if not any(cfg["id"] == config_id for cfg in self.crawl_configs):
+            return None
+        run = {
+            "run_id": "run-1",
+            "config_id": config_id,
+            "status": "queued",
+            "triggered_at": "2026-03-10T12:05:00+00:00",
+        }
+        self.crawl_runs.append(run)
+        return run
+
+
 @pytest.fixture
 def client(monkeypatch):
-    monkeypatch.setattr(api_main, "get_db_adapter", lambda: DummyDB())
+    db = DummyDB()
+    monkeypatch.setattr(api_main, "get_db_adapter", lambda: db)
     return TestClient(api_main.app)
 
 
@@ -173,3 +209,59 @@ def test_get_db_explain_endpoint(client):
 def test_get_db_explain_invalid_query(client):
     response = client.get('/api/db-explain', params={'query_name': 'not_allowed'})
     assert response.status_code == 400
+
+
+def test_create_and_list_crawl_configs(client):
+    payload = {
+        "name": "Crawl Finance",
+        "domain_zone": "EMEA",
+        "start_path": "\\\\srv\\finance",
+        "include_paths": ["\\\\srv\\finance\\public"],
+        "exclude_paths": ["\\\\srv\\finance\\temp"],
+        "connection": {
+            "username": "svc_finance",
+            "password": "secret",
+            "domain": "CORP",
+        },
+    }
+
+    create_response = client.post('/api/crawl-configs', json=payload)
+    assert create_response.status_code == 200
+    created = create_response.json()
+    assert created['name'] == 'Crawl Finance'
+    assert 'connection_username' in created
+    assert '_secret_password' not in created
+
+    list_response = client.get('/api/crawl-configs')
+    assert list_response.status_code == 200
+    listed = list_response.json()
+    assert len(listed) == 1
+    assert listed[0]['domain_zone'] == 'EMEA'
+
+
+def test_start_crawl_requires_existing_config(client):
+
+    missing = client.post('/api/crawls/start', json={'config_id': 'missing'})
+    assert missing.status_code == 404
+
+    created = client.post(
+        '/api/crawl-configs',
+        json={
+            "name": "Crawl RH",
+            "domain_zone": "FR",
+            "start_path": "\\\\srv\\rh",
+            "include_paths": [],
+            "exclude_paths": [],
+            "connection": {
+                "username": "svc_rh",
+                "password": "secret",
+                "domain": "CORP",
+            },
+        },
+    ).json()
+
+    started = client.post('/api/crawls/start', json={'config_id': created['id']})
+    assert started.status_code == 200
+    payload = started.json()
+    assert payload['status'] == 'queued'
+    assert payload['config_id'] == created['id']

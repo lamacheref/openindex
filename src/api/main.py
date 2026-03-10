@@ -6,7 +6,7 @@ Backend moderne avec WebSocket et monitoring temps réel
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import asyncio
 import logging
@@ -82,6 +82,44 @@ class ExplainPlan(BaseModel):
     query_name: str
     analyze: bool
     plan: List[str]
+
+
+class CrawlConnectionConfig(BaseModel):
+    username: str
+    password: str
+    domain: Optional[str] = None
+
+
+class CrawlConfigCreate(BaseModel):
+    name: str
+    domain_zone: str
+    start_path: str
+    include_paths: List[str] = Field(default_factory=list)
+    exclude_paths: List[str] = Field(default_factory=list)
+    connection: CrawlConnectionConfig
+
+
+class CrawlConfigPublic(BaseModel):
+    id: str
+    name: str
+    domain_zone: str
+    start_path: str
+    include_paths: List[str]
+    exclude_paths: List[str]
+    connection_username: str
+    connection_domain: Optional[str] = None
+    created_at: str
+
+
+class CrawlStartRequest(BaseModel):
+    config_id: str
+
+
+class CrawlRun(BaseModel):
+    run_id: str
+    config_id: str
+    status: str
+    triggered_at: str
 
 
 def extract_space_prefix(path: str) -> Optional[str]:
@@ -174,6 +212,132 @@ class PostgreSQLAdapter:
         return sorted(spaces.values(), key=lambda item: item["name"].lower())
 
 
+    def ensure_crawl_tables(self) -> None:
+        statements = [
+            """
+            CREATE TABLE IF NOT EXISTS crawl_configs (
+                id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                name TEXT NOT NULL,
+                domain_zone TEXT NOT NULL,
+                start_path TEXT NOT NULL,
+                include_paths TEXT[] NOT NULL DEFAULT '{}',
+                exclude_paths TEXT[] NOT NULL DEFAULT '{}',
+                connection_username TEXT NOT NULL,
+                connection_password TEXT NOT NULL,
+                connection_domain TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+            """,
+            "CREATE INDEX IF NOT EXISTS idx_crawl_configs_created_at ON crawl_configs(created_at)",
+            """
+            CREATE TABLE IF NOT EXISTS crawl_runs (
+                id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                config_id UUID NOT NULL REFERENCES crawl_configs(id) ON DELETE CASCADE,
+                status TEXT NOT NULL DEFAULT 'queued',
+                triggered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+            """,
+            "CREATE INDEX IF NOT EXISTS idx_crawl_runs_triggered_at ON crawl_runs(triggered_at)",
+        ]
+        with psycopg2.connect(**self.config) as conn:
+            with conn.cursor() as cursor:
+                for statement in statements:
+                    cursor.execute(statement)
+            conn.commit()
+
+    def list_crawl_configs(self) -> List[Dict[str, Any]]:
+        query = """
+            SELECT id::text, name, domain_zone, start_path,
+                   include_paths, exclude_paths,
+                   connection_username, connection_domain,
+                   created_at::text
+            FROM crawl_configs
+            ORDER BY created_at DESC
+        """
+        rows = self.execute_query(query)
+        return [
+            {
+                "id": row[0],
+                "name": row[1],
+                "domain_zone": row[2],
+                "start_path": row[3],
+                "include_paths": row[4] or [],
+                "exclude_paths": row[5] or [],
+                "connection_username": row[6],
+                "connection_domain": row[7],
+                "created_at": row[8],
+            }
+            for row in rows
+        ]
+
+    def create_crawl_config(self, payload: CrawlConfigCreate) -> Dict[str, Any]:
+        query = """
+            INSERT INTO crawl_configs (
+                name, domain_zone, start_path,
+                include_paths, exclude_paths,
+                connection_username, connection_password, connection_domain
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id::text, name, domain_zone, start_path,
+                      include_paths, exclude_paths,
+                      connection_username, connection_domain,
+                      created_at::text
+        """
+        with psycopg2.connect(**self.config) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    query,
+                    [
+                        payload.name,
+                        payload.domain_zone,
+                        payload.start_path,
+                        payload.include_paths,
+                        payload.exclude_paths,
+                        payload.connection.username,
+                        payload.connection.password,
+                        payload.connection.domain,
+                    ],
+                )
+                row = cursor.fetchone()
+            conn.commit()
+
+        return {
+            "id": row[0],
+            "name": row[1],
+            "domain_zone": row[2],
+            "start_path": row[3],
+            "include_paths": row[4] or [],
+            "exclude_paths": row[5] or [],
+            "connection_username": row[6],
+            "connection_domain": row[7],
+            "created_at": row[8],
+        }
+
+    def start_crawl(self, config_id: str) -> Optional[Dict[str, Any]]:
+        query = """
+            INSERT INTO crawl_runs (config_id, status)
+            SELECT id, 'queued'
+            FROM crawl_configs
+            WHERE id::text = %s
+            RETURNING id::text, config_id::text, status, triggered_at::text
+        """
+        with psycopg2.connect(**self.config) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, [config_id])
+                row = cursor.fetchone()
+            conn.commit()
+
+        if not row:
+            return None
+
+        return {
+            "run_id": row[0],
+            "config_id": row[1],
+            "status": row[2],
+            "triggered_at": row[3],
+        }
+
+
 # Connexion à la base de données
 def get_db_adapter():
     """Récupère l'adaptateur PostgreSQL (backend unique)."""
@@ -256,6 +420,7 @@ EXPLAIN_QUERIES = {
         FROM files
     """,
 }
+
 
 
 @app.get("/health")
@@ -421,6 +586,50 @@ async def get_db_explain(query_name: str = "files_list", analyze: bool = True):
     except Exception as e:
         logger.error(f"Erreur get_db_explain: {e}")
         raise HTTPException(status_code=500, detail="Erreur lors de la récupération du plan EXPLAIN")
+
+
+def ensure_crawl_storage_ready(db: Any) -> None:
+    if hasattr(db, "ensure_crawl_tables"):
+        db.ensure_crawl_tables()
+
+
+@app.get("/api/crawl-configs", response_model=List[CrawlConfigPublic])
+async def list_crawl_configs():
+    try:
+        db = get_db_adapter()
+        ensure_crawl_storage_ready(db)
+        return [CrawlConfigPublic(**config) for config in db.list_crawl_configs()]
+    except Exception as e:
+        logger.error(f"Erreur list_crawl_configs: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors du chargement des configurations de crawl")
+
+
+@app.post("/api/crawl-configs", response_model=CrawlConfigPublic)
+async def create_crawl_config(payload: CrawlConfigCreate):
+    try:
+        db = get_db_adapter()
+        ensure_crawl_storage_ready(db)
+        config = db.create_crawl_config(payload)
+        return CrawlConfigPublic(**config)
+    except Exception as e:
+        logger.error(f"Erreur create_crawl_config: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la création de la configuration de crawl")
+
+
+@app.post("/api/crawls/start", response_model=CrawlRun)
+async def start_crawl(payload: CrawlStartRequest):
+    try:
+        db = get_db_adapter()
+        ensure_crawl_storage_ready(db)
+        run = db.start_crawl(payload.config_id)
+        if not run:
+            raise HTTPException(status_code=404, detail="Configuration de crawl introuvable")
+        return CrawlRun(**run)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur start_crawl: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors du lancement du crawl")
 
 
 @app.websocket("/ws")

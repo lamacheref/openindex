@@ -71,9 +71,15 @@
                     <i class="fas fa-folder-open text-blue-600 text-2xl mr-3"></i>
                     <h1 class="text-xl font-bold text-gray-900">OpenIndex</h1>
                 </div>
-                <div class="flex items-center space-x-4">
+                <div class="flex items-center space-x-4 mr-[20px]">
                     <button @click="toggleSidebar()" class="p-2 rounded-md hover:bg-gray-100">
                         <i class="fas fa-bars text-gray-600"></i>
+                    </button>
+                    <button class="h-9 w-9 rounded-full border border-gray-300 bg-gray-50 flex items-center justify-center text-gray-600" aria-label="Connexion" title="Connexion">
+                        <i class="fas fa-user"></i>
+                    </button>
+                    <button @click="openConfiguration('crawler')" title="Configuration" class="ml-[1em] p-2 rounded-md hover:bg-gray-100 text-gray-600" aria-label="Configuration">
+                        <i class="fas fa-gear"></i>
                     </button>
                     <div class="relative">
                         <button @click="showNotifications = !showNotifications" class="p-2 rounded-md hover:bg-gray-100">
@@ -108,37 +114,27 @@
                     </div>
                 </div>
 
-                <nav class="space-y-2">
+                <nav class="space-y-3">
                     <a href="#" @click="currentView = 'dashboard'" 
                        class="flex items-center px-4 py-2 text-sm font-medium rounded-lg hover:bg-gray-100"
                        :class="currentView === 'dashboard' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'">
                         <i class="fas fa-tachometer-alt mr-3"></i>
                         Tableau de bord
                     </a>
-                    <a href="#" @click="currentView = 'files'" 
-                       class="flex items-center px-4 py-2 text-sm font-medium rounded-lg hover:bg-gray-100"
-                       :class="currentView === 'files' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'">
-                        <i class="fas fa-folder mr-3"></i>
-                        Fichiers
-                    </a>
-                    <a href="#" @click="currentView = 'duplicates'" 
-                       class="flex items-center px-4 py-2 text-sm font-medium rounded-lg hover:bg-gray-100"
-                       :class="currentView === 'duplicates' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'">
-                        <i class="fas fa-copy mr-3"></i>
-                        Doublons
-                    </a>
-                    <a href="#" @click="currentView = 'monitoring'" 
-                       class="flex items-center px-4 py-2 text-sm font-medium rounded-lg hover:bg-gray-100"
-                       :class="currentView === 'monitoring' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'">
-                        <i class="fas fa-chart-line mr-3"></i>
-                        Monitoring
-                    </a>
-                    <a href="#" @click="currentView = 'dbAnalysis'; loadDbExplain()" 
-                       class="flex items-center px-4 py-2 text-sm font-medium rounded-lg hover:bg-gray-100"
-                       :class="currentView === 'dbAnalysis' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'">
-                        <i class="fas fa-database mr-3"></i>
-                        DB Explain
-                    </a>
+                    <div class="grid grid-cols-2 gap-2">
+                        <a href="#" @click="currentView = 'files'" 
+                           class="flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg hover:bg-gray-100"
+                           :class="currentView === 'files' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'">
+                            <i class="fas fa-folder mr-2"></i>
+                            Fichiers
+                        </a>
+                        <a href="#" @click="currentView = 'duplicates'" 
+                           class="flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg hover:bg-gray-100"
+                           :class="currentView === 'duplicates' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'">
+                            <i class="fas fa-copy mr-2"></i>
+                            Doublons
+                        </a>
+                    </div>
                 </nav>
             </div>
         </aside>
@@ -326,8 +322,24 @@
                     </div>
                 </div>
 
+                <!-- Page Configuration -->
+                <div x-show="currentView === 'configuration'" class="fade-in mb-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold text-gray-900">⚙️ Configuration</h2>
+                        <button @click="currentView = 'dashboard'" class="text-sm px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700">
+                            Retour à l'accueil
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+                        <button @click="configSection = 'crawler'; loadCrawlConfigs()" class="px-4 py-2 rounded-lg text-sm font-medium"
+                                :class="configSection === 'crawler' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-300'">Crawler</button>
+                        <button @click="configSection = 'dbAnalysis'; loadDbExplain()" class="px-4 py-2 rounded-lg text-sm font-medium"
+                                :class="configSection === 'dbAnalysis' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-300'">DB Explain</button>
+                        <button @click="configSection = 'monitoring'" class="px-4 py-2 rounded-lg text-sm font-medium"
+                                :class="configSection === 'monitoring' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-300'">Monitoring</button>
+                    </div>
                 <!-- Vue Monitoring -->
-                <div x-show="currentView === 'monitoring'" class="fade-in">
+                <div x-show="currentView === 'configuration' && configSection === 'monitoring'" class="fade-in">
                     <h2 class="text-2xl font-bold text-gray-900 mb-6">📊 Monitoring temps réel</h2>
                     
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -358,8 +370,80 @@
                     </div>
                 </div>
 
+
+                <!-- Vue Implémentation rapide -->
+                <div x-show="currentView === 'configuration' && configSection === 'crawler'" class="fade-in">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6">⚡ Implémentation rapide</h2>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="card p-6">
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">Ajouter un crawl</h3>
+                            <form @submit.prevent="createCrawlConfig()" class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Nom du crawl</label>
+                                    <input type="text" x-model="newCrawl.name" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Zone de domaine</label>
+                                    <input type="text" x-model="newCrawl.domain_zone" placeholder="EMEA / EU / FR" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Path de départ</label>
+                                    <input type="text" x-model="newCrawl.start_path" placeholder="\\server\share" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Paths inclus (un par ligne)</label>
+                                    <textarea x-model="newCrawl.includePathsText" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2"></textarea>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Paths exclus (un par ligne)</label>
+                                    <textarea x-model="newCrawl.excludePathsText" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2"></textarea>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Utilisateur</label>
+                                        <input type="text" x-model="newCrawl.connection.username" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Mot de passe</label>
+                                        <input type="password" x-model="newCrawl.connection.password" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Domaine</label>
+                                        <input type="text" x-model="newCrawl.connection.domain" placeholder="CORP" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                                    </div>
+                                </div>
+                                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+                                    <i class="fas fa-plus mr-2"></i>Créer la configuration
+                                </button>
+                            </form>
+                        </div>
+
+                        <div class="card p-6">
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">Configurations disponibles</h3>
+                            <button @click="loadCrawlConfigs()" class="mb-4 bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded-lg text-sm">Rafraîchir</button>
+                            <div x-show="crawlConfigs.length === 0" class="text-sm text-gray-500">Aucune configuration pour le moment.</div>
+                            <div class="space-y-3" x-show="crawlConfigs.length > 0">
+                                <template x-for="config in crawlConfigs" :key="config.id">
+                                    <div class="border border-gray-200 rounded-lg p-4">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <p class="font-medium text-gray-900" x-text="config.name"></p>
+                                                <p class="text-xs text-gray-500" x-text="`Zone: ${config.domain_zone} • Départ: ${config.start_path}`"></p>
+                                                <p class="text-xs text-gray-500" x-text="`Compte: ${config.connection_domain || '-'}\\${config.connection_username}`"></p>
+                                            </div>
+                                            <button @click="startCrawl(config.id)" class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-sm">Lancer</button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                            <p x-show="implementationStatus" class="mt-4 text-sm text-blue-700" x-text="implementationStatus"></p>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Vue Analyse DB -->
-                <div x-show="currentView === 'dbAnalysis'" class="fade-in">
+                <div x-show="currentView === 'configuration' && configSection === 'dbAnalysis'" class="fade-in">
                     <div class="flex justify-between items-center mb-6">
                         <h2 class="text-2xl font-bold text-gray-900">🧠 Explain / Analyze DB</h2>
                         <div class="flex items-center space-x-3">
@@ -397,6 +481,7 @@
         function openIndexApp() {
             return {
                 currentView: 'dashboard',
+                configSection: 'crawler',
                 sidebarOpen: true,
                 loading: false,
                 searchQuery: '',
@@ -415,25 +500,41 @@
                 dbExplainError: '',
                 spaces: [],
                 activeSpace: '',
+                crawlConfigs: [],
+                implementationStatus: '',
+                newCrawl: {
+                    name: '',
+                    domain_zone: '',
+                    start_path: '',
+                    includePathsText: '',
+                    excludePathsText: '',
+                    connection: {
+                        username: '',
+                        password: '',
+                        domain: ''
+                    }
+                },
                 
                 async init() {
                     await this.loadSpaces();
                     this.loadStats();
                     this.initWebSocket();
                     this.initCharts();
-                    
-                    // Charger les données initiales
-                    if (this.currentView === 'files') {
-                        this.loadFiles();
-                    } else if (this.currentView === 'duplicates') {
-                        this.loadDuplicates();
-                    } else if (this.currentView === 'dbAnalysis') {
-                        this.loadDbExplain();
-                    }
+                    await this.loadCrawlConfigs();
                 },
                 
                 toggleSidebar() {
                     this.sidebarOpen = !this.sidebarOpen;
+                },
+
+                openConfiguration(section = 'crawler') {
+                    this.currentView = 'configuration';
+                    this.configSection = section;
+                    if (section === 'crawler') {
+                        this.loadCrawlConfigs();
+                    } else if (section === 'dbAnalysis') {
+                        this.loadDbExplain();
+                    }
                 },
                 
                 async loadStats() {
@@ -508,6 +609,67 @@
                     }
                 },
                 
+
+
+                async loadCrawlConfigs() {
+                    try {
+                        const response = await fetch('/api/crawl-configs');
+                        this.crawlConfigs = await response.json();
+                    } catch (error) {
+                        console.error('Erreur configs crawl:', error);
+                    }
+                },
+
+                async createCrawlConfig() {
+                    try {
+                        const payload = {
+                            name: this.newCrawl.name,
+                            domain_zone: this.newCrawl.domain_zone,
+                            start_path: this.newCrawl.start_path,
+                            include_paths: this.newCrawl.includePathsText.split('\n').map(line => line.trim()).filter(Boolean),
+                            exclude_paths: this.newCrawl.excludePathsText.split('\n').map(line => line.trim()).filter(Boolean),
+                            connection: {
+                                username: this.newCrawl.connection.username,
+                                password: this.newCrawl.connection.password,
+                                domain: this.newCrawl.connection.domain || null
+                            }
+                        };
+                        const response = await fetch('/api/crawl-configs', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        if (!response.ok) {
+                            throw new Error('Création impossible');
+                        }
+                        const created = await response.json();
+                        this.implementationStatus = `Configuration créée: ${created.name}`;
+                        this.newCrawl = {
+                            name: '', domain_zone: '', start_path: '', includePathsText: '', excludePathsText: '',
+                            connection: { username: '', password: '', domain: '' }
+                        };
+                        await this.loadCrawlConfigs();
+                    } catch (error) {
+                        this.implementationStatus = `Erreur: ${error.message}`;
+                    }
+                },
+
+                async startCrawl(configId) {
+                    try {
+                        const response = await fetch('/api/crawls/start', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ config_id: configId })
+                        });
+                        if (!response.ok) {
+                            throw new Error('Démarrage impossible');
+                        }
+                        const run = await response.json();
+                        this.implementationStatus = `Crawl ${run.run_id} en statut ${run.status}`;
+                    } catch (error) {
+                        this.implementationStatus = `Erreur: ${error.message}`;
+                    }
+                },
 
                 async loadDbExplain() {
                     this.loadingDbExplain = true;
