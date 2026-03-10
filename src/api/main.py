@@ -12,6 +12,7 @@ import asyncio
 import logging
 import os
 from datetime import datetime
+from uuid import uuid4
 
 try:
     import psycopg2
@@ -358,7 +359,9 @@ def get_db_adapter():
             with psycopg2.connect(**pg_config) as conn:
                 with conn.cursor() as cursor:
                     cursor.execute("SELECT 1")
-            return PostgreSQLAdapter(pg_config)
+            adapter = PostgreSQLAdapter(pg_config)
+            adapter.ensure_crawl_tables()
+            return adapter
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Base PostgreSQL indisponible: {exc}") from exc
 
@@ -420,6 +423,10 @@ EXPLAIN_QUERIES = {
         FROM files
     """,
 }
+
+CRAWL_CONFIGS: List[Dict[str, Any]] = []
+CRAWL_RUNS: List[Dict[str, Any]] = []
+
 
 
 
