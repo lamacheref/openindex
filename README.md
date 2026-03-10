@@ -30,6 +30,7 @@ La base active à date est :
 ```bash
 cp .env.example .env
 # optionnel: renseigner OPENINDEX_API_IMAGE / OPENINDEX_CRAWLER_IMAGE / OPENINDEX_UI_IMAGE dans .env
+# si packages GHCR privés: définir GHCR_USERNAME et GHCR_TOKEN dans .env
 
 ./deploy.sh pull
 ./deploy.sh up

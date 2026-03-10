@@ -8,6 +8,7 @@
 - Mise à jour de `.env.example` et `deploy.sh` pour un déploiement complet (`pull`, `up`, `restart`) basé sur les images publiées.
 - Archivage des Dockerfiles legacy inutilisés dans `Archives/legacy/dockerfiles/`.
 - Suppression des références actives à `J3` dans la documentation opératoire principale.
+- Correction déploiement GHCR privé: ajout gestion d'authentification (`GHCR_USERNAME`/`GHCR_TOKEN`) dans `deploy.sh` + `.env.example`.
 
 ## 2026-03-10 — T-01 TODO exécuté (J4 PostgreSQL only)
 

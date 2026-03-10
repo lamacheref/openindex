@@ -13,6 +13,15 @@ else
   exit 1
 fi
 
+load_env() {
+  if [ -f .env ]; then
+    set -a
+    # shellcheck disable=SC1091
+    source .env
+    set +a
+  fi
+}
+
 ensure_env() {
   if [ ! -f .env ]; then
     echo "📝 Création de .env depuis .env.example..."
@@ -30,10 +39,47 @@ POSTGRES_PORT=5432
 OPENINDEX_API_PORT=8000
 OPENINDEX_UI_PORT=3000
 DEBUG=false
+GHCR_USERNAME=
+GHCR_TOKEN=
 EOT
     fi
     echo "✅ .env créé. Vérifiez les images GHCR et les identifiants DB avant déploiement."
   fi
+  load_env
+}
+
+ensure_ghcr_auth() {
+  if [[ "${OPENINDEX_API_IMAGE:-}" != ghcr.io/* ]] && [[ "${OPENINDEX_CRAWLER_IMAGE:-}" != ghcr.io/* ]] && [[ "${OPENINDEX_UI_IMAGE:-}" != ghcr.io/* ]]; then
+    return 0
+  fi
+
+  if [ -n "${GHCR_USERNAME:-}" ] && [ -n "${GHCR_TOKEN:-}" ]; then
+    echo "🔐 Authentification GHCR avec GHCR_USERNAME/GHCR_TOKEN..."
+    if ! printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin >/dev/null 2>&1; then
+      echo "❌ Échec docker login ghcr.io. Vérifiez GHCR_USERNAME/GHCR_TOKEN (scope package read)."
+      exit 1
+    fi
+    return 0
+  fi
+
+  if [ -f "$HOME/.docker/config.json" ] && rg -q '"ghcr\.io"' "$HOME/.docker/config.json"; then
+    return 0
+  fi
+
+  cat <<'EOT'
+❌ Authentification GHCR requise.
+Images privées détectées sur ghcr.io mais aucun accès n'est configuré.
+Ajoutez GHCR_USERNAME et GHCR_TOKEN dans .env (token avec scope read:packages),
+ou exécutez manuellement: docker login ghcr.io
+EOT
+  exit 1
+}
+
+pull_images() {
+  ensure_env
+  ensure_ghcr_auth
+  echo "📦 Pull des images GHCR (api + crawler + ui + postgres)..."
+  $COMPOSE_CMD pull
 }
 
 pull_images() {
@@ -44,6 +90,7 @@ pull_images() {
 
 up() {
   ensure_env
+  ensure_ghcr_auth
   echo "🚀 Déploiement complet de la stack (postgres + api + crawler + ui)..."
   $COMPOSE_CMD up -d
 }
@@ -78,6 +125,7 @@ case "${1:-help}" in
     cat <<EOT
 Usage: ./deploy.sh [pull|up|down|restart|status|logs [service]|help]
 Services: postgres, api, crawler, ui
+Note GHCR: si images privées, renseigner GHCR_USERNAME/GHCR_TOKEN dans .env.
 EOT
     ;;
   *)
