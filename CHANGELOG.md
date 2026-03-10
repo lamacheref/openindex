@@ -1,5 +1,13 @@
 # Changelog OpenIndex
 
+## 2026-03-10 — T-01 TODO exécuté (J4 PostgreSQL only)
+
+- Clôture de T-01 dans `TODO.md` avec adaptation de la checklist commando au mode PostgreSQL unique.
+- Suppression du backend SQLite dans l'API FastAPI (`src/api/main.py`) et conservation de PostgreSQL uniquement.
+- Mise à jour des tests de feature flag DB pour invalider `sqlite` et valider `postgresql`.
+- Alignement documentaire (`README.md`, `README.stack.md`, `ROADMAP.md`, `CI-CD.md`, `docs/phases/J4_MIGRATION.md`) sur la stratégie: pas de migration DB, recrawl complet.
+
+
 ## 2026-03-10 — Exécution objectifs critiques TODO J1
 
 - Ajout d'un runbook hebdomadaire court avec checklist opératoire.

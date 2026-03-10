@@ -23,7 +23,7 @@ Pour l’état actuel du projet, la référence CI est le workflow GitHub J3.
 ## Variables clés
 
 - `OPENINDEX_J3_IMAGE` : image à déployer via `docker-compose.j3.yml`.
-- `OPENINDEX_DB_PATH` : chemin SQLite côté API.
+- `OPENINDEX_DB_BACKEND` : backend DB attendu (`postgresql`).
 
 ## Commandes de validation locale
 
@@ -52,7 +52,7 @@ curl -f http://localhost:8000/health
 ### Entrée J2 (gating)
 
 - Exécution reproductible de la suite de smoke tests en local/CI.
-- Règles de contribution orientées stack active (FastAPI + frontend + SQLite) explicites.
+- Règles de contribution orientées stack active (FastAPI + frontend + PostgreSQL) explicites.
 - Backlog J2 priorisé sur fiabilisation (tests, incident, exploitation).
 
 ## Convention de merge J3

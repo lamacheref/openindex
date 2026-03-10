@@ -44,7 +44,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        db_backend: [sqlite, postgresql]
+        db_backend: [postgresql]
     services:
       postgres:
         image: postgres:16
@@ -80,18 +80,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements/dev.txt
 
-      - name: Prepare SQLite fixture
-        if: matrix.db_backend == 'sqlite'
-        run: |
-          python - <<'PY'
-          import sqlite3
-          conn = sqlite3.connect('openindex.db')
-          cur = conn.cursor()
-          cur.execute('CREATE TABLE IF NOT EXISTS files (id TEXT, path TEXT, name TEXT, size INTEGER, checksum TEXT, last_modified TEXT, is_directory INTEGER, is_duplicate INTEGER, duplicate_of TEXT, created_at TEXT, updated_at TEXT)')
-          conn.commit()
-          conn.close()
-          PY
-        
       - name: Run API tests
         run: |
           pytest -q tests/test_api_fastapi.py tests/test_api_smoke_critical.py tests/test_db_backend_feature_flag.py
