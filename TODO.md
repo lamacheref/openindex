@@ -8,9 +8,9 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
 
 ## 1) Priorités immédiates (Semaine en cours)
 
-- [ ] **T-01 — Clôturer CMD-12 (checklist release commando) avec preuves**
-  - Vérifier CI verte sur `sqlite` + `postgresql`.
-  - Vérifier dry-run migration et journal versionné.
+- [x] **T-01 — Clôturer CMD-12 (checklist release commando) avec preuves**
+  - Vérifier CI verte sur `postgresql` (backend unique).
+  - Migration de DB non requise: re-crawl complet prévu sur zone de test massivement modifiée.
   - Vérifier bench comparatif publié.
   - Vérifier rollback relu par un pair.
   - Mettre à jour `CHANGELOG.md` pour le lot de clôture.
@@ -21,7 +21,7 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
   - Si No-Go: lister précisément les écarts bloquants et le plan de correction.
 
 - [ ] **T-03 — Figer la baseline technique J4**
-  - Confirmer le backend DB par défaut (`sqlite` ou `postgresql`) dans la doc principale.
+  - Confirmer PostgreSQL comme backend DB unique dans la doc principale.
   - Aligner `README.md`, `README.stack.md`, `ROADMAP.md` et ce `TODO.md`.
   - Supprimer les ambiguïtés "actif vs legacy" dans les parcours opératoires.
 
@@ -29,13 +29,13 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
 
 ## 2) Exécution J4 (prochaines 2 semaines)
 
-- [ ] **T-04 — Migration contrôlée J3 -> J4 en environnement de référence**
-  - Exécuter le dry-run sur un dataset représentatif.
-  - Exécuter la migration réelle sur environnement cible.
-  - Produire un rapport de migration (durée, volume, incidents, rollback readiness).
+- [ ] **T-04 — Initialisation contrôlée J4 sur PostgreSQL en environnement de référence**
+  - Initialiser PostgreSQL sur un dataset représentatif recrawlé.
+  - Exécuter un recrawl complet sur environnement cible (pas de migration SQLite).
+  - Produire un rapport d'initialisation (durée, volume, incidents, rollback readiness).
 
 - [ ] **T-05 — Validation de performance post-bascule**
-  - Rejouer le benchmark SQLite vs PostgreSQL sur endpoints critiques.
+  - Rejouer le benchmark PostgreSQL sur endpoints critiques et comparer à la baseline historique SQLite.
   - Vérifier le respect des seuils P95 annoncés.
   - Publier les résultats dans `docs/` avec conclusion explicite (OK / NOK).
 

@@ -1,4 +1,3 @@
-import os
 import sys
 from pathlib import Path
 
@@ -10,18 +9,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src' / 'api'))
 import main as api_main
 
 
-def test_get_db_adapter_sqlite(tmp_path, monkeypatch):
-    db_file = tmp_path / 'openindex.db'
-    db_file.write_text('')
-    monkeypatch.setenv('OPENINDEX_DB_BACKEND', 'sqlite')
-    monkeypatch.setenv('OPENINDEX_DB_PATH', str(db_file))
-
-    adapter = api_main.get_db_adapter()
-    assert isinstance(adapter, api_main.SQLiteAdapter)
-
-
 def test_get_db_adapter_invalid_backend(monkeypatch):
-    monkeypatch.setenv('OPENINDEX_DB_BACKEND', 'unknown')
+    monkeypatch.setenv('OPENINDEX_DB_BACKEND', 'sqlite')
     with pytest.raises(api_main.HTTPException) as exc:
         api_main.get_db_adapter()
     assert exc.value.status_code == 500

@@ -2,21 +2,19 @@
 
 Solution d’indexation de partages SMB avec **crawler Python**, **API FastAPI** et **frontend statique**.
 
-## État actuel (J1 lancé — mars 2026)
+## État actuel (J4 lancé — mars 2026)
 
-Le projet entre en **phase J1 (kickoff structuré)** avec une base technique déjà existante.
+Le projet est en **phase J4 (test grandeur nature PostgreSQL)**.
 
-Objectif de J1 : fiabiliser le socle documentaire + opérationnel avant montée de cadence.
+La base active à date est :
 
-La base active à date reste :
-
-- API FastAPI (`src/api/main.py`) sur base **SQLite** via `OPENINDEX_DB_PATH`.
+- API FastAPI (`src/api/main.py`) sur base **PostgreSQL** via `OPENINDEX_DB_BACKEND=postgresql`.
 - Frontend statique (`frontend/index.html`) servi par Nginx.
 - Endpoint de diagnostic SQL `GET /api/db-explain` + vue frontend associée.
-- Orchestration recommandée : `docker-compose.j3.yml` (mode image-first, variable `OPENINDEX_J3_IMAGE`).
-- Build/push d’image J3 automatisé via GitHub Actions (`.github/workflows/docker-j3.yml`).
+- Orchestration recommandée : `docker-compose.yml` (stack complète PostgreSQL).
+- Build/push d’images automatisé via GitHub Actions (`.github/workflows/docker-stack.yml`).
 
-> J1 sert de rampe de lancement vers J2/J3, sans rupture technique immédiate.
+> La migration SQLite n'est plus une étape requise: la zone de test ayant été massivement modifiée, un recrawl complet est la stratégie de référence.
 
 ## Fonctionnalités disponibles
 
@@ -25,19 +23,20 @@ La base active à date reste :
 - Listing/recherche de fichiers (`/api/files`).
 - Détection des doublons (`/api/duplicates`).
 - Monitoring temps réel via WebSocket (`/ws`).
-- Analyse de plan SQLite (`/api/db-explain`).
+- Analyse de plan PostgreSQL (`/api/db-explain`).
 
 ## Démarrage rapide (socle actuel)
 
 ```bash
 cp .env.example .env
-# optionnel: définir OPENINDEX_J3_IMAGE et OPENINDEX_DB_PATH
+# optionnel: renseigner OPENINDEX_API_IMAGE / OPENINDEX_CRAWLER_IMAGE / OPENINDEX_UI_IMAGE dans .env
+# si packages GHCR privés: définir GHCR_USERNAME et GHCR_TOKEN dans .env
 
-docker compose -f docker-compose.j3.yml pull
-docker compose -f docker-compose.j3.yml up -d
+./deploy.sh pull
+./deploy.sh up
 ```
 
-## Tests (commande unique J3)
+## Tests (commande unique)
 
 Pour standardiser l'environnement de validation local (CMD-01), lancez:
 
@@ -69,12 +68,12 @@ pytest -q tests/test_frontend_structure.py
 - Suivi d’exécution : `TODO.md`
 - Historique : `CHANGELOG.md`
 - Journal détaillé : `docs/`
-- Runbook hebdo J1 + reprise SQLite : `docs/operations/EXPLOITATION.md`
+- Runbook hebdo d'exploitation PostgreSQL : `docs/operations/EXPLOITATION.md`
 - Plan d'accélération 2 semaines : `docs/phases/J4_MIGRATION.md`
 
 ## Limitations connues
 
-- Le mode de persistance de référence reste SQLite à ce stade : performances et concurrence en écriture limitées sur forte charge.
-- Le workflow `.gitea/workflows/ci.yml` est conservé en legacy et ne constitue pas la gate de merge J3.
+- Le backend SQLite est désormais legacy et non supporté sur le parcours opératoire principal.
+- Le workflow `.gitea/workflows/ci.yml` est conservé en legacy et ne constitue pas la gate de merge de la stack active.
 - La validation locale dépend de l'accès au registre pip pour installer `requirements/dev.txt`.
 - Les tests structurels frontend vérifient le contrat HTML/Alpine, pas le rendu visuel pixel-perfect.
