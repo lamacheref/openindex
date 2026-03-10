@@ -123,6 +123,19 @@ class CrawlRun(BaseModel):
     triggered_at: str
 
 
+class MonitoringSummary(BaseModel):
+    total_configs: int
+    total_runs: int
+    queued_runs: int
+    running_runs: int
+    completed_runs: int
+    failed_runs: int
+    latest_run_status: str
+    latest_run_config_name: str
+    latest_run_triggered_at: str
+    progress_percent: float
+
+
 def extract_space_prefix(path: str) -> Optional[str]:
     normalized = path.strip()
     if not normalized:
@@ -336,6 +349,59 @@ class PostgreSQLAdapter:
             "config_id": row[1],
             "status": row[2],
             "triggered_at": row[3],
+        }
+
+    def get_monitoring_summary(self) -> Dict[str, Any]:
+        total_configs = self.execute_query("SELECT COUNT(*) FROM crawl_configs")[0][0] or 0
+        total_runs = self.execute_query("SELECT COUNT(*) FROM crawl_runs")[0][0] or 0
+
+        status_rows = self.execute_query(
+            "SELECT LOWER(status), COUNT(*) FROM crawl_runs GROUP BY LOWER(status)"
+        )
+        status_counts = {str(row[0] or ""): row[1] or 0 for row in status_rows}
+
+        latest_run_rows = self.execute_query(
+            """
+            SELECT r.status, c.name, r.triggered_at::text
+            FROM crawl_runs r
+            JOIN crawl_configs c ON c.id = r.config_id
+            ORDER BY r.triggered_at DESC
+            LIMIT 1
+            """
+        )
+
+        latest_run_status = "Aucun run"
+        latest_run_config_name = "-"
+        latest_run_triggered_at = "-"
+        if latest_run_rows:
+            latest_run_status = latest_run_rows[0][0] or "unknown"
+            latest_run_config_name = latest_run_rows[0][1] or "-"
+            latest_run_triggered_at = latest_run_rows[0][2] or "-"
+
+        completed_runs = (
+            status_counts.get("completed", 0)
+            + status_counts.get("done", 0)
+            + status_counts.get("success", 0)
+        )
+        failed_runs = status_counts.get("failed", 0) + status_counts.get("error", 0)
+        running_runs = status_counts.get("running", 0) + status_counts.get("in_progress", 0)
+        queued_runs = status_counts.get("queued", 0) + status_counts.get("pending", 0)
+
+        progress_percent = 0.0
+        if total_runs > 0:
+            progress_percent = round((completed_runs / total_runs) * 100, 1)
+
+        return {
+            "total_configs": total_configs,
+            "total_runs": total_runs,
+            "queued_runs": queued_runs,
+            "running_runs": running_runs,
+            "completed_runs": completed_runs,
+            "failed_runs": failed_runs,
+            "latest_run_status": latest_run_status,
+            "latest_run_config_name": latest_run_config_name,
+            "latest_run_triggered_at": latest_run_triggered_at,
+            "progress_percent": progress_percent,
         }
 
 
@@ -637,6 +703,18 @@ async def start_crawl(payload: CrawlStartRequest):
     except Exception as e:
         logger.error(f"Erreur start_crawl: {e}")
         raise HTTPException(status_code=500, detail="Erreur lors du lancement du crawl")
+
+
+@app.get("/api/monitoring", response_model=MonitoringSummary)
+async def get_monitoring_summary():
+    try:
+        db = get_db_adapter()
+        ensure_crawl_storage_ready(db)
+        summary = db.get_monitoring_summary()
+        return MonitoringSummary(**summary)
+    except Exception as e:
+        logger.error(f"Erreur get_monitoring_summary: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors du chargement du monitoring")
 
 
 @app.websocket("/ws")

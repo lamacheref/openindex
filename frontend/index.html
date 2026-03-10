@@ -205,6 +205,18 @@
                         </div>
                     </div>
                     
+                    <!-- Avancement crawl -->
+                    <div class="card p-6 mb-6">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-lg font-medium text-gray-900">📈 Avancement du crawl</h3>
+                            <span class="text-sm font-semibold text-blue-700" x-text="`${monitoring.progress_percent ?? 0}%`"></span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-3 mb-3">
+                            <div class="bg-blue-600 h-3 rounded-full transition-all duration-300" :style="`width: ${monitoring.progress_percent ?? 0}%`"></div>
+                        </div>
+                        <p class="text-sm text-gray-600" x-text="`Runs: ${monitoring.completed_runs ?? 0} terminés / ${monitoring.total_runs ?? 0} totaux`"></p>
+                    </div>
+
                     <!-- Graphique -->
                     <div class="card p-6">
                         <h3 class="text-lg font-medium text-gray-900 mb-4">📈 Évolution du crawl</h3>
@@ -276,6 +288,10 @@
                                 </tbody>
                             </table>
                         </div>
+
+                        <div x-show="!loading && files.length === 0" class="text-center py-8 text-gray-600">
+                            Aucun fichier listé.
+                        </div>
                     </div>
                 </div>
 
@@ -319,6 +335,10 @@
                                 </tbody>
                             </table>
                         </div>
+
+                        <div x-show="!loading && duplicates.length === 0" class="text-center py-8 text-gray-600">
+                            Aucun doublon listé.
+                        </div>
                     </div>
                 </div>
 
@@ -335,38 +355,34 @@
                                 :class="configSection === 'crawler' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-300'">Crawler</button>
                         <button @click="configSection = 'dbAnalysis'; loadDbExplain()" class="px-4 py-2 rounded-lg text-sm font-medium"
                                 :class="configSection === 'dbAnalysis' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-300'">DB Explain</button>
-                        <button @click="configSection = 'monitoring'" class="px-4 py-2 rounded-lg text-sm font-medium"
+                        <button @click="configSection = 'monitoring'; loadMonitoringSummary()" class="px-4 py-2 rounded-lg text-sm font-medium"
                                 :class="configSection === 'monitoring' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-300'">Monitoring</button>
                     </div>
                 <!-- Vue Monitoring -->
                 <div x-show="currentView === 'configuration' && configSection === 'monitoring'" class="fade-in">
-                    <h2 class="text-2xl font-bold text-gray-900 mb-6">📊 Monitoring temps réel</h2>
-                    
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div class="card p-6">
-                            <h3 class="text-lg font-medium text-gray-900 mb-4">🔌 État de connexion</h3>
-                            <div class="space-y-2">
-                                <div class="flex justify-between">
-                                    <span>WebSocket:</span>
-                                    <span :class="wsConnected ? 'text-green-600' : 'text-red-600'">
-                                        <i :class="wsConnected ? 'fas fa-check-circle' : 'fas fa-times-circle'"></i>
-                                        <span x-text="wsConnected ? 'Connecté' : 'Déconnecté'"></span>
-                                    </span>
-                                </div>
-                                <div class="flex justify-between">
-                                    <span>API:</span>
-                                    <span class="text-green-600">
-                                        <i class="fas fa-check-circle"></i>
-                                        En ligne
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="card p-6">
-                            <h3 class="text-lg font-medium text-gray-900 mb-4">📈 Performance</h3>
-                            <canvas id="performanceChart" width="400" height="200"></canvas>
-                        </div>
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold text-gray-900">📊 Monitoring et avancement</h2>
+                        <button @click="loadMonitoringSummary()" class="bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded-lg text-sm">Rafraîchir</button>
+                    </div>
+
+                    <div x-show="loadingMonitoring" class="text-center py-8">
+                        <div class="loading"></div>
+                        <p class="mt-4 text-gray-600">Chargement du monitoring...</p>
+                    </div>
+                    <p x-show="monitoringError" class="text-red-600 mb-4" x-text="monitoringError"></p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" x-show="!loadingMonitoring">
+                        <div class="card p-6"><p class="text-sm text-gray-500">Configurations</p><p class="text-2xl font-semibold" x-text="monitoring.total_configs ?? 0"></p></div>
+                        <div class="card p-6"><p class="text-sm text-gray-500">Runs totaux</p><p class="text-2xl font-semibold" x-text="monitoring.total_runs ?? 0"></p></div>
+                        <div class="card p-6"><p class="text-sm text-gray-500">En cours / en file</p><p class="text-2xl font-semibold" x-text="`${monitoring.running_runs ?? 0} / ${monitoring.queued_runs ?? 0}`"></p></div>
+                        <div class="card p-6"><p class="text-sm text-gray-500">Terminés / échecs</p><p class="text-2xl font-semibold" x-text="`${monitoring.completed_runs ?? 0} / ${monitoring.failed_runs ?? 0}`"></p></div>
+                    </div>
+
+                    <div class="card p-6 mt-6" x-show="!loadingMonitoring">
+                        <h3 class="text-lg font-medium text-gray-900 mb-3">Dernier run</h3>
+                        <p class="text-sm text-gray-700" x-text="`Statut: ${monitoring.latest_run_status || 'Aucun run'}`"></p>
+                        <p class="text-sm text-gray-700" x-text="`Configuration: ${monitoring.latest_run_config_name || '-'}`"></p>
+                        <p class="text-sm text-gray-700" x-text="`Déclenché à: ${monitoring.latest_run_triggered_at || '-'}`"></p>
                     </div>
                 </div>
 
@@ -466,6 +482,9 @@
                         <template x-if="dbExplainError">
                             <p class="text-red-600" x-text="dbExplainError"></p>
                         </template>
+                        <template x-if="!loadingDbExplain && dbExplainPlan.length === 0 && !dbExplainError">
+                            <p class="text-gray-600">Aucun plan retourné.</p>
+                        </template>
                         <template x-if="!loadingDbExplain && dbExplainPlan.length > 0">
                             <pre class="bg-gray-900 text-green-200 p-4 rounded-lg overflow-x-auto text-sm" x-text="dbExplainPlan.join('\n')"></pre>
                         </template>
@@ -502,6 +521,20 @@
                 activeSpace: '',
                 crawlConfigs: [],
                 implementationStatus: '',
+                monitoring: {
+                    total_configs: 0,
+                    total_runs: 0,
+                    queued_runs: 0,
+                    running_runs: 0,
+                    completed_runs: 0,
+                    failed_runs: 0,
+                    latest_run_status: 'Aucun run',
+                    latest_run_config_name: '-',
+                    latest_run_triggered_at: '-',
+                    progress_percent: 0
+                },
+                loadingMonitoring: false,
+                monitoringError: '',
                 newCrawl: {
                     name: '',
                     domain_zone: '',
@@ -521,6 +554,7 @@
                     this.initWebSocket();
                     this.initCharts();
                     await this.loadCrawlConfigs();
+                    await this.loadMonitoringSummary();
                 },
                 
                 toggleSidebar() {
@@ -534,6 +568,8 @@
                         this.loadCrawlConfigs();
                     } else if (section === 'dbAnalysis') {
                         this.loadDbExplain();
+                    } else if (section === 'monitoring') {
+                        this.loadMonitoringSummary();
                     }
                 },
                 
@@ -649,6 +685,7 @@
                             connection: { username: '', password: '', domain: '' }
                         };
                         await this.loadCrawlConfigs();
+                        await this.loadMonitoringSummary();
                     } catch (error) {
                         this.implementationStatus = `Erreur: ${error.message}`;
                     }
@@ -666,8 +703,37 @@
                         }
                         const run = await response.json();
                         this.implementationStatus = `Crawl ${run.run_id} en statut ${run.status}`;
+                        await this.loadMonitoringSummary();
                     } catch (error) {
                         this.implementationStatus = `Erreur: ${error.message}`;
+                    }
+                },
+
+                async loadMonitoringSummary() {
+                    this.loadingMonitoring = true;
+                    this.monitoringError = '';
+                    try {
+                        const response = await fetch('/api/monitoring');
+                        if (!response.ok) {
+                            throw new Error('Erreur API monitoring');
+                        }
+                        this.monitoring = await response.json();
+                    } catch (error) {
+                        this.monitoringError = error.message;
+                        this.monitoring = {
+                            total_configs: 0,
+                            total_runs: 0,
+                            queued_runs: 0,
+                            running_runs: 0,
+                            completed_runs: 0,
+                            failed_runs: 0,
+                            latest_run_status: 'Aucun run',
+                            latest_run_config_name: '-',
+                            latest_run_triggered_at: '-',
+                            progress_percent: 0
+                        };
+                    } finally {
+                        this.loadingMonitoring = false;
                     }
                 },
 
