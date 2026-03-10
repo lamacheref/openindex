@@ -32,3 +32,25 @@ docker build -f Dockerfile.j3 -t openindex-j3:local .
 docker compose -f docker-compose.j3.yml up -d
 curl -f http://localhost:8000/health
 ```
+
+
+## Matrice de décision (actif vs legacy)
+
+| Chaîne | Statut | Usage attendu | Action |
+|---|---|---|---|
+| `.github/workflows/docker-j3.yml` | **Active** | Build/publish images crawler+UI pour la stack courante | Référence unique pour validations CI J1/J2 |
+| `.gitea/workflows/ci.yml` | **Legacy** | Historique, compatibilité infra Gitea non cible | Ne pas utiliser comme source de vérité; maintenance minimale |
+
+## Critères de sortie J1 vers entrée J2
+
+### Sortie J1 (DoD)
+
+- Documentation de pilotage alignée (`README`, `ROADMAP`, `TODO`, `CI-CD`, `docs/WORKFLOW`).
+- Contrôles critiques automatisés disponibles (API smoke + non-régression frontend structurelle).
+- Distinction explicite entre workflows CI actifs et legacy actée dans la documentation.
+
+### Entrée J2 (gating)
+
+- Exécution reproductible de la suite de smoke tests en local/CI.
+- Règles de contribution orientées stack active (FastAPI + frontend + SQLite) explicites.
+- Backlog J2 priorisé sur fiabilisation (tests, incident, exploitation).
