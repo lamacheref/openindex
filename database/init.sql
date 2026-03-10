@@ -47,6 +47,37 @@ CREATE TABLE IF NOT EXISTS crawl_statistics (
     status TEXT DEFAULT 'completed'
 );
 
+
+
+-- Table des configurations de crawl
+CREATE TABLE IF NOT EXISTS crawl_configs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    domain_zone TEXT NOT NULL,
+    start_path TEXT NOT NULL,
+    include_paths TEXT[] NOT NULL DEFAULT '{}',
+    exclude_paths TEXT[] NOT NULL DEFAULT '{}',
+    connection_username TEXT NOT NULL,
+    connection_password TEXT NOT NULL,
+    connection_domain TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_crawl_configs_domain_zone ON crawl_configs(domain_zone);
+CREATE INDEX IF NOT EXISTS idx_crawl_configs_created_at ON crawl_configs(created_at);
+
+-- Table des exécutions de crawl
+CREATE TABLE IF NOT EXISTS crawl_runs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    config_id UUID NOT NULL REFERENCES crawl_configs(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'queued',
+    triggered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_crawl_runs_config_id ON crawl_runs(config_id);
+CREATE INDEX IF NOT EXISTS idx_crawl_runs_status ON crawl_runs(status);
+CREATE INDEX IF NOT EXISTS idx_crawl_runs_triggered_at ON crawl_runs(triggered_at);
+
 -- Table pour les logs de crawl (optionnel)
 CREATE TABLE IF NOT EXISTS crawl_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

@@ -14,6 +14,10 @@ import main as api_main
 
 
 class DummyDB:
+    def __init__(self):
+        self.crawl_configs = []
+        self.crawl_runs = []
+
     def execute_query(self, query, params=None):
         params = params or []
         if query.strip() == "ANALYZE":
@@ -90,9 +94,41 @@ class DummyDB:
         ]
 
 
+    def list_crawl_configs(self):
+        return list(self.crawl_configs)
+
+    def create_crawl_config(self, payload):
+        item = {
+            "id": "cfg-1",
+            "name": payload.name,
+            "domain_zone": payload.domain_zone,
+            "start_path": payload.start_path,
+            "include_paths": payload.include_paths,
+            "exclude_paths": payload.exclude_paths,
+            "connection_username": payload.connection.username,
+            "connection_domain": payload.connection.domain,
+            "created_at": "2026-03-10T12:00:00+00:00",
+        }
+        self.crawl_configs = [item]
+        return item
+
+    def start_crawl(self, config_id):
+        if not any(cfg["id"] == config_id for cfg in self.crawl_configs):
+            return None
+        run = {
+            "run_id": "run-1",
+            "config_id": config_id,
+            "status": "queued",
+            "triggered_at": "2026-03-10T12:05:00+00:00",
+        }
+        self.crawl_runs.append(run)
+        return run
+
+
 @pytest.fixture
 def client(monkeypatch):
-    monkeypatch.setattr(api_main, "get_db_adapter", lambda: DummyDB())
+    db = DummyDB()
+    monkeypatch.setattr(api_main, "get_db_adapter", lambda: db)
     return TestClient(api_main.app)
 
 
@@ -176,7 +212,6 @@ def test_get_db_explain_invalid_query(client):
 
 
 def test_create_and_list_crawl_configs(client):
-    api_main.CRAWL_CONFIGS.clear()
     payload = {
         "name": "Crawl Finance",
         "domain_zone": "EMEA",
@@ -205,7 +240,6 @@ def test_create_and_list_crawl_configs(client):
 
 
 def test_start_crawl_requires_existing_config(client):
-    api_main.CRAWL_CONFIGS.clear()
 
     missing = client.post('/api/crawls/start', json={'config_id': 'missing'})
     assert missing.status_code == 404
