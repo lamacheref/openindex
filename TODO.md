@@ -22,12 +22,12 @@
 
 ### Semaine 1 — Stabilisation exécutable J3
 
-- [ ] CMD-01 — Standardiser l'environnement de test (requirements/dev + script unique).
-- [ ] CMD-02 — Fiabiliser les tests API critiques et éliminer la flakiness.
-- [ ] CMD-03 — Renforcer la non-régression frontend sur les vues clés.
-- [ ] CMD-04 — Tester le runbook incident SQLite et mesurer le temps de recovery.
-- [ ] CMD-05 — Documenter une CI de référence unique (J3) + conventions de merge.
-- [ ] CMD-06 — Ajouter la section "limitations connues" dans la documentation principale.
+- [x] CMD-01 — Standardiser l'environnement de test (requirements/dev + script unique).
+- [x] CMD-02 — Fiabiliser les tests API critiques et éliminer la flakiness.
+- [x] CMD-03 — Renforcer la non-régression frontend sur les vues clés.
+- [x] CMD-04 — Tester le runbook incident SQLite et mesurer le temps de recovery.
+- [x] CMD-05 — Documenter une CI de référence unique (J3) + conventions de merge.
+- [x] CMD-06 — Ajouter la section "limitations connues" dans la documentation principale.
 
 ### Semaine 2 — Readiness J4 sans big bang
 

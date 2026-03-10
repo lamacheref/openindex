@@ -54,3 +54,7 @@ curl -f http://localhost:8000/health
 - Exécution reproductible de la suite de smoke tests en local/CI.
 - Règles de contribution orientées stack active (FastAPI + frontend + SQLite) explicites.
 - Backlog J2 priorisé sur fiabilisation (tests, incident, exploitation).
+
+## Convention de merge J3
+
+La convention opérationnelle de merge et la référence CI unique sont détaillées dans `docs/CI_REFERENCE_J3.md`.

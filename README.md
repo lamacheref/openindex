@@ -37,6 +37,22 @@ docker compose -f docker-compose.j3.yml pull
 docker compose -f docker-compose.j3.yml up -d
 ```
 
+## Tests (commande unique J3)
+
+Pour standardiser l'environnement de validation local (CMD-01), lancez:
+
+```bash
+./scripts/run_j3_test_suite.sh
+```
+
+Ce script crée un `.venv` local si nécessaire, installe `requirements/dev.txt`, puis exécute `pytest -q tests`.
+Pour cibler les tests critiques anti-flakiness uniquement:
+
+```bash
+pytest -q tests/test_api_smoke_critical.py
+pytest -q tests/test_frontend_structure.py
+```
+
 ## Accès
 
 - Frontend : http://localhost:3000
@@ -55,3 +71,10 @@ docker compose -f docker-compose.j3.yml up -d
 - Journal détaillé : `docs/`
 - Runbook hebdo J1 + reprise SQLite : `docs/RUNBOOK_HEBDO.md`
 - Plan d'accélération 2 semaines : `docs/OPTION_COMMANDO.md`
+
+## Limitations connues
+
+- Le mode de persistance de référence reste SQLite à ce stade : performances et concurrence en écriture limitées sur forte charge.
+- Le workflow `.gitea/workflows/ci.yml` est conservé en legacy et ne constitue pas la gate de merge J3.
+- La validation locale dépend de l'accès au registre pip pour installer `requirements/dev.txt`.
+- Les tests structurels frontend vérifient le contrat HTML/Alpine, pas le rendu visuel pixel-perfect.

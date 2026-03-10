@@ -52,19 +52,24 @@ def client(monkeypatch):
     return TestClient(api_main.app)
 
 
-def test_critical_health(client):
+@pytest.mark.parametrize("repeat_index", range(5))
+def test_critical_health(client, repeat_index):
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["status"] == "healthy"
 
 
-def test_critical_stats(client):
+@pytest.mark.parametrize("repeat_index", range(5))
+def test_critical_stats(client, repeat_index):
     response = client.get("/api/stats")
     assert response.status_code == 200
-    assert response.json()["total_files"] == 1
+    payload = response.json()
+    assert payload["total_files"] == 1
+    assert payload["duplicate_files"] == 0
 
 
-def test_critical_files(client):
+@pytest.mark.parametrize("repeat_index", range(5))
+def test_critical_files(client, repeat_index):
     response = client.get("/api/files", params={"limit": 10, "offset": 0})
     assert response.status_code == 200
     payload = response.json()
@@ -72,7 +77,8 @@ def test_critical_files(client):
     assert payload[0]["path"] == "/share/docs"
 
 
-def test_critical_db_explain(client):
+@pytest.mark.parametrize("repeat_index", range(5))
+def test_critical_db_explain(client, repeat_index):
     response = client.get("/api/db-explain", params={"query_name": "files_list", "analyze": True})
     assert response.status_code == 200
     payload = response.json()
