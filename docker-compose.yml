@@ -25,7 +25,7 @@ services:
       start_period: 20s
 
   api:
-    image: ${OPENINDEX_API_IMAGE:-ghcr.io/OWNER/openindex-api:latest}
+    image: ${OPENINDEX_API_IMAGE:-ghcr.io/lamacheref/openindex-api:latest}
     container_name: openindex-api
     restart: unless-stopped
     environment:
@@ -44,7 +44,7 @@ services:
       - openindex-network
 
   crawler:
-    image: ${OPENINDEX_CRAWLER_IMAGE:-ghcr.io/OWNER/openindex-crawler:latest}
+    image: ${OPENINDEX_CRAWLER_IMAGE:-ghcr.io/lamacheref/openindex-crawler:latest}
     container_name: openindex-crawler
     restart: unless-stopped
     environment:
@@ -64,7 +64,7 @@ services:
       - openindex-network
 
   ui:
-    image: ${OPENINDEX_UI_IMAGE:-ghcr.io/OWNER/openindex-ui:latest}
+    image: ${OPENINDEX_UI_IMAGE:-ghcr.io/lamacheref/openindex-ui:latest}
     container_name: openindex-ui
     restart: unless-stopped
     ports:

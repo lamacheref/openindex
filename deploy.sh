@@ -20,9 +20,9 @@ ensure_env() {
       cp .env.example .env
     else
       cat > .env <<EOT
-OPENINDEX_API_IMAGE=ghcr.io/OWNER/openindex-api:latest
-OPENINDEX_CRAWLER_IMAGE=ghcr.io/OWNER/openindex-crawler:latest
-OPENINDEX_UI_IMAGE=ghcr.io/OWNER/openindex-ui:latest
+OPENINDEX_API_IMAGE=ghcr.io/lamacheref/openindex-api:latest
+OPENINDEX_CRAWLER_IMAGE=ghcr.io/lamacheref/openindex-crawler:latest
+OPENINDEX_UI_IMAGE=ghcr.io/lamacheref/openindex-ui:latest
 POSTGRES_DB=openindex
 POSTGRES_USER=openindex_user
 POSTGRES_PASSWORD=openindex_secure_password
