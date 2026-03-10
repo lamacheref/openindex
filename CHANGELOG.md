@@ -1,5 +1,11 @@
 # Changelog OpenIndex
 
+## 2026-03-10 — Exécution objectifs critiques TODO J1
+
+- Ajout d'un runbook hebdomadaire court avec checklist opératoire.
+- Formalisation d'un lot de tests API critiques reproductibles (`tests/test_api_smoke_critical.py`).
+- Documentation de la reprise sur incident SQLite (absence/corruption) avec procédure et commandes.
+
 ## 2026-03-10 — Lancement J1
 
 - Lancement officiel de la phase **J1** (kickoff opérationnel).
