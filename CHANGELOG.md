@@ -1,5 +1,12 @@
 # Changelog OpenIndex
 
+## 2026-03-10 — Lancement J1
+
+- Lancement officiel de la phase **J1** (kickoff opérationnel).
+- Recalage documentaire global sur la séquence J1 -> J2 -> J3.
+- Mise à jour coordonnée des documents racine : `README.md`, `PROJET.md`, `ROADMAP.md`, `TODO.md`.
+- Incrément de version projet en `0.2.0` pour marquer le démarrage J1.
+
 ## 2026-03-09 — Consolidation documentaire
 
 - Harmonisation des documents racine et `docs/` sur l’état réel J3.

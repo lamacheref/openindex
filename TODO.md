@@ -1,25 +1,24 @@
-# TODO OpenIndex — Suivi opérationnel
+# TODO OpenIndex — J1
 
-## Priorité haute (semaine en cours)
+## Priorité critique (J1)
 
+- [ ] Établir une checklist de démarrage hebdo (runbook court).
 - [ ] Valider un jeu de tests reproductible API (`/health`, `/api/stats`, `/api/files`, `/api/db-explain`).
-- [ ] Ajouter un scénario de test de non-régression frontend sur les vues principales.
-- [ ] Documenter procédure de récupération sur DB SQLite absente/corrompue.
+- [ ] Décrire la procédure de reprise sur incident SQLite (absence/corruption).
 
-## Priorité moyenne
+## Priorité haute
 
-- [ ] Clarifier les workflows CI legacy vs J3 dans la gouvernance du dépôt.
-- [ ] Définir les critères de bascule J3 -> J4 (PostgreSQL).
-- [ ] Ajouter une section “limitations connues” dans le README.
+- [ ] Ajouter un scénario de non-régression frontend sur les vues principales.
+- [ ] Clarifier les workflows CI actifs vs legacy dans le dépôt.
+- [ ] Définir les critères de sortie J1 et entrée J2.
 
-## Backlog J4
+## Préparation J2/J3
 
-- [ ] Implémenter adaptateur PostgreSQL API en parallèle du mode SQLite.
-- [ ] Valider performances sur volumétrie représentative.
-- [ ] Documenter migration des données J3 vers J4.
+- [ ] Formaliser les SLO minimaux API (latence, erreurs, disponibilité).
+- [ ] Préparer plan de test de charge sur volumétrie représentative.
+- [ ] Lister les prérequis techniques pour la consolidation PostgreSQL.
 
-## Fait récemment
+## Fait (lancement J1)
 
-- [x] Harmonisation complète de la documentation (racine + `docs/`).
-- [x] Clarification de la stack active et des composants legacy.
-- [x] Mise à jour roadmap/projet/workflow sur état réel.
+- [x] Mise à jour synchronisée `CHANGELOG`, `PROJET`, `README`, `ROADMAP`, `TODO`.
+- [x] Version projet incrémentée pour marquer le kickoff J1.

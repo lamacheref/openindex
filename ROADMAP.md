@@ -1,32 +1,41 @@
-# ROADMAP OpenIndex (mise à jour mars 2026)
+# ROADMAP OpenIndex (J1 relancé — mars 2026)
 
 ## Vision
 
 Industrialiser OpenIndex pour un usage régulier en environnement SMB volumineux, en sécurisant la chaîne : ingestion -> API -> visualisation -> exploitation.
 
-## Phase J3 (actuelle) — Stabilisation SQLite
+## Phase J1 (active) — Kickoff opérationnel
 
-### Réalisé
-- API FastAPI opérationnelle avec endpoints de consultation.
-- Frontend statique connecté à l’API.
-- Monitoring WebSocket basique.
-- Endpoint d’analyse SQL (`/api/db-explain`).
-- Déploiement image-first (`docker-compose.j3.yml`).
+### Objectifs J1
+- Cadrer les priorités de sprint et les responsabilités.
+- Rendre la documentation de pilotage totalement alignée.
+- Mettre sous contrôle les points critiques de fiabilité (tests/sauvegarde).
 
-### À finaliser
-- Renforcer les tests automatiques API/front.
-- Durcir la fiabilité crawler en exécution longue.
-- Standardiser les checklists d’exploitation.
+### Sorties attendues J1
+- Baseline documentaire stable et versionnée.
+- TODO priorisé avec critères de done explicites.
+- Plan de passage J1 -> J2 validé.
 
-## Phase J4 (prochaine) — Consolidation PostgreSQL
+## Phase J2 (prochaine) — Fiabilisation
+
+- Renforcer les tests API/front essentiels.
+- Formaliser procédures d’incident sur la base active.
+- Clarifier les workflows CI utiles et déprécier les parcours legacy.
+
+## Phase J3 — Stabilisation technique
+
+- Exploitation robuste de la stack active (FastAPI + frontend + SQLite).
+- Optimisation des performances de consultation.
+- Durcissement des exécutions longues côté crawler.
+
+## Phase J4 — Consolidation PostgreSQL
 
 - Rebasculer le backend données principal vers PostgreSQL.
 - Stabiliser le schéma et la stratégie d’indexation.
-- Ajuster les jobs CI/CD autour de la cible J4.
-- Préparer stratégie de migration depuis SQLite J3.
+- Préparer la migration depuis SQLite.
 
 ## Phase J5 — Qualité et observabilité
 
-- Couverture de tests (unitaires/intégration) mesurée.
-- Dashboards d’observabilité (santé API, crawl, volume, erreurs).
-- Process de release plus strict (DoD + checklist publication).
+- Couverture de tests mesurée et suivie.
+- Dashboards de santé et alerting.
+- Processus de release strict (DoD + checklist publication).

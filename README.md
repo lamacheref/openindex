@@ -2,9 +2,13 @@
 
 Solution d’indexation de partages SMB avec **crawler Python**, **API FastAPI** et **frontend statique**.
 
-## État actuel (mars 2026)
+## État actuel (J1 lancé — mars 2026)
 
-OpenIndex est actuellement exploité dans une variante **J3 orientée stabilisation** :
+Le projet entre en **phase J1 (kickoff structuré)** avec une base technique déjà existante.
+
+Objectif de J1 : fiabiliser le socle documentaire + opérationnel avant montée de cadence.
+
+La base active à date reste :
 
 - API FastAPI (`src/api/main.py`) sur base **SQLite** via `OPENINDEX_DB_PATH`.
 - Frontend statique (`frontend/index.html`) servi par Nginx.
@@ -12,7 +16,7 @@ OpenIndex est actuellement exploité dans une variante **J3 orientée stabilisat
 - Orchestration recommandée : `docker-compose.j3.yml` (mode image-first, variable `OPENINDEX_J3_IMAGE`).
 - Build/push d’image J3 automatisé via GitHub Actions (`.github/workflows/docker-j3.yml`).
 
-> La cible J4 reste la consolidation PostgreSQL pour la suite.
+> J1 sert de rampe de lancement vers J2/J3, sans rupture technique immédiate.
 
 ## Fonctionnalités disponibles
 
@@ -23,7 +27,7 @@ OpenIndex est actuellement exploité dans une variante **J3 orientée stabilisat
 - Monitoring temps réel via WebSocket (`/ws`).
 - Analyse de plan SQLite (`/api/db-explain`).
 
-## Démarrage rapide (J3)
+## Démarrage rapide (socle actuel)
 
 ```bash
 cp .env.example .env
