@@ -8,9 +8,9 @@
 
 ## Priorité haute
 
-- [ ] Ajouter un scénario de non-régression frontend sur les vues principales.
-- [ ] Clarifier les workflows CI actifs vs legacy dans le dépôt.
-- [ ] Définir les critères de sortie J1 et entrée J2.
+- [x] Ajouter un scénario de non-régression frontend sur les vues principales.
+- [x] Clarifier les workflows CI actifs vs legacy dans le dépôt.
+- [x] Définir les critères de sortie J1 et entrée J2.
 
 ## Préparation J2/J3
 

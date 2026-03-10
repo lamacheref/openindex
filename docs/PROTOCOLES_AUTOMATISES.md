@@ -17,3 +17,20 @@
 ## Écart actuel
 
 Les workflows legacy existent encore; la référence opérationnelle doit rester la chaîne J3.
+
+
+## Scénario non-régression frontend (vues principales)
+
+Objectif: garantir la présence des vues clés et de leurs bindings Alpine.
+
+- Vues contrôlées: `dashboard`, `files`, `duplicates`, `monitoring`.
+- Vérifications minimales:
+  - présence du déclencheur `currentView = ...` dans la navigation,
+  - présence du conteneur de vue `x-show="currentView === ..."`,
+  - présence des libellés utilisateur associés (Tableau de bord, Fichiers, Doublons, Monitoring).
+
+Commande recommandée:
+
+```bash
+pytest -q tests/test_frontend_structure.py
+```
