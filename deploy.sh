@@ -82,6 +82,12 @@ pull_images() {
   $COMPOSE_CMD pull
 }
 
+pull_images() {
+  ensure_env
+  echo "📦 Pull des images GHCR (api + crawler + ui + postgres)..."
+  $COMPOSE_CMD pull
+}
+
 up() {
   ensure_env
   ensure_ghcr_auth
