@@ -39,7 +39,7 @@ def postgres_stats(pg_config: dict) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument('--sqlite-path', default=os.getenv('OPENINDEX_DB_PATH', 'openindex.db'))
-    parser.add_argument('--journal', default='docs/migration_dry_run_j3_j4.json')
+    parser.add_argument('--journal', default='docs/artifacts/migration_dry_run_j3_j4.json')
     parser.add_argument('--dry-run', action='store_true', default=True)
     args = parser.parse_args()
 

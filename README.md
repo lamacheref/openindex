@@ -69,8 +69,8 @@ pytest -q tests/test_frontend_structure.py
 - Suivi d’exécution : `TODO.md`
 - Historique : `CHANGELOG.md`
 - Journal détaillé : `docs/`
-- Runbook hebdo J1 + reprise SQLite : `docs/RUNBOOK_HEBDO.md`
-- Plan d'accélération 2 semaines : `docs/OPTION_COMMANDO.md`
+- Runbook hebdo J1 + reprise SQLite : `docs/operations/EXPLOITATION.md`
+- Plan d'accélération 2 semaines : `docs/phases/J4_MIGRATION.md`
 
 ## Limitations connues
 

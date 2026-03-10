@@ -1,44 +1,99 @@
-# TODO OpenIndex — J1 à J3
+# TODO OpenIndex — suite post-commando (J4 -> J5)
 
-## Priorité critique (J1)
+## Objectif
 
-- [x] Établir une checklist de démarrage hebdo (runbook court).
-- [x] Valider un jeu de tests reproductible API (`/health`, `/api/stats`, `/api/files`, `/api/db-explain`).
-- [x] Décrire la procédure de reprise sur incident SQLite (absence/corruption).
+Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par preuves**, puis enclencher J5 (qualité & observabilité) avec critères de sortie mesurables.
 
-## Priorité haute (J1)
+---
 
-- [x] Ajouter un scénario de non-régression frontend sur les vues principales.
-- [x] Clarifier les workflows CI actifs vs legacy dans le dépôt.
-- [x] Définir les critères de sortie J1 et entrée J2.
+## 1) Priorités immédiates (Semaine en cours)
 
-## Préparation J2/J3 (finalisée)
+- [ ] **T-01 — Clôturer CMD-12 (checklist release commando) avec preuves**
+  - Vérifier CI verte sur `sqlite` + `postgresql`.
+  - Vérifier dry-run migration et journal versionné.
+  - Vérifier bench comparatif publié.
+  - Vérifier rollback relu par un pair.
+  - Mettre à jour `CHANGELOG.md` pour le lot de clôture.
 
-- [x] Formaliser les SLO minimaux API (latence, erreurs, disponibilité) via KPI commando et critères go/no-go.
-- [x] Préparer un plan de test de charge et benchmark comparatif SQLite vs PostgreSQL.
-- [x] Lister les prérequis techniques pour la consolidation PostgreSQL (adaptateur parallèle, dry-run, rollback, CI dual DB).
+- [ ] **T-02 — Décision formelle Go/No-Go J4**
+  - Appliquer les critères de `docs/phases/J4_MIGRATION.md`.
+  - Rédiger la décision dans un compte-rendu daté dans `docs/`.
+  - Si No-Go: lister précisément les écarts bloquants et le plan de correction.
 
-## Suite (issue des docs / option commando)
+- [ ] **T-03 — Figer la baseline technique J4**
+  - Confirmer le backend DB par défaut (`sqlite` ou `postgresql`) dans la doc principale.
+  - Aligner `README.md`, `README.stack.md`, `ROADMAP.md` et ce `TODO.md`.
+  - Supprimer les ambiguïtés "actif vs legacy" dans les parcours opératoires.
 
-### Semaine 1 — Stabilisation exécutable J3
+---
 
-- [x] CMD-01 — Standardiser l'environnement de test (requirements/dev + script unique).
-- [x] CMD-02 — Fiabiliser les tests API critiques et éliminer la flakiness.
-- [x] CMD-03 — Renforcer la non-régression frontend sur les vues clés.
-- [x] CMD-04 — Tester le runbook incident SQLite et mesurer le temps de recovery.
-- [x] CMD-05 — Documenter une CI de référence unique (J3) + conventions de merge.
-- [x] CMD-06 — Ajouter la section "limitations connues" dans la documentation principale.
+## 2) Exécution J4 (prochaines 2 semaines)
 
-### Semaine 2 — Readiness J4 sans big bang
+- [ ] **T-04 — Migration contrôlée J3 -> J4 en environnement de référence**
+  - Exécuter le dry-run sur un dataset représentatif.
+  - Exécuter la migration réelle sur environnement cible.
+  - Produire un rapport de migration (durée, volume, incidents, rollback readiness).
 
-- [x] CMD-07 — Définir les critères go/no-go J3 -> J4 (perf, rollback, migration).
-- [x] CMD-08 — Introduire l'adaptateur PostgreSQL en mode parallèle (feature flag).
-- [x] CMD-09 — Écrire et valider le dry-run de migration J3 -> J4.
-- [x] CMD-10 — Publier un bench comparatif SQLite vs PostgreSQL (P95 endpoints critiques).
-- [x] CMD-11 — Étendre la CI pour couvrir SQLite + PostgreSQL (matrice dual DB).
-- [x] CMD-12 — Préparer la checklist de release commando.
+- [ ] **T-05 — Validation de performance post-bascule**
+  - Rejouer le benchmark SQLite vs PostgreSQL sur endpoints critiques.
+  - Vérifier le respect des seuils P95 annoncés.
+  - Publier les résultats dans `docs/` avec conclusion explicite (OK / NOK).
 
-## Fait (lancement J1)
+- [ ] **T-06 — Renforcement CI dual DB**
+  - Rendre obligatoire le passage du job dual DB avant merge.
+  - Ajouter collecte d'artefacts minimaux en échec (logs API/tests).
+  - Documenter le chemin de diagnostic rapide en cas de pipeline rouge.
 
-- [x] Mise à jour synchronisée `CHANGELOG`, `PROJET`, `README`, `ROADMAP`, `TODO`.
-- [x] Version projet incrémentée pour marquer le kickoff J1.
+- [ ] **T-07 — Drill de rollback J4**
+  - Simuler un incident post-migration.
+  - Exécuter le rollback complet avec chronométrage.
+  - Capitaliser la procédure réelle dans `docs/operations/EXPLOITATION.md`.
+
+---
+
+## 3) Préparation J5 (qualité & observabilité)
+
+- [ ] **T-08 — Définir les SLI/SLO opérationnels minimum**
+  - Disponibilité API, latence P95, taux d'erreurs, temps de recovery.
+  - Seuils d'alerte + responsables + fréquence de revue.
+
+- [ ] **T-09 — Pack de tests critiques "release gate"**
+  - API smoke critique.
+  - Non-régression frontend structurelle.
+  - Vérification DB explain / requêtes clés.
+  - Exécution via une commande unique documentée.
+
+- [ ] **T-10 — Observabilité minimale exploitable**
+  - Standardiser logs applicatifs (format, niveau, corrélation).
+  - Définir 1 dashboard santé + 1 vue incidents.
+  - Définir la procédure d'escalade en cas de dérive.
+
+---
+
+## 4) Dette documentaire à résorber
+
+- [ ] **T-11 — Nettoyage docs historiques vs référence active**
+  - Marquer explicitement les documents legacy.
+  - Ajouter un index "où trouver la vérité" dans `docs/`.
+  - Réduire les doublons roadmap/projet/todo.
+
+- [ ] **T-12 — Gouvernance de preuve**
+  - Chaque item clos doit pointer vers: commande exécutée, artefact, commit.
+  - Remplacer tout marqueur implicite par une preuve vérifiable.
+
+---
+
+## Définition de terminé (DoD) pour chaque tâche
+
+- [ ] Une preuve d'exécution est versionnée (log, JSON, capture, rapport).
+- [ ] Les impacts doc sont propagés aux fichiers de référence.
+- [ ] Un risque principal et son plan de mitigation sont notés.
+- [ ] La tâche est traçable dans l'historique Git (commit clair).
+
+---
+
+## Notes de pilotage
+
+- Priorisation: **fiabilité > migration > confort**.
+- Pas de nouvelle feature produit tant que T-01 à T-07 ne sont pas clôturées.
+- Revue hebdo obligatoire des KPI (pipeline, flakiness, perf, recovery).

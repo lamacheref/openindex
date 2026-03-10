@@ -26,7 +26,7 @@ def measure(samples: int, base_ms: float, jitter_ms: float) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument('--samples', type=int, default=30)
-    parser.add_argument('--output', default='docs/bench_sqlite_vs_postgresql.json')
+    parser.add_argument('--output', default='docs/artifacts/bench_sqlite_vs_postgresql.json')
     args = parser.parse_args()
 
     report = {
