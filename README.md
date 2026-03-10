@@ -49,3 +49,4 @@ docker compose -f docker-compose.j3.yml up -d
 - Suivi d’exécution : `TODO.md`
 - Historique : `CHANGELOG.md`
 - Journal détaillé : `docs/`
+- Plan d'accélération 2 semaines : `docs/OPTION_COMMANDO.md`
