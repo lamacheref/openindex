@@ -2,9 +2,9 @@
 
 ## Priorité critique (J1)
 
-- [ ] Établir une checklist de démarrage hebdo (runbook court).
-- [ ] Valider un jeu de tests reproductible API (`/health`, `/api/stats`, `/api/files`, `/api/db-explain`).
-- [ ] Décrire la procédure de reprise sur incident SQLite (absence/corruption).
+- [x] Établir une checklist de démarrage hebdo (runbook court).
+- [x] Valider un jeu de tests reproductible API (`/health`, `/api/stats`, `/api/files`, `/api/db-explain`).
+- [x] Décrire la procédure de reprise sur incident SQLite (absence/corruption).
 
 ## Priorité haute
 
