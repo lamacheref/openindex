@@ -12,18 +12,20 @@ def test_frontend_has_expected_views_and_bindings():
     assert "Tableau de bord" in html
     assert "x-data=\"openIndexApp()\"" in html
 
-    expected_views = {
+    expected_main_views = {
         "dashboard": "Tableau de bord",
         "files": "Fichiers",
         "duplicates": "Doublons",
-        "monitoring": "Monitoring",
-        "implementation": "Implémentation rapide",
+        "configuration": "Configuration",
     }
 
-    for view_key, view_label in expected_views.items():
+    for view_key, view_label in expected_main_views.items():
         assert f"currentView = '{view_key}'" in html
-        assert f"x-show=\"currentView === '{view_key}'\"" in html
         assert view_label in html
+
+    assert "Implémentation rapide" in html
+    assert "Monitoring temps réel" in html
+    assert "Explain / Analyze DB" in html
 
 
 def test_frontend_uses_realtime_and_chart_libs():
@@ -34,16 +36,31 @@ def test_frontend_uses_realtime_and_chart_libs():
     assert "crawlChart" in html
 
 
-def test_frontend_nav_switches_cover_all_main_views():
+def test_frontend_sidebar_limits_main_navigation():
     html = read_frontend_html()
 
-    view_switches = set(re.findall(r"currentView\s*=\s*'([a-z_]+)'", html))
-    assert {"dashboard", "files", "duplicates", "monitoring", "implementation"}.issubset(view_switches)
+    nav_start = html.index('<nav class="space-y-3">')
+    nav_end = html.index('</nav>', nav_start)
+    nav_html = html[nav_start:nav_end]
+
+    assert "Tableau de bord" in nav_html
+    assert "Fichiers" in nav_html
+    assert "Doublons" in nav_html
+    assert "Monitoring" not in nav_html
+    assert "DB Explain" not in nav_html
+    assert "Implémentation rapide" not in nav_html
 
 
-def test_frontend_main_views_are_declared_once_each():
+def test_configuration_access_and_sections_exist():
     html = read_frontend_html()
 
-    for view_key in ("dashboard", "files", "duplicates", "monitoring", "implementation"):
-        occurrences = len(re.findall(rf"x-show=\"currentView === '{view_key}'\"", html))
-        assert occurrences == 1, f"La vue {view_key} doit être déclarée exactement une fois"
+    assert "title=\"Configuration\"" in html
+    assert "fa-gear" in html
+    assert "openConfiguration('crawler')" in html
+
+    assert "configSection = 'crawler'" in html
+    assert "configSection = 'dbAnalysis'" in html
+    assert "configSection = 'monitoring'" in html
+    assert "currentView === 'configuration' && configSection === 'crawler'" in html
+    assert "currentView === 'configuration' && configSection === 'dbAnalysis'" in html
+    assert "currentView === 'configuration' && configSection === 'monitoring'" in html

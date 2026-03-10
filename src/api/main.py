@@ -429,6 +429,7 @@ CRAWL_RUNS: List[Dict[str, Any]] = []
 
 
 
+
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
@@ -594,10 +595,16 @@ async def get_db_explain(query_name: str = "files_list", analyze: bool = True):
         raise HTTPException(status_code=500, detail="Erreur lors de la récupération du plan EXPLAIN")
 
 
+def ensure_crawl_storage_ready(db: Any) -> None:
+    if hasattr(db, "ensure_crawl_tables"):
+        db.ensure_crawl_tables()
+
+
 @app.get("/api/crawl-configs", response_model=List[CrawlConfigPublic])
 async def list_crawl_configs():
     try:
         db = get_db_adapter()
+        ensure_crawl_storage_ready(db)
         return [CrawlConfigPublic(**config) for config in db.list_crawl_configs()]
     except Exception as e:
         logger.error(f"Erreur list_crawl_configs: {e}")
@@ -608,6 +615,7 @@ async def list_crawl_configs():
 async def create_crawl_config(payload: CrawlConfigCreate):
     try:
         db = get_db_adapter()
+        ensure_crawl_storage_ready(db)
         config = db.create_crawl_config(payload)
         return CrawlConfigPublic(**config)
     except Exception as e:
@@ -619,6 +627,7 @@ async def create_crawl_config(payload: CrawlConfigCreate):
 async def start_crawl(payload: CrawlStartRequest):
     try:
         db = get_db_adapter()
+        ensure_crawl_storage_ready(db)
         run = db.start_crawl(payload.config_id)
         if not run:
             raise HTTPException(status_code=404, detail="Configuration de crawl introuvable")

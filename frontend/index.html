@@ -71,9 +71,15 @@
                     <i class="fas fa-folder-open text-blue-600 text-2xl mr-3"></i>
                     <h1 class="text-xl font-bold text-gray-900">OpenIndex</h1>
                 </div>
-                <div class="flex items-center space-x-4">
+                <div class="flex items-center space-x-4 mr-[20px]">
                     <button @click="toggleSidebar()" class="p-2 rounded-md hover:bg-gray-100">
                         <i class="fas fa-bars text-gray-600"></i>
+                    </button>
+                    <button class="h-9 w-9 rounded-full border border-gray-300 bg-gray-50 flex items-center justify-center text-gray-600" aria-label="Connexion" title="Connexion">
+                        <i class="fas fa-user"></i>
+                    </button>
+                    <button @click="openConfiguration('crawler')" title="Configuration" class="ml-[1em] p-2 rounded-md hover:bg-gray-100 text-gray-600" aria-label="Configuration">
+                        <i class="fas fa-gear"></i>
                     </button>
                     <div class="relative">
                         <button @click="showNotifications = !showNotifications" class="p-2 rounded-md hover:bg-gray-100">
@@ -108,43 +114,27 @@
                     </div>
                 </div>
 
-                <nav class="space-y-2">
+                <nav class="space-y-3">
                     <a href="#" @click="currentView = 'dashboard'" 
                        class="flex items-center px-4 py-2 text-sm font-medium rounded-lg hover:bg-gray-100"
                        :class="currentView === 'dashboard' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'">
                         <i class="fas fa-tachometer-alt mr-3"></i>
                         Tableau de bord
                     </a>
-                    <a href="#" @click="currentView = 'files'" 
-                       class="flex items-center px-4 py-2 text-sm font-medium rounded-lg hover:bg-gray-100"
-                       :class="currentView === 'files' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'">
-                        <i class="fas fa-folder mr-3"></i>
-                        Fichiers
-                    </a>
-                    <a href="#" @click="currentView = 'duplicates'" 
-                       class="flex items-center px-4 py-2 text-sm font-medium rounded-lg hover:bg-gray-100"
-                       :class="currentView === 'duplicates' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'">
-                        <i class="fas fa-copy mr-3"></i>
-                        Doublons
-                    </a>
-                    <a href="#" @click="currentView = 'monitoring'" 
-                       class="flex items-center px-4 py-2 text-sm font-medium rounded-lg hover:bg-gray-100"
-                       :class="currentView === 'monitoring' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'">
-                        <i class="fas fa-chart-line mr-3"></i>
-                        Monitoring
-                    </a>
-                    <a href="#" @click="currentView = 'dbAnalysis'; loadDbExplain()" 
-                       class="flex items-center px-4 py-2 text-sm font-medium rounded-lg hover:bg-gray-100"
-                       :class="currentView === 'dbAnalysis' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'">
-                        <i class="fas fa-database mr-3"></i>
-                        DB Explain
-                    </a>
-                    <a href="#" @click="currentView = 'implementation'" 
-                       class="flex items-center px-4 py-2 text-sm font-medium rounded-lg hover:bg-gray-100"
-                       :class="currentView === 'implementation' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'">
-                        <i class="fas fa-rocket mr-3"></i>
-                        Implémentation rapide
-                    </a>
+                    <div class="grid grid-cols-2 gap-2">
+                        <a href="#" @click="currentView = 'files'" 
+                           class="flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg hover:bg-gray-100"
+                           :class="currentView === 'files' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'">
+                            <i class="fas fa-folder mr-2"></i>
+                            Fichiers
+                        </a>
+                        <a href="#" @click="currentView = 'duplicates'" 
+                           class="flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg hover:bg-gray-100"
+                           :class="currentView === 'duplicates' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'">
+                            <i class="fas fa-copy mr-2"></i>
+                            Doublons
+                        </a>
+                    </div>
                 </nav>
             </div>
         </aside>
@@ -332,8 +322,24 @@
                     </div>
                 </div>
 
+                <!-- Page Configuration -->
+                <div x-show="currentView === 'configuration'" class="fade-in mb-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold text-gray-900">⚙️ Configuration</h2>
+                        <button @click="currentView = 'dashboard'" class="text-sm px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700">
+                            Retour à l'accueil
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+                        <button @click="configSection = 'crawler'; loadCrawlConfigs()" class="px-4 py-2 rounded-lg text-sm font-medium"
+                                :class="configSection === 'crawler' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-300'">Crawler</button>
+                        <button @click="configSection = 'dbAnalysis'; loadDbExplain()" class="px-4 py-2 rounded-lg text-sm font-medium"
+                                :class="configSection === 'dbAnalysis' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-300'">DB Explain</button>
+                        <button @click="configSection = 'monitoring'" class="px-4 py-2 rounded-lg text-sm font-medium"
+                                :class="configSection === 'monitoring' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-300'">Monitoring</button>
+                    </div>
                 <!-- Vue Monitoring -->
-                <div x-show="currentView === 'monitoring'" class="fade-in">
+                <div x-show="currentView === 'configuration' && configSection === 'monitoring'" class="fade-in">
                     <h2 class="text-2xl font-bold text-gray-900 mb-6">📊 Monitoring temps réel</h2>
                     
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -366,7 +372,7 @@
 
 
                 <!-- Vue Implémentation rapide -->
-                <div x-show="currentView === 'implementation'" class="fade-in">
+                <div x-show="currentView === 'configuration' && configSection === 'crawler'" class="fade-in">
                     <h2 class="text-2xl font-bold text-gray-900 mb-6">⚡ Implémentation rapide</h2>
 
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -437,7 +443,7 @@
                 </div>
 
                 <!-- Vue Analyse DB -->
-                <div x-show="currentView === 'dbAnalysis'" class="fade-in">
+                <div x-show="currentView === 'configuration' && configSection === 'dbAnalysis'" class="fade-in">
                     <div class="flex justify-between items-center mb-6">
                         <h2 class="text-2xl font-bold text-gray-900">🧠 Explain / Analyze DB</h2>
                         <div class="flex items-center space-x-3">
@@ -475,6 +481,7 @@
         function openIndexApp() {
             return {
                 currentView: 'dashboard',
+                configSection: 'crawler',
                 sidebarOpen: true,
                 loading: false,
                 searchQuery: '',
@@ -513,20 +520,21 @@
                     this.loadStats();
                     this.initWebSocket();
                     this.initCharts();
-                    
-                    // Charger les données initiales
-                    if (this.currentView === 'files') {
-                        this.loadFiles();
-                    } else if (this.currentView === 'duplicates') {
-                        this.loadDuplicates();
-                    } else if (this.currentView === 'dbAnalysis') {
-                        this.loadDbExplain();
-                    }
                     await this.loadCrawlConfigs();
                 },
                 
                 toggleSidebar() {
                     this.sidebarOpen = !this.sidebarOpen;
+                },
+
+                openConfiguration(section = 'crawler') {
+                    this.currentView = 'configuration';
+                    this.configSection = section;
+                    if (section === 'crawler') {
+                        this.loadCrawlConfigs();
+                    } else if (section === 'dbAnalysis') {
+                        this.loadDbExplain();
+                    }
                 },
                 
                 async loadStats() {
