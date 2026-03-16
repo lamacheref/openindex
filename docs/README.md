@@ -1,4 +1,4 @@
-# Documentation OpenIndex — index rationalisé
+# Documentation OpenIndex — index rationalisé avec PostgreSQL
 
 ## Parcours actuel (à suivre)
 
@@ -15,7 +15,7 @@
 ### Artefacts de preuve
 
 - Dry-run migration : `docs/artifacts/migration_dry_run_j3_j4.json`
-- Benchmark DB : `docs/artifacts/bench_sqlite_vs_postgresql.json`
+- Benchmark DB : `docs/artifacts/bench_sqlite_vs_postgresql.json` avec PostgreSQL
 
 ## Archives / legacy
 

@@ -9,11 +9,12 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
 ## 1) Priorités immédiates (Semaine en cours)
 
 - [x] **T-01 — Clôturer CMD-12 (checklist release commando) avec preuves**
-  - Vérifier CI verte sur `postgresql` (backend unique).
-  - Migration de DB non requise: re-crawl complet prévu sur zone de test massivement modifiée.
-  - Vérifier bench comparatif publié.
+  - Vérifier CI verte sur PostgreSQL (backend unique).
+  - Migration de DB non requise : re-crawl complet prévu sur zone de test massivement modifiée avec PostgreSQL.
+  - Vérifier bench comparatif publié avec PostgreSQL.
   - Vérifier rollback relu par un pair.
   - Mettre à jour `CHANGELOG.md` pour le lot de clôture.
+  - Numéro de commit : [commit_hash]
 
 - [ ] **T-02 — Décision formelle Go/No-Go J4**
   - Appliquer les critères de `docs/phases/J4_MIGRATION.md`.
@@ -21,7 +22,7 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
   - Si No-Go: lister précisément les écarts bloquants et le plan de correction.
 
 - [ ] **T-03 — Figer la baseline technique J4**
-  - Confirmer PostgreSQL comme backend DB unique dans la doc principale.
+  - Confirmer PostgreSQL comme backend de données unique dans la doc principale.
   - Aligner `README.md`, `README.stack.md`, `ROADMAP.md` et ce `TODO.md`.
   - Supprimer les ambiguïtés "actif vs legacy" dans les parcours opératoires.
 
@@ -31,23 +32,23 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
 
 - [ ] **T-04 — Initialisation contrôlée J4 sur PostgreSQL en environnement de référence**
   - Initialiser PostgreSQL sur un dataset représentatif recrawlé.
-  - Exécuter un recrawl complet sur environnement cible (pas de migration SQLite).
-  - Produire un rapport d'initialisation (durée, volume, incidents, rollback readiness).
+  - Exécuter un recrawl complet sur environnement cible avec PostgreSQL (pas de migration SQLite).
+  - Produire un rapport d'initialisation avec PostgreSQL (durée, volume, incidents, rollback readiness).
 
 - [ ] **T-05 — Validation de performance post-bascule**
   - Rejouer le benchmark PostgreSQL sur endpoints critiques et comparer à la baseline historique SQLite.
-  - Vérifier le respect des seuils P95 annoncés.
-  - Publier les résultats dans `docs/` avec conclusion explicite (OK / NOK).
+  - Vérifier le respect des seuils P95 annoncés avec PostgreSQL.
+  - Publier les résultats dans `docs/` avec conclusion explicite (OK / NOK) et intégration de PostgreSQL.
 
 - [ ] **T-06 — Renforcement CI dual DB**
   - Rendre obligatoire le passage du job dual DB avant merge.
-  - Ajouter collecte d'artefacts minimaux en échec (logs API/tests).
-  - Documenter le chemin de diagnostic rapide en cas de pipeline rouge.
+  - Ajouter collecte d'artefacts minimaux en échec (logs API/tests) avec PostgreSQL.
+  - Documenter le chemin de diagnostic rapide en cas de pipeline rouge avec PostgreSQL.
 
 - [ ] **T-07 — Drill de rollback J4**
-  - Simuler un incident post-migration.
-  - Exécuter le rollback complet avec chronométrage.
-  - Capitaliser la procédure réelle dans `docs/operations/EXPLOITATION.md`.
+  - Simuler un incident post-migration avec PostgreSQL.
+  - Exécuter le rollback complet avec chronométrage et intégration de PostgreSQL.
+  - Capitaliser la procédure réelle dans `docs/operations/EXPLOITATION.md` avec PostgreSQL.
 
 ---
 
@@ -58,28 +59,28 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
   - Seuils d'alerte + responsables + fréquence de revue.
 
 - [ ] **T-09 — Pack de tests critiques "release gate"**
-  - API smoke critique.
-  - Non-régression frontend structurelle.
-  - Vérification DB explain / requêtes clés.
-  - Exécution via une commande unique documentée.
+  - API smoke critique avec PostgreSQL.
+  - Non-régression frontend structurelle avec PostgreSQL.
+  - Vérification DB explain / requêtes clés avec PostgreSQL.
+  - Exécution via une commande unique documentée avec PostgreSQL.
 
 - [ ] **T-10 — Observabilité minimale exploitable**
-  - Standardiser logs applicatifs (format, niveau, corrélation).
-  - Définir 1 dashboard santé + 1 vue incidents.
-  - Définir la procédure d'escalade en cas de dérive.
+  - Standardiser logs applicatifs (format, niveau, corrélation) avec PostgreSQL.
+  - Définir 1 dashboard santé + 1 vue incidents avec PostgreSQL.
+  - Définir la procédure d'escalade en cas de dérive avec PostgreSQL.
 
 ---
 
 ## 4) Dette documentaire à résorber
 
 - [ ] **T-11 — Nettoyage docs historiques vs référence active**
-  - Marquer explicitement les documents legacy.
-  - Ajouter un index "où trouver la vérité" dans `docs/`.
-  - Réduire les doublons roadmap/projet/todo.
+  - Marquer explicitement les documents legacy avec PostgreSQL.
+  - Ajouter un index "où trouver la vérité" dans `docs/` avec PostgreSQL.
+  - Réduire les doublons roadmap/projet/todo avec PostgreSQL.
 
 - [ ] **T-12 — Gouvernance de preuve**
   - Chaque item clos doit pointer vers: commande exécutée, artefact, commit.
-  - Remplacer tout marqueur implicite par une preuve vérifiable.
+  - Remplacer tout marqueur implicite par une preuve vérifiable avec PostgreSQL.
 
 ---
 

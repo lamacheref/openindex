@@ -1,6 +1,6 @@
 # OpenIndex
 
-Solution d’indexation de partages SMB avec **crawler Python**, **API FastAPI** et **frontend statique**.
+Solution d’indexation de partages SMB avec **crawler Python**, **API FastAPI**, **frontend statique** et **PostgreSQL**.
 
 ## État actuel (J4 lancé — mars 2026)
 
@@ -8,30 +8,31 @@ Le projet est en **phase J4 (test grandeur nature PostgreSQL)**.
 
 La base active à date est :
 
-- API FastAPI (`src/api/main.py`) sur base **PostgreSQL** via `OPENINDEX_DB_BACKEND=postgresql`.
+- API FastAPI (`src/api/main.py`) avec base de données **PostgreSQL** via `OPENINDEX_DB_BACKEND=postgresql`.
 - Frontend statique (`frontend/index.html`) servi par Nginx.
-- Endpoint de diagnostic SQL `GET /api/db-explain` + vue frontend associée.
+- Endpoint de diagnostic SQL `GET /api/db-explain` avec vue frontend associée.
 - Orchestration recommandée : `docker-compose.yml` (stack complète PostgreSQL).
 - Build/push d’images automatisé via GitHub Actions (`.github/workflows/docker-stack.yml`).
 
-> La migration SQLite n'est plus une étape requise: la zone de test ayant été massivement modifiée, un recrawl complet est la stratégie de référence.
+> La migration SQLite n'est plus nécessaire : la zone de test ayant été massivement modifiée, un recrawl complet est la stratégie de référence.
 
 ## Fonctionnalités disponibles
 
-- Indexation et inventaire de fichiers SMB.
+- Indexation et inventaire de fichiers SMB avec stockage dans **PostgreSQL**.
 - Statistiques globales (`/api/stats`).
 - Listing/recherche de fichiers (`/api/files`).
 - Détection des doublons (`/api/duplicates`).
 - Monitoring temps réel via WebSocket (`/ws`).
 - Analyse de plan PostgreSQL (`/api/db-explain`).
 
-## Démarrage rapide (socle actuel)
+## Démarrage rapide (socle actuel avec PostgreSQL)
 
 ```bash
 cp .env.example .env
 # optionnel: renseigner OPENINDEX_API_IMAGE / OPENINDEX_CRAWLER_IMAGE / OPENINDEX_UI_IMAGE dans .env
 # si packages GHCR privés: définir GHCR_USERNAME et GHCR_TOKEN dans .env
 
+# Vérifier la disponibilité de PostgreSQL
 ./deploy.sh pull
 ./deploy.sh up
 ```

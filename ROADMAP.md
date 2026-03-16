@@ -30,9 +30,9 @@ Industrialiser OpenIndex pour un usage régulier en environnement SMB volumineux
 
 ## Phase J4 — Consolidation PostgreSQL (active)
 
-- Opérer le backend données principal en PostgreSQL.
-- Stabiliser le schéma et la stratégie d’indexation.
-- Exécuter des recrawls complets (sans migration SQLite) sur zones de test.
+- Opérer le backend de données principal en PostgreSQL avec vérification de la disponibilité et stabilité.
+- Stabiliser le schéma et la stratégie d’indexation dans PostgreSQL.
+- Exécuter des recrawls complets sur zones de test avec PostgreSQL.
 
 ## Phase J5 — Qualité et observabilité
 
