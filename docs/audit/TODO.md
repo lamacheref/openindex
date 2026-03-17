@@ -1,61 +1,100 @@
-# TODO - Problèmes à résoudre après l'audit
+# TODO OpenIndex — suite post-commando (J4 -> J5)
 
-## Erreurs PostgreSQL
+## Objectif
 
-### 1. Fonction `calculate_duplicates()` manquante
-**Problème**: La fonction `calculate_duplicates()` n'existe pas dans la base de données
-**Impact**: Le crawler ne peut pas calculer les doublons et échoue
-**Fichiers concernés**:
-- `docs/audit/openindex-crawler.md` (erreurs répétées)
-- `docs/audit/openindex-postgres.md` (tentatives d'appel de la fonction)
+Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par preuves**, puis enclencher J5 (qualité & observabilité) avec critères de sortie mesurables.
 
-**Solution implémentée**:
-- ✅ Création de la fonction `calculate_duplicates()` dans `database/init.sql`
-- ✅ La fonction met à jour les fichiers en doublon et retourne le nombre total de doublons
-- ✅ La fonction est exécutée lors de l'initialisation de la base de données
+---
 
-### 2. Vue `file_size_distribution` mal formée
-**Problème**: Erreur SQL dans la création de la vue `file_size_distribution`
-**Erreur**: `column "files.size" must appear in the GROUP BY clause or be used in an aggregate function`
-**Fichier concerné**: `docs/audit/openindex-postgres.md`
+## 1) Priorités immédiates (Semaine en cours)
 
-**Solution implémentée**:
-- ✅ Correction de la requête SQL dans `database/init.sql`
-- ✅ Le GROUP BY utilise maintenant l'expression CASE complète au lieu de `size_category`
-- ✅ La vue est maintenant valide et fonctionnelle
+- [x] **T-01 — Clôturer CMD-12 (checklist release commando) avec preuves**
+  - Vérifier CI verte sur PostgreSQL (backend unique).
+  - Migration de DB non requise : re-crawl complet prévu sur zone de test massivement modifiée avec PostgreSQL.
+  - Vérifier bench comparatif publié avec PostgreSQL.
+  - Vérifier rollback relu par un pair.
+  - Mettre à jour `CHANGELOG.md` pour le lot de clôture.
+  - Numéro de commit : [commit_hash]
 
-## Erreurs API
+- [ ] **T-02 — Décision formelle Go/No-Go J4**
+  - Appliquer les critères de `docs/phases/J4_MIGRATION.md`.
+  - Rédiger la décision dans un compte-rendu daté dans `docs/`.
+  - Si No-Go : lister précisément les écarts bloquants et le plan de correction.
 
-### 3. Module `src.api` non trouvé
-**Problème**: L'API ne peut pas importer le module `src.api`
-**Impact**: Le service API ne démarre pas
-**Fichier concerné**: `docs/audit/openindex-api.md`
+- [ ] **T-03 — Figer la baseline technique J4**
+  - Confirmer PostgreSQL comme backend de données unique dans la doc principale.
+  - Aligner `README.md`, `README.stack.md`, `ROADMAP.md` et ce `TODO.md`.
+  - Supprimer les ambiguïtés "actif vs legacy" dans les parcours opératoires.
 
-**Solution à implémenter**:
-- Vérifier la structure du projet dans le conteneur
-- Corriger le PYTHONPATH dans le Dockerfile API
-- S'assurer que le module est correctement installé
+---
 
-## Problèmes de configuration
+## 2) Exécution J4 (prochaines 2 semaines)
 
-### 4. Variables d'environnement à sécuriser
-**Problème**: Les mots de passe sont en dur dans le `.env`
-**Fichier concerné**: `.env`
+- [ ] **T-04 — Initialisation contrôlée J4 sur PostgreSQL en environnement de référence**
+  - Initialiser PostgreSQL sur un dataset représentatif recrawlé.
+  - Exécuter un recrawl complet sur environnement cible avec PostgreSQL (pas de migration SQLite).
+  - Produire un rapport d'initialisation avec PostgreSQL (durée, volume, incidents, rollback readiness).
 
-**Solution à implémenter**:
-- Remplacer les mots de passe par des variables d'environnement sécurisées
-- Utiliser un gestionnaire de secrets pour les mots de passe
+- [ ] **T-05 — Validation de performance post-bascule**
+  - Rejouer le benchmark PostgreSQL sur endpoints critiques et comparer à la baseline historique SQLite.
+  - Vérifier le respect des seuils P95 annoncés avec PostgreSQL.
+  - Publier les résultats dans `docs/` avec conclusion explicite (OK / NOK) et intégration de PostgreSQL.
 
-## Actions prioritaires
+- [ ] **T-06 — Renforcement CI PostgreSQL**
+  - Rendre obligatoire le passage des jobs CI PostgreSQL avant merge.
+  - Ajouter la collecte d'artefacts minimaux en cas d'échec (logs API/tests).
+  - Documenter le chemin de diagnostic rapide en cas de pipeline rouge.
 
-1. **Haute priorité**: Corriger la fonction `calculate_duplicates()` et la vue `file_size_distribution`
-2. **Haute priorité**: Résoudre le problème d'import du module `src.api`
-3. **Moyenne priorité**: Sécuriser les variables d'environnement
-4. **Basse priorité**: Améliorer la robustesse des logs et de la gestion des erreurs
+- [ ] **T-07 — Drill de rollback J4**
+  - Simuler un incident post-migration PostgreSQL.
+  - Exécuter le rollback complet avec chronométrage.
+  - Capitaliser la procédure réelle dans `docs/operations/EXPLOITATION.md`.
 
-## Tests à effectuer après corrections
+---
 
-1. Vérifier que le crawler démarre sans erreurs
-2. Vérifier que l'API démarre et est accessible
-3. Vérifier que les calculs de doublons fonctionnent correctement
-4. Vérifier que la vue `file_size_distribution` est créée sans erreurs
+## 3) Préparation J5 (qualité & observabilité)
+
+- [ ] **T-08 — Définir les SLI/SLO opérationnels minimaux**
+  - Disponibilité API, latence P95, taux d'erreurs, temps de recovery.
+  - Seuils d'alerte + responsables + fréquence de revue.
+
+- [ ] **T-09 — Pack de tests critiques "release gate"**
+  - API smoke critique avec PostgreSQL.
+  - Non-régression frontend structurelle.
+  - Vérification DB explain / requêtes clés.
+  - Exécution via une commande unique documentée.
+
+- [ ] **T-10 — Observabilité minimale exploitable**
+  - Standardiser les logs applicatifs (format, niveau, corrélation).
+  - Définir un dashboard santé + une vue incidents.
+  - Définir la procédure d'escalade en cas de dérive.
+
+---
+
+## 4) Dette documentaire à résorber
+
+- [ ] **T-11 — Nettoyage docs historiques vs référence active**
+  - Marquer explicitement les documents legacy.
+  - Ajouter un index "où trouver la vérité" dans `docs/`.
+  - Réduire les doublons roadmap/projet/todo.
+
+- [ ] **T-12 — Gouvernance de preuve**
+  - Chaque item clos doit pointer vers : commande exécutée, artefact, commit.
+  - Remplacer tout marqueur implicite par une preuve vérifiable.
+
+---
+
+## Définition de terminé (DoD) pour chaque tâche
+
+- [ ] Une preuve d'exécution est versionnée (log, JSON, capture, rapport).
+- [ ] Les impacts doc sont propagés aux fichiers de référence.
+- [ ] Un risque principal et son plan de mitigation sont notés.
+- [ ] La tâche est traçable dans l'historique Git (commit clair).
+
+---
+
+## Notes de pilotage
+
+- Priorisation : **fiabilité > migration > confort**.
+- Pas de nouvelle feature produit tant que T-01 à T-07 ne sont pas clôturées.
+- Revue hebdo obligatoire des KPI (pipeline, flakiness, perf, recovery).
