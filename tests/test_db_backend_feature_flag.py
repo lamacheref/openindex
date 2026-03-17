@@ -24,7 +24,18 @@ def test_get_db_adapter_postgresql(monkeypatch):
 
     class FakeCursor:
         def execute(self, query):
-            assert query == 'SELECT 1'
+            # Accept both the initial connection test and the table creation queries
+            if query.strip().upper().startswith('SELECT 1'):
+                return
+            if 'CREATE TABLE IF NOT EXISTS crawl_configs' in query:
+                return
+            if 'CREATE INDEX IF NOT EXISTS idx_crawl_configs_created_at' in query:
+                return
+            if 'CREATE TABLE IF NOT EXISTS crawl_runs' in query:
+                return
+            if 'CREATE INDEX IF NOT EXISTS idx_crawl_runs_triggered_at' in query:
+                return
+            raise AssertionError(f"Unexpected query: {query}")
 
         def __enter__(self):
             return self
@@ -42,6 +53,9 @@ def test_get_db_adapter_postgresql(monkeypatch):
         def __exit__(self, exc_type, exc, tb):
             return False
 
+        def commit(self):
+            pass
+
     def fake_connect(**kwargs):
         calls['count'] += 1
         assert kwargs['dbname']
@@ -51,4 +65,4 @@ def test_get_db_adapter_postgresql(monkeypatch):
 
     adapter = api_main.get_db_adapter()
     assert isinstance(adapter, api_main.PostgreSQLAdapter)
-    assert calls['count'] == 1
+    assert calls['count'] == 2
