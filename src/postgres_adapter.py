@@ -133,8 +133,11 @@ class PostgreSQLAdapter:
             cursor = conn.cursor()
             
             try:
-                # Utiliser la fonction PostgreSQL définie dans init.sql
-                cursor.execute("SELECT calculate_duplicates()")
+                # Garantir la présence de la fonction même sur une base déjà existante
+                self._ensure_calculate_duplicates_function(cursor)
+
+                # Utiliser explicitement le schéma public pour éviter les problèmes de search_path
+                cursor.execute("SELECT public.calculate_duplicates()")
                 duplicate_count = cursor.fetchone()[0]
                 
                 conn.commit()
@@ -145,6 +148,45 @@ class PostgreSQLAdapter:
                 conn.rollback()
                 self.logger.error(f"Erreur lors du calcul des doublons: {e}")
                 raise
+
+    def _ensure_calculate_duplicates_function(self, cursor):
+        """Crée la fonction calculate_duplicates() si elle est absente."""
+        cursor.execute(
+            """
+            CREATE OR REPLACE FUNCTION public.calculate_duplicates()
+            RETURNS INTEGER AS $$
+            DECLARE
+                duplicate_count INTEGER;
+            BEGIN
+                UPDATE files
+                SET is_duplicate = TRUE,
+                    duplicate_of = (
+                        SELECT id
+                        FROM files f2
+                        WHERE f2.checksum = files.checksum
+                          AND f2.id != files.id
+                          AND f2.is_directory = FALSE
+                        LIMIT 1
+                    )
+                WHERE checksum IN (
+                    SELECT checksum
+                    FROM files
+                    WHERE checksum IS NOT NULL
+                      AND is_directory = FALSE
+                    GROUP BY checksum
+                    HAVING COUNT(*) > 1
+                )
+                AND is_directory = FALSE;
+
+                SELECT COUNT(*) INTO duplicate_count
+                FROM files
+                WHERE is_duplicate = TRUE;
+
+                RETURN duplicate_count;
+            END;
+            $$ LANGUAGE plpgsql;
+            """
+        )
     
     def get_statistics(self) -> Dict[str, Any]:
         """
