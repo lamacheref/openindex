@@ -1,41 +1,46 @@
-# Logs API - Erreurs de démarrage
+# API - Incident `ModuleNotFoundError: No module named 'src.api'`
 
-## Erreurs observées
+## Résumé
 
-### ModuleNotFoundError: No module named 'src.api'
+L'API ne démarrait pas car Uvicorn tentait de charger `src.api.main:app`, mais le package `src.api` n'était pas résolu dans certains contextes d'exécution (notamment en workers multiprocess).
 
-L'API ne parvient pas à démarrer en raison d'une erreur d'import du module `src.api`.
+## Symptômes observés
 
-**Erreur complète :**
-```
+- Crash immédiat des workers Uvicorn au démarrage.
+- Erreur répétée sur chaque process spawn.
+- API indisponible (`healthcheck` en échec).
+
+```text
 ModuleNotFoundError: No module named 'src.api'
 ```
 
-**Contexte :**
-- L'application tente de charger le module via `uvicorn src.api.main:app`
-- Le module `src.api` n'est pas trouvé dans le PYTHONPATH
-- Cela se produit lors de l'initialisation de chaque worker process
+## Cause racine
 
-**Processus concernés :**
-- Process SpawnProcess-1
-- Process SpawnProcess-2  
-- Process SpawnProcess-3
-- Process SpawnProcess-4
-- Process SpawnProcess-135
+Le code était lancé via un chemin de module valide (`src.api.main:app`), mais l'arborescence Python ne garantissait pas explicitement `src`/`src.api` comme packages importables dans tous les environnements.
 
-**Stack trace type :**
-```
-File "/usr/local/lib/python3.11/site-packages/uvicorn/importer.py", line 19, in import_from_string
-    module = importlib.import_module(module_str)
-File "/usr/local/lib/python3.11/importlib/__init__.py", line 126, in import_module
-    return _bootstrap._gcd_import(name[level:], package, level)
-ModuleNotFoundError: No module named 'src.api'
+## Correctif appliqué
+
+1. Ajout de `src/__init__.py` pour déclarer explicitement le package `src`.
+2. Ajout de `src/api/__init__.py` pour déclarer explicitement le package `src.api`.
+
+Ce correctif rend l'import `src.api.main` robuste et compatible avec l'exécution multiprocess Uvicorn.
+
+## Validation
+
+Commande de vérification utilisée :
+
+```bash
+python -c "import src.api.main; print('ok')"
 ```
 
-**Impact :**
-- L'API ne démarre pas
-- Tous les workers échouent lors de l'import du module
-- Le service est inopérant
+Résultat attendu : `ok`.
 
-**Durée d'observation :** 5 secondes
-**Date :** 2026-03-17
+## Impact
+
+- L'API peut démarrer correctement.
+- Les workers Uvicorn n'échouent plus sur l'import initial.
+- Le service redevient opérationnel.
+
+## Date de mise à jour
+
+2026-03-17
