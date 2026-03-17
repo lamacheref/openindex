@@ -41,14 +41,14 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
   - Publier les résultats dans `docs/` avec conclusion explicite (OK / NOK) et intégration de PostgreSQL.
 
 - [ ] **T-06 — Renforcement CI dual DB**
-  - Rendre obligatoire le passage du job dual DB avant merge.
-  - Ajouter collecte d'artefacts minimaux en échec (logs API/tests) avec PostgreSQL.
-  - Documenter le chemin de diagnostic rapide en cas de pipeline rouge avec PostgreSQL.
+  - Rendre obligatoire le passage des jobs CI PostgreSQL avant merge.
+  - Ajouter la collecte d'artefacts minimaux en cas d'échec (logs API/tests).
+  - Documenter le chemin de diagnostic rapide en cas de pipeline rouge.
 
 - [ ] **T-07 — Drill de rollback J4**
-  - Simuler un incident post-migration avec PostgreSQL.
-  - Exécuter le rollback complet avec chronométrage et intégration de PostgreSQL.
-  - Capitaliser la procédure réelle dans `docs/operations/EXPLOITATION.md` avec PostgreSQL.
+  - Simuler un incident post-migration PostgreSQL.
+  - Exécuter le rollback complet avec chronométrage.
+  - Capitaliser la procédure réelle dans `docs/operations/EXPLOITATION.md`.
 
 ---
 
@@ -60,27 +60,27 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
 
 - [ ] **T-09 — Pack de tests critiques "release gate"**
   - API smoke critique avec PostgreSQL.
-  - Non-régression frontend structurelle avec PostgreSQL.
-  - Vérification DB explain / requêtes clés avec PostgreSQL.
-  - Exécution via une commande unique documentée avec PostgreSQL.
+  - Non-régression frontend structurelle.
+  - Vérification DB explain / requêtes clés.
+  - Exécution via une commande unique documentée.
 
 - [ ] **T-10 — Observabilité minimale exploitable**
-  - Standardiser logs applicatifs (format, niveau, corrélation) avec PostgreSQL.
-  - Définir 1 dashboard santé + 1 vue incidents avec PostgreSQL.
-  - Définir la procédure d'escalade en cas de dérive avec PostgreSQL.
+  - Standardiser les logs applicatifs (format, niveau, corrélation).
+  - Définir un dashboard santé + une vue incidents.
+  - Définir la procédure d'escalade en cas de dérive.
 
 ---
 
 ## 4) Dette documentaire à résorber
 
 - [ ] **T-11 — Nettoyage docs historiques vs référence active**
-  - Marquer explicitement les documents legacy avec PostgreSQL.
-  - Ajouter un index "où trouver la vérité" dans `docs/` avec PostgreSQL.
-  - Réduire les doublons roadmap/projet/todo avec PostgreSQL.
+  - Marquer explicitement les documents legacy.
+  - Ajouter un index "où trouver la vérité" dans `docs/`.
+  - Réduire les doublons roadmap/projet/todo.
 
 - [ ] **T-12 — Gouvernance de preuve**
   - Chaque item clos doit pointer vers: commande exécutée, artefact, commit.
-  - Remplacer tout marqueur implicite par une preuve vérifiable avec PostgreSQL.
+  - Remplacer tout marqueur implicite par une preuve vérifiable.
 
 ---
 
