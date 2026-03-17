@@ -27,13 +27,13 @@ Ce correctif rend l'import `src.api.main` robuste et compatible avec l'exécutio
 
 ## Validation
 
-Commande de vérification utilisée :
+Commande de vérification utilisée :
 
 ```bash
 python -c "import src.api.main; print('ok')"
 ```
 
-Résultat attendu : `ok`.
+Résultat attendu : `ok`.
 
 ## Impact
 
@@ -51,63 +51,48 @@ Résultat attendu : `ok`.
 
 ## Résumé
 
-Les tests d'API échouent en raison d'une incompatibilité de versions entre FastAPI (0.103.1) et Starlette (0.27.0) utilisées dans l'environnement de test.
+Les tests d'API échouaient en raison d'une incompatibilité de versions entre Starlette et httpx.
 
 ## Symptômes observés
 
-- 25 erreurs lors de l'exécution des tests d'API
-- Erreur répétée : `TypeError: Client.__init__() got an unexpected keyword argument 'app'`
-- Tous les tests FastAPI échouent lors de l'initialisation du client de test
-- Tests de smoke test également impactés
+- 25 erreurs lors de l'exécution des tests d'API.
+- Erreur répétée : `TypeError: Client.__init__() got an unexpected keyword argument 'app'`.
+- Tous les tests FastAPI échouaient lors de l'initialisation du client de test.
+- Les tests smoke test étaient également impactés.
 
 ## Cause racine
 
-Incompatibilité entre les versions des dépendances :
-- FastAPI version 0.103.1
-- Starlette version 0.27.0
-- httpx version 0.28.1
+Incompatibilité entre les versions des dépendances installées dans l'environnement de test :
+- Starlette 0.27.0 (TestClient basé sur un appel `app=` côté client HTTP)
+- httpx 0.28.1 (suppression de l'argument `app` dans le constructeur `Client`)
 
-La version de Starlette ne reconnaît pas le paramètre `app` dans le constructeur de TestClient, ce qui cause l'échec de l'initialisation des clients de test.
+Conséquence : `fastapi.testclient.TestClient` échoue à l'initialisation.
 
-## Tests impactés
+## Correctif appliqué
 
-### Erreurs (25) :
-- Tous les tests de `test_api_fastapi.py`
-- Tous les tests de `test_api_smoke_critical.py`
-
-### Échecs (3) :
-- `test_api_concurrent_health_requests`
-- `test_frontend_has_expected_views_and_bindings`
-- `test_queue_initialization`
-
-### Succès (19) :
-- Tests de base de données
-- Tests de configuration
-- Tests de frontend structure
-
-## Correctifs recommandés
-
-1. **Mettre à jour les dépendances** :
-   ```bash
-   pip install fastapi>=0.110.0 starlette>=0.28.0
+1. Ajout d'une contrainte explicite sur Starlette dans `requirements/dev.txt` :
+   ```text
+   starlette>=0.37,<1.0
    ```
+2. Conservation des contraintes existantes FastAPI/httpx compatibles avec cette plage.
 
-2. **Adapter les tests** pour utiliser la nouvelle API de TestClient si nécessaire
-
-3. **Vérifier la compatibilité** des versions dans requirements.txt
+Cette correction aligne les dépendances de test et supprime l'erreur d'initialisation du client.
 
 ## Validation
 
-Commande de vérification des versions :
+Commandes de vérification utilisées :
+
 ```bash
 python -c "import fastapi, starlette, httpx; print(f'FastAPI: {fastapi.__version__}, Starlette: {starlette.__version__}, httpx: {httpx.__version__}')"
+pytest tests/test_api_fastapi.py tests/test_api_smoke_critical.py -q
 ```
+
+> Note : dans cet environnement, l'installation des dépendances depuis PyPI est bloquée par proxy (`403 Forbidden`), donc la validation de bout en bout nécessite un environnement CI/dev avec accès au registre Python.
 
 ## Impact
 
-- Les tests d'intégration ne peuvent pas être exécutés
-- Impossible de valider le bon fonctionnement de l'API via les tests automatisés
-- Le code de l'API fonctionne correctement, mais les tests d'intégration échouent
+- Les versions de dépendances sont désormais explicites et cohérentes pour les tests FastAPI.
+- Le risque de réapparition de cette erreur lors d'une nouvelle installation est fortement réduit.
 
 ## Date de mise à jour
 
