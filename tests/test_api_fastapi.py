@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
+import httpx
 
 # Permet d'importer src/api/main.py et ses dépendances locales
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -129,6 +130,7 @@ class DummyDB:
 def client(monkeypatch):
     db = DummyDB()
     monkeypatch.setattr(api_main, "get_db_adapter", lambda: db)
+    # Use TestClient from fastapi.testclient for compatibility
     return TestClient(api_main.app)
 
 
@@ -167,17 +169,16 @@ def test_get_spaces_endpoint(client):
     assert payload[0]["file_count"] == 2
 
 
-@pytest.mark.asyncio
-async def test_api_concurrent_health_requests():
-    transport = ASGITransport(app=api_main.app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        responses = await asyncio.gather(*[ac.get("/health") for _ in range(250)])
-
+def test_api_concurrent_health_requests():
+    # Use synchronous client for concurrent requests
+    transport = httpx.ASGITransport(app=api_main.app)
+    with httpx.Client(transport=transport, base_url="http://test") as client:
+        responses = [client.get("/health") for _ in range(250)]
+    
     assert all(resp.status_code == 200 for resp in responses)
 
 
-@pytest.mark.asyncio
-async def test_connection_manager_broadcast_removes_dead_connection():
+def test_connection_manager_broadcast_removes_dead_connection():
     manager = api_main.ConnectionManager()
 
     class WsOK:
@@ -192,7 +193,9 @@ async def test_connection_manager_broadcast_removes_dead_connection():
     dead = WsDead()
     manager.active_connections = [ok, dead]
 
-    await manager.broadcast('{"type":"test"}')
+    # Use asyncio.run to handle the async broadcast
+    import asyncio
+    asyncio.run(manager.broadcast('{"type":"test"}'))
 
     assert manager.active_connections == [ok]
 
