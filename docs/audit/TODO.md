@@ -19,7 +19,7 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
 - [ ] **T-02 — Décision formelle Go/No-Go J4**
   - Appliquer les critères de `docs/phases/J4_MIGRATION.md`.
   - Rédiger la décision dans un compte-rendu daté dans `docs/`.
-  - Si No-Go: lister précisément les écarts bloquants et le plan de correction.
+  - Si No-Go : lister précisément les écarts bloquants et le plan de correction.
 
 - [ ] **T-03 — Figer la baseline technique J4**
   - Confirmer PostgreSQL comme backend de données unique dans la doc principale.
@@ -40,7 +40,7 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
   - Vérifier le respect des seuils P95 annoncés avec PostgreSQL.
   - Publier les résultats dans `docs/` avec conclusion explicite (OK / NOK) et intégration de PostgreSQL.
 
-- [ ] **T-06 — Renforcement CI dual DB**
+- [ ] **T-06 — Renforcement CI PostgreSQL**
   - Rendre obligatoire le passage des jobs CI PostgreSQL avant merge.
   - Ajouter la collecte d'artefacts minimaux en cas d'échec (logs API/tests).
   - Documenter le chemin de diagnostic rapide en cas de pipeline rouge.
@@ -54,7 +54,7 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
 
 ## 3) Préparation J5 (qualité & observabilité)
 
-- [ ] **T-08 — Définir les SLI/SLO opérationnels minimum**
+- [ ] **T-08 — Définir les SLI/SLO opérationnels minimaux**
   - Disponibilité API, latence P95, taux d'erreurs, temps de recovery.
   - Seuils d'alerte + responsables + fréquence de revue.
 
@@ -79,7 +79,7 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
   - Réduire les doublons roadmap/projet/todo.
 
 - [ ] **T-12 — Gouvernance de preuve**
-  - Chaque item clos doit pointer vers: commande exécutée, artefact, commit.
+  - Chaque item clos doit pointer vers : commande exécutée, artefact, commit.
   - Remplacer tout marqueur implicite par une preuve vérifiable.
 
 ---
@@ -95,6 +95,6 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
 
 ## Notes de pilotage
 
-- Priorisation: **fiabilité > migration > confort**.
+- Priorisation : **fiabilité > migration > confort**.
 - Pas de nouvelle feature produit tant que T-01 à T-07 ne sont pas clôturées.
 - Revue hebdo obligatoire des KPI (pipeline, flakiness, perf, recovery).
