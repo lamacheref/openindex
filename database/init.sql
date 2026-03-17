@@ -138,7 +138,15 @@ SELECT
     SUM(size) as total_size
 FROM files 
 WHERE is_directory = FALSE
-GROUP BY size_category
+GROUP BY 
+    CASE 
+        WHEN size < 1024 THEN '< 1 KB'
+        WHEN size < 1024*1024 THEN '1 KB - 1 MB'
+        WHEN size < 1024*1024*10 THEN '1 MB - 10 MB'
+        WHEN size < 1024*1024*100 THEN '10 MB - 100 MB'
+        WHEN size < 1024*1024*1024 THEN '100 MB - 1 GB'
+        ELSE '> 1 GB'
+    END
 ORDER BY 
     CASE 
         WHEN size < 1024 THEN 1
