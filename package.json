@@ -1,6 +1,6 @@
 {
   "name": "openindex-frontend-build",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "scripts": {
     "build:frontend": "tailwindcss -i ./frontend/styles/tailwind-input.css -o ./frontend/assets/tailwind.css --minify"
