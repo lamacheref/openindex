@@ -23,10 +23,12 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
   - Preuves: recrawl contrôlé, benchmark 3 runs stable, rollback drill validé, CI GitHub PostgreSQL verte sur PR `#41`.
   - Commit: `17f5806`
 
-- [ ] **T-03 — Figer la baseline technique J4**
+- [x] **T-03 — Figer la baseline technique J4**
   - Confirmer PostgreSQL comme backend de données unique dans la doc principale.
   - Aligner `README.md`, `README.stack.md`, `ROADMAP.md` et ce `TODO.md`.
   - Supprimer les ambiguïtés "actif vs legacy" dans les parcours opératoires.
+  - État propagé: `README.md`, `README.stack.md`, `ROADMAP.md`, `TODO.md`.
+  - Commit: `40c691b`
 
 ---
 
