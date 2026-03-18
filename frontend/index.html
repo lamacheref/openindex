@@ -3,508 +3,511 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenIndex - Interface Moderne</title>
-    
-    <!-- CDN pour les bibliothèques -->
+    <title>OpenIndex - Console opératoire</title>
+
     <script src="https://unpkg.com/htmx.org@1.9.6"></script>
     <script src="https://unpkg.com/alpinejs@3.12.3/dist/cdn.min.js" defer></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+
     <style>
-        /* Animations et transitions */
-        .fade-in { animation: fadeIn 0.3s ease-in; }
+        .fade-in { animation: fadeIn 0.25s ease-in; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        
-        .loading { 
-            display: inline-block; 
-            width: 20px; 
-            height: 20px; 
-            border: 3px solid #f3f3f3; 
-            border-top: 3px solid #3498db; 
-            border-radius: 50%; 
-            animation: spin 1s linear infinite; 
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f1f5f9;
+            border-top: 3px solid #0f766e;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        
-        /* Sidebar responsive */
-        .sidebar { transition: transform 0.3s ease-in-out; }
-        .sidebar-closed { transform: translateX(-100%); }
-        
-        /* Cards modernes */
-        .card { 
-            background: white; 
-            border-radius: 12px; 
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); 
-            transition: all 0.3s ease;
+
+        .card {
+            background: rgba(255, 255, 255, 0.94);
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            border-radius: 18px;
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
         }
-        .card:hover { transform: translateY(-2px); box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15); }
-        
-        /* Tableau moderne */
-        .table-modern { 
-            border-collapse: separate; 
-            border-spacing: 0; 
-            border-radius: 8px; 
-            overflow: hidden; 
+
+        .table-modern {
+            border-collapse: separate;
+            border-spacing: 0;
+            width: 100%;
         }
-        .table-modern th { 
-            background: #f8fafc; 
-            font-weight: 600; 
-            text-align: left; 
-            padding: 12px 16px; 
+        .table-modern th {
+            background: #f8fafc;
+            font-weight: 600;
+            text-align: left;
+            padding: 12px 16px;
+            color: #334155;
         }
-        .table-modern td { 
-            padding: 12px 16px; 
-            border-top: 1px solid #e2e8f0; 
+        .table-modern td {
+            padding: 12px 16px;
+            border-top: 1px solid #e2e8f0;
+            vertical-align: top;
         }
-        .table-modern tr:hover { background: #f1f5f9; }
+        .table-modern tr:hover { background: #f8fafc; }
+
+        body {
+            background:
+                radial-gradient(circle at top left, rgba(245, 158, 11, 0.12), transparent 28%),
+                radial-gradient(circle at right, rgba(15, 118, 110, 0.10), transparent 26%),
+                linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+        }
     </style>
 </head>
-<body class="bg-gray-50" x-data="openIndexApp()">
-    
-    <!-- Header moderne -->
-    <header class="bg-white shadow-sm border-b border-gray-200">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center h-16">
-                <div class="flex items-center">
-                    <i class="fas fa-folder-open text-blue-600 text-2xl mr-3"></i>
-                    <h1 class="text-xl font-bold text-gray-900">OpenIndex</h1>
+<body x-data="openIndexApp()" class="text-slate-900">
+    <header class="fixed top-0 left-0 right-0 h-16 bg-white/92 backdrop-blur border-b border-slate-200 z-50">
+        <div class="h-full px-4 sm:px-6 lg:px-8">
+            <div class="h-full flex items-center justify-between">
+                <div class="flex items-center ml-[1em]">
+                    <div class="h-10 w-10 rounded-2xl bg-teal-700 text-white flex items-center justify-center shadow-sm">
+                        <i class="fas fa-folder-tree"></i>
+                    </div>
+                    <div class="ml-3">
+                        <h1 class="text-lg font-bold tracking-tight">OpenIndex</h1>
+                        <p class="text-xs text-slate-500">Console opératoire SMB</p>
+                    </div>
                 </div>
-                <div class="flex items-center space-x-4 mr-[20px]">
-                    <button @click="toggleSidebar()" class="p-2 rounded-md hover:bg-gray-100">
-                        <i class="fas fa-bars text-gray-600"></i>
+
+                <div class="flex items-center gap-2 pr-4">
+                    <button @click="showNotifications = !showNotifications"
+                            class="h-10 w-10 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 relative"
+                            aria-label="Notifications"
+                            title="Notifications">
+                        <i class="fas fa-bell"></i>
+                        <span x-show="unreadNotifications > 0"
+                              class="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center"
+                              x-text="unreadNotifications"></span>
                     </button>
-                    <button class="h-9 w-9 rounded-full border border-gray-300 bg-gray-50 flex items-center justify-center text-gray-600" aria-label="Connexion" title="Connexion">
-                        <i class="fas fa-user"></i>
-                    </button>
-                    <button @click="openConfiguration('crawler')" title="Configuration" class="ml-[1em] p-2 rounded-md hover:bg-gray-100 text-gray-600" aria-label="Configuration">
+                    <button @click="openConfiguration('crawler')"
+                            title="Configuration"
+                            class="h-10 w-10 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                            aria-label="Configuration">
                         <i class="fas fa-gear"></i>
                     </button>
-                    <div class="relative">
-                        <button @click="showNotifications = !showNotifications" class="p-2 rounded-md hover:bg-gray-100">
-                            <i class="fas fa-bell text-gray-600"></i>
-                            <span x-show="unreadNotifications > 0" 
-                                  class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center"
-                                  x-text="unreadNotifications"></span>
-                        </button>
-                    </div>
+                    <button class="h-10 w-10 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                            aria-label="Profil utilisateur"
+                            title="Profil utilisateur">
+                        <i class="fas fa-user"></i>
+                    </button>
                 </div>
             </div>
         </div>
     </header>
 
-    <div class="flex h-screen pt-16">
-        <!-- Sidebar moderne -->
-        <aside class="sidebar w-64 bg-white shadow-lg fixed left-0 top-16 h-full z-40 border-r border-gray-200"
-               :class="sidebarOpen ? '' : 'sidebar-closed'">
-            <div class="p-6">
-                <div class="mb-6">
-                    <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Espaces</p>
-                    <div class="space-y-1">
-                        <template x-for="space in spaces" :key="space.path_prefix">
-                            <button @click="selectSpace(space.path_prefix)"
-                                    class="w-full text-left flex items-center justify-between px-3 py-2 text-sm rounded-lg hover:bg-gray-100"
-                                    :class="activeSpace === space.path_prefix ? 'bg-blue-50 text-blue-700' : 'text-gray-700'">
-                                <span class="truncate" x-text="space.name"></span>
-                                <span class="text-xs text-gray-500" x-text="space.file_count"></span>
-                            </button>
-                        </template>
-                        <p x-show="spaces.length === 0" class="text-xs text-gray-500 px-3 py-2">Aucun espace détecté</p>
+    <div class="pt-16 h-screen flex">
+        <aside class="w-80 shrink-0 border-r border-slate-200 bg-white/86 backdrop-blur flex flex-col">
+            <div class="p-6 space-y-5">
+                <section class="card p-5">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">Espace choisi</p>
+                    <p class="mt-3 text-sm font-semibold break-all" x-text="activeSpace || 'Aucun espace détecté'"></p>
+                    <div class="mt-4 space-y-2" x-show="spaces.length > 0">
+                        <label class="text-xs text-slate-500">Basculer d’espace</label>
+                        <select x-model="activeSpace" @change="selectSpace(activeSpace)" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                            <template x-for="space in spaces" :key="space.path_prefix">
+                                <option :value="space.path_prefix" x-text="`${space.name} (${space.file_count})`"></option>
+                            </template>
+                        </select>
                     </div>
-                </div>
+                </section>
 
-                <nav class="space-y-3">
-                    <a href="#" @click="currentView = 'dashboard'" 
-                       class="flex items-center px-4 py-2 text-sm font-medium rounded-lg hover:bg-gray-100"
-                       :class="currentView === 'dashboard' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'">
-                        <i class="fas fa-tachometer-alt mr-3"></i>
-                        Tableau de bord
-                    </a>
-                    <div class="grid grid-cols-2 gap-2">
-                        <a href="#" @click="currentView = 'files'" 
-                           class="flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg hover:bg-gray-100"
-                           :class="currentView === 'files' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'">
-                            <i class="fas fa-folder mr-2"></i>
-                            Fichiers
-                        </a>
-                        <a href="#" @click="currentView = 'duplicates'" 
-                           class="flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg hover:bg-gray-100"
-                           :class="currentView === 'duplicates' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'">
-                            <i class="fas fa-copy mr-2"></i>
-                            Doublons
-                        </a>
+                <section class="card p-5">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">Dernier lancement</p>
+                    <p class="mt-3 text-sm font-semibold" x-text="crawlOverview.monitoring.latest_run_config_name || '-'"></p>
+                    <p class="mt-1 text-xs text-slate-500" x-text="formatDate(crawlOverview.monitoring.latest_run_triggered_at)"></p>
+                </section>
+
+                <section class="card p-5">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">État du crawl</p>
+                    <div class="mt-3 flex items-center justify-between">
+                        <span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium"
+                              :class="crawlIsActive ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'">
+                            <span class="h-2.5 w-2.5 rounded-full" :class="crawlIsActive ? 'bg-emerald-500' : 'bg-slate-400'"></span>
+                            <span x-text="crawlIsActive ? 'Actif' : 'Inactif'"></span>
+                        </span>
+                        <span class="text-xs text-slate-500" x-text="wsConnected ? 'WebSocket actif' : 'WebSocket hors ligne'"></span>
                     </div>
+                </section>
+
+                <nav class="space-y-2">
+                    <button @click="currentView = 'dashboard'"
+                            class="w-full flex items-center justify-between rounded-2xl px-4 py-3 text-left transition"
+                            :class="currentView === 'dashboard' ? 'bg-teal-700 text-white shadow-lg shadow-teal-700/15' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'">
+                        <span class="flex items-center gap-3">
+                            <i class="fas fa-gauge-high"></i>
+                            <span>Tableau de bord</span>
+                        </span>
+                        <span class="text-xs" x-show="currentView === 'dashboard'">Actif</span>
+                    </button>
+                    <button @click="currentView = 'fileExplorer'"
+                            class="w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-left transition"
+                            :class="currentView === 'fileExplorer' ? 'bg-teal-700 text-white shadow-lg shadow-teal-700/15' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'">
+                        <i class="fas fa-folder-tree"></i>
+                        <span>Explorateur de fichiers</span>
+                    </button>
+                    <button @click="currentView = 'artifacts'"
+                            class="w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-left transition"
+                            :class="currentView === 'artifacts' ? 'bg-teal-700 text-white shadow-lg shadow-teal-700/15' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'">
+                        <i class="fas fa-filter-circle-xmark"></i>
+                        <span>Traitements des artefacts</span>
+                    </button>
                 </nav>
+            </div>
+
+            <div class="mt-auto px-6 pb-6">
+                <div class="card p-5 text-center space-y-2">
+                    <a :href="systemStatus.newer_version_available ? (systemStatus.newest_version_url || systemStatus.repository_url) : systemStatus.repository_url"
+                       class="block text-sm font-semibold"
+                       :class="systemStatus.newer_version_available ? 'text-orange-600' : 'text-slate-800'"
+                       target="_blank"
+                       rel="noreferrer"
+                       x-text="`Version ${systemStatus.app_version} (${systemStatus.commit_hash})`"></a>
+                    <p class="text-xs text-slate-500" x-text="`Build: ${systemStatus.build_date}`"></p>
+                    <a class="text-xs text-slate-500 hover:text-slate-700" href="#" x-text="systemStatus.license_label"></a>
+                    <p class="text-xs text-slate-500" x-text="systemStatus.license_owner"></p>
+                </div>
             </div>
         </aside>
 
-        <!-- Main content -->
-        <main class="flex-1 ml-64 transition-all duration-300" :class="sidebarOpen ? 'ml-64' : 'ml-0'">
-            <div class="p-6">
-                
-                <!-- Vue Tableau de bord -->
-                <div x-show="currentView === 'dashboard'" class="fade-in">
-                    <h2 class="text-2xl font-bold text-gray-900 mb-6">📊 Tableau de bord</h2>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                        <div class="card p-6">
-                            <div class="flex items-center">
-                                <div class="flex-shrink-0 bg-blue-500 rounded-lg p-3">
-                                    <i class="fas fa-file text-white text-xl"></i>
-                                </div>
-                                <div class="ml-5 w-0 flex-1">
-                                    <dl>
-                                        <dt class="text-sm font-medium text-gray-500 truncate">Total Fichiers</dt>
-                                        <dd class="text-lg font-medium text-gray-900" x-text="stats.total_files?.toLocaleString() || '0'"></dd>
-                                    </dl>
-                                </div>
+        <main class="flex-1 min-w-0">
+            <div class="h-[calc(100vh-4rem)] overflow-y-auto px-8 py-7">
+                <div x-show="currentView === 'dashboard'" class="fade-in space-y-6">
+                    <div class="pt-2">
+                        <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
+                            <div>
+                                <h2 class="text-3xl font-bold tracking-tight">Tableau de bord</h2>
+                                <p class="mt-2 text-sm text-slate-600">Vue centrale de pilotage du crawl, de la base active et du suivi opératoire.</p>
+                            </div>
+                            <div class="flex flex-wrap gap-3">
+                                <button @click="refreshOperations()" class="rounded-2xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-800">
+                                    <i class="fas fa-rotate mr-2"></i>Rafraîchir
+                                </button>
+                                <button @click="openConfiguration('crawler')" class="rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                                    <i class="fas fa-sliders mr-2"></i>Piloter le crawl
+                                </button>
                             </div>
                         </div>
-                        
-                        <div class="card p-6">
-                            <div class="flex items-center">
-                                <div class="flex-shrink-0 bg-green-500 rounded-lg p-3">
-                                    <i class="fas fa-folder text-white text-xl"></i>
-                                </div>
-                                <div class="ml-5 w-0 flex-1">
-                                    <dl>
-                                        <dt class="text-sm font-medium text-gray-500 truncate">Total Répertoires</dt>
-                                        <dd class="text-lg font-medium text-gray-900" x-text="stats.total_directories?.toLocaleString() || '0'"></dd>
-                                    </dl>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="card p-6">
-                            <div class="flex items-center">
-                                <div class="flex-shrink-0 bg-yellow-500 rounded-lg p-3">
-                                    <i class="fas fa-copy text-white text-xl"></i>
-                                </div>
-                                <div class="ml-5 w-0 flex-1">
-                                    <dl>
-                                        <dt class="text-sm font-medium text-gray-500 truncate">Fichiers en double</dt>
-                                        <dd class="text-lg font-medium text-gray-900" x-text="stats.duplicate_files?.toLocaleString() || '0'"></dd>
-                                    </dl>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="card p-6">
-                            <div class="flex items-center">
-                                <div class="flex-shrink-0 bg-purple-500 rounded-lg p-3">
-                                    <i class="fas fa-hdd text-white text-xl"></i>
-                                </div>
-                                <div class="ml-5 w-0 flex-1">
-                                    <dl>
-                                        <dt class="text-sm font-medium text-gray-500 truncate">Taille totale</dt>
-                                        <dd class="text-lg font-medium text-gray-900" x-text="formatBytes(stats.total_size || 0)"></dd>
-                                    </dl>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Avancement crawl -->
-                    <div class="card p-6 mb-6">
-                        <div class="flex items-center justify-between mb-3">
-                            <h3 class="text-lg font-medium text-gray-900">📈 Avancement du crawl</h3>
-                            <span class="text-sm font-semibold text-blue-700" x-text="`${monitoring.progress_percent ?? 0}%`"></span>
-                        </div>
-                        <div class="w-full bg-gray-200 rounded-full h-3 mb-3">
-                            <div class="bg-blue-600 h-3 rounded-full transition-all duration-300" :style="`width: ${monitoring.progress_percent ?? 0}%`"></div>
-                        </div>
-                        <p class="text-sm text-gray-600" x-text="`Runs: ${monitoring.completed_runs ?? 0} terminés / ${monitoring.total_runs ?? 0} totaux`"></p>
                     </div>
 
-                    <!-- Graphique -->
-                    <div class="card p-6">
-                        <h3 class="text-lg font-medium text-gray-900 mb-4">📈 Évolution du crawl</h3>
-                        <canvas id="crawlChart" width="400" height="200"></canvas>
-                    </div>
-                </div>
+                    <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+                        <div class="card p-5">
+                            <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Total fichiers</p>
+                            <p class="mt-3 text-3xl font-semibold" x-text="stats.total_files?.toLocaleString() || '0'"></p>
+                        </div>
+                        <div class="card p-5">
+                            <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Total répertoires</p>
+                            <p class="mt-3 text-3xl font-semibold" x-text="stats.total_directories?.toLocaleString() || '0'"></p>
+                        </div>
+                        <div class="card p-5">
+                            <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Doublons</p>
+                            <p class="mt-3 text-3xl font-semibold" x-text="stats.duplicate_files?.toLocaleString() || '0'"></p>
+                        </div>
+                        <div class="card p-5">
+                            <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Volume indexé</p>
+                            <p class="mt-3 text-3xl font-semibold" x-text="formatBytes(stats.total_size || 0)"></p>
+                        </div>
+                    </section>
 
-                <!-- Vue Fichiers -->
-                <div x-show="currentView === 'files'" class="fade-in">
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-2xl font-bold text-gray-900">📁 Fichiers</h2>
-                        <div class="flex items-center space-x-4">
-                            <input type="text" x-model="searchQuery" placeholder="🔍 Rechercher..." 
-                                   class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                            <button @click="loadFiles()" 
-                                    class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
-                                <i class="fas fa-search mr-2"></i>Rechercher
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div class="card overflow-hidden">
-                        <div x-show="loading" class="text-center py-8">
-                            <div class="loading"></div>
-                            <p class="mt-4 text-gray-600">Chargement des fichiers...</p>
-                        </div>
-                        
-                        <div x-show="!loading && files.length > 0" class="overflow-x-auto">
-                            <table class="table-modern min-w-full">
-                                <thead class="bg-gray-50">
-                                    <tr>
-                                        <th class="cursor-pointer hover:bg-gray-100" @click="sortBy = 'name'">
-                                            Nom <i class="fas fa-sort ml-1"></i>
-                                        </th>
-                                        <th class="cursor-pointer hover:bg-gray-100" @click="sortBy = 'size'">
-                                            Taille <i class="fas fa-sort ml-1"></i>
-                                        </th>
-                                        <th class="cursor-pointer hover:bg-gray-100" @click="sortBy = 'last_modified'">
-                                            Modifié <i class="fas fa-sort ml-1"></i>
-                                        </th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="bg-white divide-y divide-gray-200">
-                                    <template x-for="file in sortedFiles" :key="file.id">
-                                        <tr class="hover:bg-gray-50">
-                                            <td class="px-6 py-4 whitespace-nowrap">
-                                                <div class="flex items-center">
-                                                    <i :class="file.is_directory ? 'fas fa-folder text-yellow-500' : 'fas fa-file text-blue-500'" 
-                                                       class="mr-3"></i>
-                                                    <span x-text="file.name"></span>
-                                                    <span x-show="file.is_duplicate" class="ml-2 text-red-500">
-                                                        <i class="fas fa-copy"></i>
-                                                    </span>
-                                                </div>
-                                            </td>
-                                            <td class="px-6 py-4 whitespace-nowrap" x-text="formatBytes(file.size || 0)"></td>
-                                            <td class="px-6 py-4 whitespace-nowrap" x-text="formatDate(file.last_modified)"></td>
-                                            <td class="px-6 py-4 whitespace-nowrap">
-                                                <button class="text-blue-600 hover:text-blue-900 mr-3">
-                                                    <i class="fas fa-eye"></i>
-                                                </button>
-                                                <button class="text-red-600 hover:text-red-900">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            </td>
-                                        </tr>
+                    <section class="card p-6">
+                        <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
+                            <div>
+                                <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Avancement du crawl</p>
+                                <h3 class="mt-2 text-xl font-semibold">Bloc opératoire actif</h3>
+                                <p class="mt-2 text-sm text-slate-600">Le suivi est alimenté par l’état des runs et les événements remontés par l’API. Le calcul de masse préalable reste à compléter pour une jauge de progression strictement fiable.</p>
+                            </div>
+                            <div class="flex flex-wrap gap-3">
+                                <select x-model="selectedConfigId" class="rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm">
+                                    <option value="">Choisir une configuration</option>
+                                    <template x-for="config in crawlOverview.configs" :key="config.id">
+                                        <option :value="config.id" x-text="`${config.name} • ${config.start_path}`"></option>
                                     </template>
-                                </tbody>
-                            </table>
+                                </select>
+                                <button @click="selectedConfigId ? startCrawl(selectedConfigId) : null"
+                                        :disabled="!selectedConfigId"
+                                        class="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-slate-300">
+                                    <i class="fas fa-play mr-2"></i>Lancer
+                                </button>
+                                <button @click="showCrawlerLogs = !showCrawlerLogs"
+                                        class="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                                    <i class="fas fa-align-left mr-2"></i>
+                                    <span x-text="showCrawlerLogs ? 'Masquer les logs' : 'Voir les logs'"></span>
+                                </button>
+                            </div>
                         </div>
 
-                        <div x-show="!loading && files.length === 0" class="text-center py-8 text-gray-600">
-                            Aucun fichier listé.
+                        <div class="mt-6">
+                            <div class="flex items-center justify-between text-sm">
+                                <span class="text-slate-600">Progression actuelle</span>
+                                <span class="font-semibold text-teal-800" x-text="`${crawlOverview.monitoring.progress_percent ?? 0}%`"></span>
+                            </div>
+                            <div class="mt-2 h-4 rounded-full bg-slate-200 overflow-hidden">
+                                <div class="h-4 rounded-full bg-gradient-to-r from-teal-700 to-emerald-500 transition-all duration-500"
+                                     :style="`width: ${crawlOverview.monitoring.progress_percent ?? 0}%`"></div>
+                            </div>
+                            <p class="mt-3 text-sm text-slate-600" x-text="`Dernier run: ${crawlOverview.monitoring.latest_run_status || 'Aucun run'} • ${crawlOverview.monitoring.latest_run_config_name || '-'}`"></p>
+                            <p class="mt-1 text-sm text-slate-600" x-show="implementationStatus" x-text="implementationStatus"></p>
                         </div>
-                    </div>
-                </div>
 
-                <!-- Vue Doublons -->
-                <div x-show="currentView === 'duplicates'" class="fade-in">
-                    <h2 class="text-2xl font-bold text-gray-900 mb-6">🔄 Fichiers en double</h2>
-                    <div class="card overflow-hidden">
-                        <div x-show="loading" class="text-center py-8">
-                            <div class="loading"></div>
-                            <p class="mt-4 text-gray-600">Chargement des doublons...</p>
+                        <div class="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                            <template x-for="queue in queueIndicators" :key="queue.label">
+                                <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                                    <p class="text-xs uppercase tracking-[0.2em] text-slate-400" x-text="queue.label"></p>
+                                    <p class="mt-2 text-2xl font-semibold" x-text="queue.value"></p>
+                                    <p class="mt-1 text-xs text-slate-500" x-text="queue.detail"></p>
+                                </div>
+                            </template>
                         </div>
-                        
-                        <div x-show="!loading && duplicates.length > 0" class="overflow-x-auto">
-                            <table class="table-modern min-w-full">
-                                <thead class="bg-gray-50">
-                                    <tr>
-                                        <th>Fichier original</th>
-                                        <th>Fichier en double</th>
-                                        <th>Taille</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="bg-white divide-y divide-gray-200">
-                                    <template x-for="dup in duplicates" :key="dup.id">
-                                        <tr class="hover:bg-gray-50">
-                                            <td class="px-6 py-4">
-                                                <div class="flex items-center">
-                                                    <i class="fas fa-file text-blue-500 mr-3"></i>
-                                                    <span x-text="dup.name"></span>
-                                                </div>
-                                            </td>
-                                            <td class="px-6 py-4 text-red-600" x-text="dup.duplicate_of"></td>
-                                            <td class="px-6 py-4" x-text="formatBytes(dup.size || 0)"></td>
-                                            <td class="px-6 py-4">
-                                                <button class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm">
-                                                    <i class="fas fa-trash mr-1"></i>Supprimer
-                                                </button>
-                                            </td>
+
+                        <div x-show="showCrawlerLogs" class="mt-6 fade-in">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Journal du crawler</label>
+                            <textarea class="w-full rounded-2xl border border-slate-200 bg-slate-950 p-4 text-sm text-emerald-200 font-mono h-[40vh]"
+                                      readonly
+                                      x-text="operationalLogText"></textarea>
+                        </div>
+                    </section>
+
+                    <section class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+                        <div class="card p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-semibold">Runs récents</h3>
+                                <span class="text-xs text-slate-500">Source: /api/crawls/overview</span>
+                            </div>
+                            <div x-show="loadingOverview" class="py-8 text-center">
+                                <div class="loading"></div>
+                            </div>
+                            <div x-show="!loadingOverview && crawlOverview.recent_runs.length === 0" class="text-sm text-slate-500">
+                                Aucun run enregistré.
+                            </div>
+                            <div x-show="!loadingOverview && crawlOverview.recent_runs.length > 0" class="overflow-x-auto">
+                                <table class="table-modern">
+                                    <thead>
+                                        <tr>
+                                            <th>Configuration</th>
+                                            <th>Statut</th>
+                                            <th>Déclenché à</th>
                                         </tr>
-                                    </template>
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        <template x-for="run in crawlOverview.recent_runs" :key="run.run_id">
+                                            <tr>
+                                                <td>
+                                                    <p class="font-medium text-slate-900" x-text="run.config_name"></p>
+                                                    <p class="text-xs text-slate-500 break-all" x-text="run.start_path"></p>
+                                                </td>
+                                                <td>
+                                                    <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
+                                                          :class="statusBadgeClass(run.status)"
+                                                          x-text="run.status"></span>
+                                                </td>
+                                                <td class="text-sm text-slate-600" x-text="formatDate(run.triggered_at)"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
 
-                        <div x-show="!loading && duplicates.length === 0" class="text-center py-8 text-gray-600">
-                            Aucun doublon listé.
+                        <div class="card p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-semibold">Configuration active</h3>
+                                <button @click="openConfiguration('crawler')" class="text-sm text-teal-700 hover:text-teal-900">Gérer</button>
+                            </div>
+                            <div x-show="selectedConfig" class="space-y-4">
+                                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                    <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Nom</p>
+                                    <p class="mt-2 text-base font-semibold" x-text="selectedConfig?.name || '-'"></p>
+                                </div>
+                                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                    <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Chemin de départ</p>
+                                    <p class="mt-2 text-sm break-all" x-text="selectedConfig?.start_path || '-'"></p>
+                                </div>
+                                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                    <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Compte</p>
+                                    <p class="mt-2 text-sm" x-text="selectedConfigAccount"></p>
+                                </div>
+                            </div>
+                            <div x-show="!selectedConfig" class="text-sm text-slate-500">
+                                Sélectionne une configuration pour préparer le prochain run.
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <div x-show="currentView === 'fileExplorer'" class="fade-in">
+                    <div class="pt-2">
+                        <h2 class="text-3xl font-bold tracking-tight">Explorateur de fichiers</h2>
+                        <p class="mt-2 text-sm text-slate-600">Préparation de la future vue double panneau type explorateur. Le développement détaillé reste planifié dans le backlog.</p>
+                    </div>
+                    <div class="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-5">
+                        <div class="card p-6 min-h-[28rem]">
+                            <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Panneau source</p>
+                            <div class="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 h-[22rem] flex items-center justify-center text-slate-500 text-sm text-center px-8">
+                                Vue arborescente source à implémenter.
+                            </div>
+                        </div>
+                        <div class="card p-6 min-h-[28rem]">
+                            <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Panneau destination</p>
+                            <div class="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 h-[22rem] flex items-center justify-center text-slate-500 text-sm text-center px-8">
+                                Vue arborescente destination à implémenter.
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Page Configuration -->
-                <div x-show="currentView === 'configuration'" class="fade-in mb-6">
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-2xl font-bold text-gray-900">⚙️ Configuration</h2>
-                        <button @click="currentView = 'dashboard'" class="text-sm px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700">
-                            Retour à l'accueil
+                <div x-show="currentView === 'artifacts'" class="fade-in">
+                    <div class="pt-2">
+                        <h2 class="text-3xl font-bold tracking-tight">Traitements des artefacts</h2>
+                        <p class="mt-2 text-sm text-slate-600">Préparation de la future page d’action sur les temporaires, doublons et artefacts système.</p>
+                    </div>
+                    <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-5">
+                        <div class="card p-6">
+                            <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Temporaires Office</p>
+                            <p class="mt-3 text-3xl font-semibold">-</p>
+                        </div>
+                        <div class="card p-6">
+                            <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Doublons</p>
+                            <p class="mt-3 text-3xl font-semibold">-</p>
+                        </div>
+                        <div class="card p-6">
+                            <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Fichiers système</p>
+                            <p class="mt-3 text-3xl font-semibold">-</p>
+                        </div>
+                    </div>
+                    <div class="mt-6 card p-6">
+                        <p class="text-sm text-slate-600">Cette vue sera dédiée aux décisions de suppression, d’ignorance et d’archivage, avec sélection multiple et traitement de masse.</p>
+                    </div>
+                </div>
+
+                <div x-show="currentView === 'configuration'" class="fade-in">
+                    <div class="pt-2 flex items-center justify-between gap-4">
+                        <div>
+                            <h2 class="text-3xl font-bold tracking-tight">Configuration</h2>
+                            <p class="mt-2 text-sm text-slate-600">Accès secondaire aux réglages et diagnostics.</p>
+                        </div>
+                        <button @click="currentView = 'dashboard'" class="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                            Retour au tableau de bord
                         </button>
                     </div>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
-                        <button @click="configSection = 'crawler'; loadCrawlConfigs()" class="px-4 py-2 rounded-lg text-sm font-medium"
-                                :class="configSection === 'crawler' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-300'">Crawler</button>
-                        <button @click="configSection = 'dbAnalysis'; loadDbExplain()" class="px-4 py-2 rounded-lg text-sm font-medium"
-                                :class="configSection === 'dbAnalysis' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-300'">DB Explain</button>
-                        <button @click="configSection = 'monitoring'; loadMonitoringSummary()" class="px-4 py-2 rounded-lg text-sm font-medium"
-                                :class="configSection === 'monitoring' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-300'">Monitoring</button>
-                    </div>
-                <!-- Vue Monitoring -->
-                <div x-show="currentView === 'configuration' && configSection === 'monitoring'" class="fade-in">
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-2xl font-bold text-gray-900">📊 Monitoring et avancement</h2>
-                        <button @click="loadMonitoringSummary()" class="bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded-lg text-sm">Rafraîchir</button>
+
+                    <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <button @click="configSection = 'crawler'; loadCrawlConfigs()" class="rounded-2xl px-4 py-3 text-sm font-medium"
+                                :class="configSection === 'crawler' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">Crawler</button>
+                        <button @click="configSection = 'dbAnalysis'; loadDbExplain()" class="rounded-2xl px-4 py-3 text-sm font-medium"
+                                :class="configSection === 'dbAnalysis' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">DB Explain</button>
+                        <button @click="configSection = 'monitoring'; loadMonitoringSummary()" class="rounded-2xl px-4 py-3 text-sm font-medium"
+                                :class="configSection === 'monitoring' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">Monitoring</button>
                     </div>
 
-                    <div x-show="loadingMonitoring" class="text-center py-8">
-                        <div class="loading"></div>
-                        <p class="mt-4 text-gray-600">Chargement du monitoring...</p>
+                    <div x-show="currentView === 'configuration' && configSection === 'monitoring'" class="fade-in mt-6 card p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h3 class="text-xl font-semibold">Monitoring</h3>
+                                <p class="mt-1 text-sm text-slate-600">Monitoring temps réel des runs et de la file de traitement.</p>
+                            </div>
+                            <button @click="loadMonitoringSummary()" class="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200">Rafraîchir</button>
+                        </div>
+                        <div x-show="loadingMonitoring" class="text-center py-8">
+                            <div class="loading"></div>
+                        </div>
+                        <div x-show="!loadingMonitoring" class="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                            <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs text-slate-400 uppercase tracking-[0.2em]">Configurations</p><p class="mt-2 text-2xl font-semibold" x-text="monitoring.total_configs ?? 0"></p></div>
+                            <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs text-slate-400 uppercase tracking-[0.2em]">Runs totaux</p><p class="mt-2 text-2xl font-semibold" x-text="monitoring.total_runs ?? 0"></p></div>
+                            <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs text-slate-400 uppercase tracking-[0.2em]">En cours / en file</p><p class="mt-2 text-2xl font-semibold" x-text="`${monitoring.running_runs ?? 0} / ${monitoring.queued_runs ?? 0}`"></p></div>
+                            <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs text-slate-400 uppercase tracking-[0.2em]">Terminés / échecs</p><p class="mt-2 text-2xl font-semibold" x-text="`${monitoring.completed_runs ?? 0} / ${monitoring.failed_runs ?? 0}`"></p></div>
+                        </div>
                     </div>
-                    <p x-show="monitoringError" class="text-red-600 mb-4" x-text="monitoringError"></p>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" x-show="!loadingMonitoring">
-                        <div class="card p-6"><p class="text-sm text-gray-500">Configurations</p><p class="text-2xl font-semibold" x-text="monitoring.total_configs ?? 0"></p></div>
-                        <div class="card p-6"><p class="text-sm text-gray-500">Runs totaux</p><p class="text-2xl font-semibold" x-text="monitoring.total_runs ?? 0"></p></div>
-                        <div class="card p-6"><p class="text-sm text-gray-500">En cours / en file</p><p class="text-2xl font-semibold" x-text="`${monitoring.running_runs ?? 0} / ${monitoring.queued_runs ?? 0}`"></p></div>
-                        <div class="card p-6"><p class="text-sm text-gray-500">Terminés / échecs</p><p class="text-2xl font-semibold" x-text="`${monitoring.completed_runs ?? 0} / ${monitoring.failed_runs ?? 0}`"></p></div>
-                    </div>
-
-                    <div class="card p-6 mt-6" x-show="!loadingMonitoring">
-                        <h3 class="text-lg font-medium text-gray-900 mb-3">Dernier run</h3>
-                        <p class="text-sm text-gray-700" x-text="`Statut: ${monitoring.latest_run_status || 'Aucun run'}`"></p>
-                        <p class="text-sm text-gray-700" x-text="`Configuration: ${monitoring.latest_run_config_name || '-'}`"></p>
-                        <p class="text-sm text-gray-700" x-text="`Déclenché à: ${monitoring.latest_run_triggered_at || '-'}`"></p>
-                    </div>
-                </div>
-
-
-                <!-- Vue Implémentation rapide -->
-                <div x-show="currentView === 'configuration' && configSection === 'crawler'" class="fade-in">
-                    <h2 class="text-2xl font-bold text-gray-900 mb-6">⚡ Implémentation rapide</h2>
-
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div x-show="currentView === 'configuration' && configSection === 'crawler'" class="fade-in mt-6 grid grid-cols-1 xl:grid-cols-2 gap-5">
                         <div class="card p-6">
-                            <h3 class="text-lg font-medium text-gray-900 mb-4">Ajouter un crawl</h3>
-                            <form @submit.prevent="createCrawlConfig()" class="space-y-4">
+                            <h3 class="text-xl font-semibold">Implémentation rapide</h3>
+                            <form @submit.prevent="createCrawlConfig()" class="mt-5 space-y-4">
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Nom du crawl</label>
-                                    <input type="text" x-model="newCrawl.name" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Nom du crawl</label>
+                                    <input type="text" x-model="newCrawl.name" required class="w-full rounded-xl border border-slate-300 px-3 py-2">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Zone de domaine</label>
-                                    <input type="text" x-model="newCrawl.domain_zone" placeholder="EMEA / EU / FR" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Zone de domaine</label>
+                                    <input type="text" x-model="newCrawl.domain_zone" required class="w-full rounded-xl border border-slate-300 px-3 py-2">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Path de départ</label>
-                                    <input type="text" x-model="newCrawl.start_path" placeholder="\\server\share" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Paths inclus (un par ligne)</label>
-                                    <textarea x-model="newCrawl.includePathsText" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2"></textarea>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Paths exclus (un par ligne)</label>
-                                    <textarea x-model="newCrawl.excludePathsText" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2"></textarea>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Path de départ</label>
+                                    <input type="text" x-model="newCrawl.start_path" placeholder="\\server\share" required class="w-full rounded-xl border border-slate-300 px-3 py-2">
                                 </div>
                                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Utilisateur</label>
-                                        <input type="text" x-model="newCrawl.connection.username" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Mot de passe</label>
-                                        <input type="password" x-model="newCrawl.connection.password" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Domaine</label>
-                                        <input type="text" x-model="newCrawl.connection.domain" placeholder="CORP" class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                                    </div>
+                                    <input type="text" x-model="newCrawl.connection.username" placeholder="Utilisateur" required class="rounded-xl border border-slate-300 px-3 py-2">
+                                    <input type="password" x-model="newCrawl.connection.password" placeholder="Mot de passe" required class="rounded-xl border border-slate-300 px-3 py-2">
+                                    <input type="text" x-model="newCrawl.connection.domain" placeholder="Domaine" class="rounded-xl border border-slate-300 px-3 py-2">
                                 </div>
-                                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+                                <button type="submit" class="rounded-2xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">
                                     <i class="fas fa-plus mr-2"></i>Créer la configuration
                                 </button>
                             </form>
                         </div>
 
                         <div class="card p-6">
-                            <h3 class="text-lg font-medium text-gray-900 mb-4">Configurations disponibles</h3>
-                            <button @click="loadCrawlConfigs()" class="mb-4 bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded-lg text-sm">Rafraîchir</button>
-                            <div x-show="crawlConfigs.length === 0" class="text-sm text-gray-500">Aucune configuration pour le moment.</div>
-                            <div class="space-y-3" x-show="crawlConfigs.length > 0">
+                            <h3 class="text-xl font-semibold">Configurations disponibles</h3>
+                            <div class="mt-5 space-y-3">
                                 <template x-for="config in crawlConfigs" :key="config.id">
-                                    <div class="border border-gray-200 rounded-lg p-4">
-                                        <div class="flex items-center justify-between">
+                                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                        <div class="flex items-start justify-between gap-3">
                                             <div>
-                                                <p class="font-medium text-gray-900" x-text="config.name"></p>
-                                                <p class="text-xs text-gray-500" x-text="`Zone: ${config.domain_zone} • Départ: ${config.start_path}`"></p>
-                                                <p class="text-xs text-gray-500" x-text="`Compte: ${config.connection_domain || '-'}\\${config.connection_username}`"></p>
+                                                <p class="font-semibold" x-text="config.name"></p>
+                                                <p class="text-xs text-slate-500 mt-1" x-text="config.start_path"></p>
                                             </div>
-                                            <button @click="startCrawl(config.id)" class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-sm">Lancer</button>
+                                            <button @click="startCrawl(config.id)" class="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Lancer</button>
                                         </div>
                                     </div>
                                 </template>
+                                <div x-show="crawlConfigs.length === 0" class="text-sm text-slate-500">Aucune configuration pour le moment.</div>
                             </div>
-                            <p x-show="implementationStatus" class="mt-4 text-sm text-blue-700" x-text="implementationStatus"></p>
                         </div>
                     </div>
-                </div>
 
-                <!-- Vue Analyse DB -->
-                <div x-show="currentView === 'configuration' && configSection === 'dbAnalysis'" class="fade-in">
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-2xl font-bold text-gray-900">🧠 Explain / Analyze DB</h2>
-                        <div class="flex items-center space-x-3">
-                            <select x-model="selectedExplainQuery" class="px-3 py-2 border border-gray-300 rounded-lg">
-                                <option value="files_list">Liste des fichiers</option>
-                                <option value="duplicates">Doublons</option>
-                                <option value="stats">Statistiques globales</option>
-                            </select>
-                            <label class="flex items-center text-sm text-gray-700">
-                                <input type="checkbox" x-model="explainAnalyze" class="mr-2">ANALYZE
-                            </label>
-                            <button @click="loadDbExplain()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">Lancer</button>
+                    <div x-show="currentView === 'configuration' && configSection === 'dbAnalysis'" class="fade-in mt-6 card p-6">
+                        <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+                            <div>
+                                <h3 class="text-xl font-semibold">Explain / Analyze DB</h3>
+                                <p class="mt-1 text-sm text-slate-600">Diagnostic SQL ciblé sur les requêtes sensibles.</p>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-3">
+                                <select x-model="selectedExplainQuery" class="rounded-xl border border-slate-300 px-3 py-2">
+                                    <option value="files_list">Liste des fichiers</option>
+                                    <option value="duplicates">Doublons</option>
+                                    <option value="stats">Statistiques globales</option>
+                                </select>
+                                <label class="flex items-center text-sm text-slate-700">
+                                    <input type="checkbox" x-model="explainAnalyze" class="mr-2">ANALYZE
+                                </label>
+                                <button @click="loadDbExplain()" class="rounded-2xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">Lancer</button>
+                            </div>
+                        </div>
+                        <div class="mt-5">
+                            <div x-show="loadingDbExplain" class="text-center py-8">
+                                <div class="loading"></div>
+                            </div>
+                            <p x-show="dbExplainError" class="text-red-600" x-text="dbExplainError"></p>
+                            <pre x-show="!loadingDbExplain && dbExplainPlan.length > 0"
+                                 class="rounded-2xl bg-slate-950 p-4 text-sm text-emerald-200 overflow-x-auto"
+                                 x-text="dbExplainPlan.join('\n')"></pre>
+                            <p x-show="!loadingDbExplain && dbExplainPlan.length === 0 && !dbExplainError" class="text-sm text-slate-500">Aucun plan retourné.</p>
                         </div>
                     </div>
-                    <div class="card p-6">
-                        <div x-show="loadingDbExplain" class="text-center py-4">
-                            <div class="loading"></div>
-                            <p class="mt-2 text-gray-600">Exécution du plan SQL...</p>
-                        </div>
-                        <template x-if="dbExplainError">
-                            <p class="text-red-600" x-text="dbExplainError"></p>
-                        </template>
-                        <template x-if="!loadingDbExplain && dbExplainPlan.length === 0 && !dbExplainError">
-                            <p class="text-gray-600">Aucun plan retourné.</p>
-                        </template>
-                        <template x-if="!loadingDbExplain && dbExplainPlan.length > 0">
-                            <pre class="bg-gray-900 text-green-200 p-4 rounded-lg overflow-x-auto text-sm" x-text="dbExplainPlan.join('\n')"></pre>
-                        </template>
-                    </div>
-                </div>
                 </div>
             </div>
         </main>
     </div>
 
-    <!-- Script Alpine.js -->
     <script>
         function openIndexApp() {
             return {
                 currentView: 'dashboard',
                 configSection: 'crawler',
-                sidebarOpen: true,
                 loading: false,
-                searchQuery: '',
-                sortBy: 'name',
                 files: [],
                 duplicates: [],
                 stats: {},
@@ -512,6 +515,7 @@
                 ws: null,
                 showNotifications: false,
                 unreadNotifications: 0,
+                showCrawlerLogs: false,
                 selectedExplainQuery: 'files_list',
                 explainAnalyze: true,
                 dbExplainPlan: [],
@@ -520,7 +524,22 @@
                 spaces: [],
                 activeSpace: '',
                 crawlConfigs: [],
-                implementationStatus: '',
+                crawlOverview: {
+                    monitoring: {
+                        total_configs: 0,
+                        total_runs: 0,
+                        queued_runs: 0,
+                        running_runs: 0,
+                        completed_runs: 0,
+                        failed_runs: 0,
+                        latest_run_status: 'Aucun run',
+                        latest_run_config_name: '-',
+                        latest_run_triggered_at: '-',
+                        progress_percent: 0
+                    },
+                    configs: [],
+                    recent_runs: []
+                },
                 monitoring: {
                     total_configs: 0,
                     total_runs: 0,
@@ -534,31 +553,41 @@
                     progress_percent: 0
                 },
                 loadingMonitoring: false,
+                loadingOverview: false,
+                implementationStatus: '',
                 monitoringError: '',
+                selectedConfigId: '',
+                systemStatus: {
+                    app_version: '0.1.0',
+                    commit_hash: 'dev',
+                    build_date: '-',
+                    license_label: 'Licence',
+                    license_owner: 'Copyright 2026 SMIDEN',
+                    repository_url: 'https://github.com/lamacheref/openindex',
+                    newer_version_available: false,
+                    newest_version_url: null
+                },
+                operationalLogs: [],
                 newCrawl: {
                     name: '',
                     domain_zone: '',
                     start_path: '',
-                    includePathsText: '',
-                    excludePathsText: '',
                     connection: {
                         username: '',
                         password: '',
                         domain: ''
                     }
                 },
-                
+
                 async init() {
+                    this.addLogEntry('UI initialisée');
                     await this.loadSpaces();
-                    this.loadStats();
-                    this.initWebSocket();
-                    this.initCharts();
+                    await this.loadStats();
                     await this.loadCrawlConfigs();
                     await this.loadMonitoringSummary();
-                },
-                
-                toggleSidebar() {
-                    this.sidebarOpen = !this.sidebarOpen;
+                    await this.loadCrawlOverview();
+                    await this.loadSystemStatus();
+                    this.initWebSocket();
                 },
 
                 openConfiguration(section = 'crawler') {
@@ -572,7 +601,7 @@
                         this.loadMonitoringSummary();
                     }
                 },
-                
+
                 async loadStats() {
                     try {
                         const params = new URLSearchParams();
@@ -583,46 +612,10 @@
                         this.stats = await response.json();
                     } catch (error) {
                         console.error('Erreur stats:', error);
+                        this.addLogEntry(`Erreur stats: ${error.message}`);
                     }
                 },
-                
-                async loadFiles() {
-                    this.loading = true;
-                    try {
-                        const params = new URLSearchParams({
-                            limit: 100,
-                            offset: 0,
-                            search: this.searchQuery
-                        });
-                        if (this.activeSpace) {
-                            params.append('space', this.activeSpace);
-                        }
-                        
-                        const response = await fetch(`/api/files?${params}`);
-                        this.files = await response.json();
-                    } catch (error) {
-                        console.error('Erreur fichiers:', error);
-                    } finally {
-                        this.loading = false;
-                    }
-                },
-                
-                async loadDuplicates() {
-                    this.loading = true;
-                    try {
-                        const params = new URLSearchParams();
-                        if (this.activeSpace) {
-                            params.append('space', this.activeSpace);
-                        }
-                        const response = await fetch(`/api/duplicates?${params}`);
-                        this.duplicates = await response.json();
-                    } catch (error) {
-                        console.error('Erreur doublons:', error);
-                    } finally {
-                        this.loading = false;
-                    }
-                },
-                
+
                 async loadSpaces() {
                     try {
                         const response = await fetch('/api/spaces');
@@ -632,27 +625,76 @@
                         }
                     } catch (error) {
                         console.error('Erreur espaces:', error);
+                        this.addLogEntry(`Erreur espaces: ${error.message}`);
                     }
                 },
 
                 async selectSpace(spacePrefix) {
                     this.activeSpace = spacePrefix;
                     await this.loadStats();
-                    if (this.currentView === 'files') {
-                        await this.loadFiles();
-                    } else if (this.currentView === 'duplicates') {
-                        await this.loadDuplicates();
-                    }
+                    this.addLogEntry(`Espace actif: ${spacePrefix}`);
                 },
-                
-
 
                 async loadCrawlConfigs() {
                     try {
                         const response = await fetch('/api/crawl-configs');
                         this.crawlConfigs = await response.json();
+                        if (!this.selectedConfigId && this.crawlConfigs.length > 0) {
+                            this.selectedConfigId = this.crawlConfigs[0].id;
+                        }
                     } catch (error) {
                         console.error('Erreur configs crawl:', error);
+                        this.addLogEntry(`Erreur configs crawl: ${error.message}`);
+                    }
+                },
+
+                async loadCrawlOverview() {
+                    this.loadingOverview = true;
+                    try {
+                        const response = await fetch('/api/crawls/overview?limit=8');
+                        if (!response.ok) {
+                            throw new Error('Erreur API overview');
+                        }
+                        this.crawlOverview = await response.json();
+                        if (!this.selectedConfigId && this.crawlOverview.configs.length > 0) {
+                            this.selectedConfigId = this.crawlOverview.configs[0].id;
+                        }
+                    } catch (error) {
+                        console.error('Erreur overview crawl:', error);
+                        this.addLogEntry(`Erreur overview crawl: ${error.message}`);
+                    } finally {
+                        this.loadingOverview = false;
+                    }
+                },
+
+                async loadMonitoringSummary() {
+                    this.loadingMonitoring = true;
+                    this.monitoringError = '';
+                    try {
+                        const response = await fetch('/api/monitoring');
+                        if (!response.ok) {
+                            throw new Error('Erreur API monitoring');
+                        }
+                        this.monitoring = await response.json();
+                        this.crawlOverview.monitoring = this.monitoring;
+                    } catch (error) {
+                        this.monitoringError = error.message;
+                        this.addLogEntry(`Erreur monitoring: ${error.message}`);
+                    } finally {
+                        this.loadingMonitoring = false;
+                    }
+                },
+
+                async loadSystemStatus() {
+                    try {
+                        const response = await fetch('/api/system/status');
+                        if (!response.ok) {
+                            throw new Error('Erreur API system status');
+                        }
+                        this.systemStatus = await response.json();
+                    } catch (error) {
+                        console.error('Erreur status système:', error);
+                        this.addLogEntry(`Erreur status système: ${error.message}`);
                     }
                 },
 
@@ -662,8 +704,8 @@
                             name: this.newCrawl.name,
                             domain_zone: this.newCrawl.domain_zone,
                             start_path: this.newCrawl.start_path,
-                            include_paths: this.newCrawl.includePathsText.split('\n').map(line => line.trim()).filter(Boolean),
-                            exclude_paths: this.newCrawl.excludePathsText.split('\n').map(line => line.trim()).filter(Boolean),
+                            include_paths: [],
+                            exclude_paths: [],
                             connection: {
                                 username: this.newCrawl.connection.username,
                                 password: this.newCrawl.connection.password,
@@ -680,14 +722,22 @@
                         }
                         const created = await response.json();
                         this.implementationStatus = `Configuration créée: ${created.name}`;
+                        this.selectedConfigId = created.id;
+                        this.addLogEntry(`Configuration créée: ${created.name}`);
                         this.newCrawl = {
-                            name: '', domain_zone: '', start_path: '', includePathsText: '', excludePathsText: '',
-                            connection: { username: '', password: '', domain: '' }
+                            name: '',
+                            domain_zone: '',
+                            start_path: '',
+                            connection: {
+                                username: '',
+                                password: '',
+                                domain: ''
+                            }
                         };
-                        await this.loadCrawlConfigs();
-                        await this.loadMonitoringSummary();
+                        await this.refreshOperations();
                     } catch (error) {
                         this.implementationStatus = `Erreur: ${error.message}`;
+                        this.addLogEntry(`Erreur création config: ${error.message}`);
                     }
                 },
 
@@ -703,37 +753,11 @@
                         }
                         const run = await response.json();
                         this.implementationStatus = `Crawl ${run.run_id} en statut ${run.status}`;
-                        await this.loadMonitoringSummary();
+                        this.addLogEntry(`Run déclenché: ${run.run_id} (${run.status})`);
+                        await this.refreshOperations();
                     } catch (error) {
                         this.implementationStatus = `Erreur: ${error.message}`;
-                    }
-                },
-
-                async loadMonitoringSummary() {
-                    this.loadingMonitoring = true;
-                    this.monitoringError = '';
-                    try {
-                        const response = await fetch('/api/monitoring');
-                        if (!response.ok) {
-                            throw new Error('Erreur API monitoring');
-                        }
-                        this.monitoring = await response.json();
-                    } catch (error) {
-                        this.monitoringError = error.message;
-                        this.monitoring = {
-                            total_configs: 0,
-                            total_runs: 0,
-                            queued_runs: 0,
-                            running_runs: 0,
-                            completed_runs: 0,
-                            failed_runs: 0,
-                            latest_run_status: 'Aucun run',
-                            latest_run_config_name: '-',
-                            latest_run_triggered_at: '-',
-                            progress_percent: 0
-                        };
-                    } finally {
-                        this.loadingMonitoring = false;
+                        this.addLogEntry(`Erreur lancement crawl: ${error.message}`);
                     }
                 },
 
@@ -755,117 +779,126 @@
                     } catch (error) {
                         this.dbExplainError = error.message;
                         this.dbExplainPlan = [];
-                        console.error('Erreur Explain:', error);
+                        this.addLogEntry(`Erreur Explain: ${error.message}`);
                     } finally {
                         this.loadingDbExplain = false;
                     }
                 },
-                
+
                 initWebSocket() {
                     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
                     const wsUrl = `${protocol}//${window.location.host}/ws`;
-                    
                     this.ws = new WebSocket(wsUrl);
-                    
+
                     this.ws.onopen = () => {
                         this.wsConnected = true;
-                        console.log('WebSocket connecté');
+                        this.addLogEntry('WebSocket connecté');
                     };
-                    
+
                     this.ws.onmessage = (event) => {
                         const message = JSON.parse(event.data);
                         if (message.type === 'stats_update') {
                             this.stats = message.data;
-                            this.updateCharts();
+                        }
+                        if (message.type === 'monitoring_update') {
+                            this.monitoring = message.data;
+                            this.crawlOverview.monitoring = message.data;
+                            this.addLogEntry(`Monitoring: ${message.data.latest_run_status || 'mise à jour'}`);
                         }
                     };
-                    
+
                     this.ws.onclose = () => {
                         this.wsConnected = false;
-                        console.log('WebSocket déconnecté');
-                        // Tentative de reconnexion après 5 secondes
+                        this.addLogEntry('WebSocket déconnecté');
                         setTimeout(() => this.initWebSocket(), 5000);
                     };
                 },
-                
-                initCharts() {
-                    // Graphique d'évolution du crawl
-                    const ctx = document.getElementById('crawlChart');
-                    if (ctx) {
-                        new Chart(ctx, {
-                            type: 'line',
-                            data: {
-                                labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'],
-                                datasets: [{
-                                    label: 'Fichiers indexés',
-                                    data: [1200, 1900, 3000, 5000, 4200, 3800],
-                                    borderColor: 'rgb(59, 130, 246)',
-                                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                                    tension: 0.4
-                                }]
-                            },
-                            options: {
-                                responsive: true,
-                                maintainAspectRatio: false
-                            }
-                        });
-                    }
-                    
-                    // Graphique de performance
-                    const perfCtx = document.getElementById('performanceChart');
-                    if (perfCtx) {
-                        new Chart(perfCtx, {
-                            type: 'doughnut',
-                            data: {
-                                labels: ['Fichiers traités', 'En attente', 'Erreurs'],
-                                datasets: [{
-                                    data: [85, 10, 5],
-                                    backgroundColor: [
-                                        'rgba(34, 197, 94, 0.8)',
-                                        'rgba(251, 191, 36, 0.8)',
-                                        'rgba(239, 68, 68, 0.8)'
-                                    ]
-                                }]
-                            },
-                            options: {
-                                responsive: true,
-                                maintainAspectRatio: false
-                            }
-                        });
-                    }
+
+                async refreshOperations() {
+                    await Promise.all([
+                        this.loadStats(),
+                        this.loadCrawlConfigs(),
+                        this.loadMonitoringSummary(),
+                        this.loadCrawlOverview(),
+                        this.loadSystemStatus()
+                    ]);
+                    this.addLogEntry('Rafraîchissement manuel exécuté');
                 },
-                
-                updateCharts() {
-                    // Mettre à jour les graphiques avec les nouvelles données
-                    console.log('Mise à jour des graphiques:', this.stats);
+
+                addLogEntry(message) {
+                    const stamp = new Date().toLocaleString('fr-FR');
+                    this.operationalLogs = [`[${stamp}] ${message}`, ...this.operationalLogs].slice(0, 120);
                 },
-                
-                get sortedFiles() {
-                    return [...this.files].sort((a, b) => {
-                        if (this.sortBy === 'name') {
-                            return a.name.localeCompare(b.name);
-                        } else if (this.sortBy === 'size') {
-                            return (b.size || 0) - (a.size || 0);
-                        } else if (this.sortBy === 'last_modified') {
-                            return new Date(b.last_modified) - new Date(a.last_modified);
-                        }
-                        return 0;
-                    });
+
+                statusBadgeClass(status) {
+                    const normalized = (status || '').toLowerCase();
+                    if (['completed', 'done', 'success'].includes(normalized)) return 'bg-emerald-100 text-emerald-800';
+                    if (['running', 'in_progress'].includes(normalized)) return 'bg-blue-100 text-blue-800';
+                    if (['queued', 'pending'].includes(normalized)) return 'bg-amber-100 text-amber-800';
+                    if (['failed', 'error'].includes(normalized)) return 'bg-red-100 text-red-800';
+                    return 'bg-slate-100 text-slate-800';
                 },
-                
+
                 formatBytes(bytes) {
-                    if (bytes === 0) return '0 Bytes';
+                    if (!bytes) return '0 Bytes';
                     const k = 1024;
                     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
                     const i = Math.floor(Math.log(bytes) / Math.log(k));
                     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
                 },
-                
+
                 formatDate(dateString) {
-                    if (!dateString) return 'N/A';
+                    if (!dateString || dateString === '-') return '-';
                     return new Date(dateString).toLocaleString('fr-FR');
+                },
+
+                get crawlIsActive() {
+                    return (this.crawlOverview.monitoring.running_runs || 0) > 0;
+                },
+
+                get selectedConfig() {
+                    return this.crawlOverview.configs.find((config) => config.id === this.selectedConfigId)
+                        || this.crawlConfigs.find((config) => config.id === this.selectedConfigId)
+                        || null;
+                },
+
+                get selectedConfigAccount() {
+                    if (!this.selectedConfig) return '-';
+                    return `${this.selectedConfig.connection_domain || '-'}\\${this.selectedConfig.connection_username || '-'}`;
+                },
+
+                get queueIndicators() {
+                    return [
+                        {
+                            label: 'Queue en file',
+                            value: this.monitoring.queued_runs ?? 0,
+                            detail: 'Runs en attente de traitement'
+                        },
+                        {
+                            label: 'Queue active',
+                            value: this.monitoring.running_runs ?? 0,
+                            detail: 'Runs en cours'
+                        },
+                        {
+                            label: 'Queue terminée',
+                            value: this.monitoring.completed_runs ?? 0,
+                            detail: 'Runs validés'
+                        },
+                        {
+                            label: 'Queue en erreur',
+                            value: this.monitoring.failed_runs ?? 0,
+                            detail: 'Runs à diagnostiquer'
+                        }
+                    ];
+                },
+
+                get operationalLogText() {
+                    if (this.operationalLogs.length === 0) {
+                        return '[aucun événement]';
+                    }
+                    return this.operationalLogs.join('\n');
                 }
-            }
+            };
         }
     </script>
 </body>

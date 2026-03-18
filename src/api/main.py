@@ -127,6 +127,16 @@ class CrawlRun(BaseModel):
     triggered_at: str
 
 
+class CrawlRunHistoryItem(BaseModel):
+    run_id: str
+    config_id: str
+    config_name: str
+    domain_zone: str
+    start_path: str
+    status: str
+    triggered_at: str
+
+
 class MonitoringSummary(BaseModel):
     total_configs: int
     total_runs: int
@@ -138,6 +148,23 @@ class MonitoringSummary(BaseModel):
     latest_run_config_name: str
     latest_run_triggered_at: str
     progress_percent: float
+
+
+class CrawlOverview(BaseModel):
+    monitoring: MonitoringSummary
+    configs: List[CrawlConfigPublic]
+    recent_runs: List[CrawlRunHistoryItem]
+
+
+class SystemStatus(BaseModel):
+    app_version: str
+    commit_hash: str
+    build_date: str
+    license_label: str
+    license_owner: str
+    repository_url: str
+    newer_version_available: bool
+    newest_version_url: Optional[str] = None
 
 
 def extract_space_prefix(path: str) -> Optional[str]:
@@ -422,6 +449,44 @@ class PostgreSQLAdapter:
             "latest_run_config_name": latest_run_config_name,
             "latest_run_triggered_at": latest_run_triggered_at,
             "progress_percent": progress_percent,
+        }
+
+    def list_recent_crawl_runs(self, limit: int = 10) -> List[Dict[str, Any]]:
+        rows = self.execute_query(
+            """
+            SELECT
+                r.id::text,
+                r.config_id::text,
+                c.name,
+                c.domain_zone,
+                c.start_path,
+                r.status,
+                r.triggered_at::text
+            FROM crawl_runs r
+            JOIN crawl_configs c ON c.id = r.config_id
+            ORDER BY r.triggered_at DESC
+            LIMIT %s
+            """,
+            [limit],
+        )
+        return [
+            {
+                "run_id": row[0],
+                "config_id": row[1],
+                "config_name": row[2],
+                "domain_zone": row[3],
+                "start_path": row[4],
+                "status": row[5],
+                "triggered_at": row[6],
+            }
+            for row in rows
+        ]
+
+    def get_crawl_overview(self, limit: int = 10) -> Dict[str, Any]:
+        return {
+            "monitoring": self.get_monitoring_summary(),
+            "configs": self.list_crawl_configs(),
+            "recent_runs": self.list_recent_crawl_runs(limit=limit),
         }
 
 
@@ -745,6 +810,52 @@ async def get_monitoring_summary():
         raise HTTPException(status_code=500, detail="Erreur lors du chargement du monitoring")
 
 
+@app.get("/api/crawls/overview", response_model=CrawlOverview)
+async def get_crawl_overview(limit: int = 10):
+    try:
+        db = get_db_adapter()
+        ensure_crawl_storage_ready(db)
+        overview = db.get_crawl_overview(limit=limit)
+        return CrawlOverview(
+            monitoring=MonitoringSummary(**overview["monitoring"]),
+            configs=[CrawlConfigPublic(**config) for config in overview["configs"]],
+            recent_runs=[CrawlRunHistoryItem(**run) for run in overview["recent_runs"]],
+        )
+    except Exception as e:
+        logger.error(f"Erreur get_crawl_overview: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors du chargement de la vue d'ensemble des crawls")
+
+
+@app.get("/api/system/status", response_model=SystemStatus)
+async def get_system_status():
+    try:
+        version = os.getenv("OPENINDEX_APP_VERSION", app.version)
+        commit_hash = os.getenv("OPENINDEX_BUILD_COMMIT", "dev")
+        build_date = os.getenv("OPENINDEX_BUILD_DATE", datetime.now().date().isoformat())
+        repository_url = os.getenv("OPENINDEX_REPOSITORY_URL", "https://github.com/lamacheref/openindex")
+        newer_version_available = os.getenv("OPENINDEX_NEWER_VERSION_AVAILABLE", "false").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        newest_version_url = os.getenv("OPENINDEX_NEWEST_VERSION_URL") or repository_url
+
+        return SystemStatus(
+            app_version=version,
+            commit_hash=commit_hash,
+            build_date=build_date,
+            license_label="Licence",
+            license_owner="Copyright 2026 SMIDEN",
+            repository_url=repository_url,
+            newer_version_available=newer_version_available,
+            newest_version_url=newest_version_url if newer_version_available else None,
+        )
+    except Exception as e:
+        logger.error(f"Erreur get_system_status: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors du chargement du statut système")
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
@@ -754,8 +865,19 @@ async def websocket_endpoint(websocket: WebSocket):
             try:
                 db = get_db_adapter()
                 stats = db.get_statistics()
-                message = WebSocketMessage(type="stats_update", data=stats, timestamp=datetime.now())
-                await manager.send_personal_message(message.json(), websocket)
+                await manager.send_personal_message(
+                    WebSocketMessage(type="stats_update", data=stats, timestamp=datetime.now()).json(),
+                    websocket,
+                )
+                if hasattr(db, "get_monitoring_summary"):
+                    await manager.send_personal_message(
+                        WebSocketMessage(
+                            type="monitoring_update",
+                            data=db.get_monitoring_summary(),
+                            timestamp=datetime.now(),
+                        ).json(),
+                        websocket,
+                    )
             except Exception as e:
                 logger.error(f"Erreur WebSocket stats: {e}")
     except WebSocketDisconnect:

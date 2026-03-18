@@ -138,6 +138,16 @@ class SMBCrawlerPostgreSQL:
         
         return False, None
 
+    def _get_path_depth(self, path):
+        """Retourne la profondeur relative à la racine du partage."""
+        root_prefix = rf"\\{self.server}\{self.share_name}"
+        if not path.startswith(root_prefix):
+            return 0
+        relative_path = path[len(root_prefix):].strip("\\")
+        if not relative_path:
+            return 0
+        return relative_path.count("\\")
+
     def list_directory_fallback(self, unc_path):
         """
         Méthode de secours utilisant smbclient en ligne de commande
@@ -283,6 +293,9 @@ class SMBCrawlerPostgreSQL:
                             
                             # Ajouter à la queue appropriée
                             if file_data['is_directory']:
+                                current_depth = self._get_path_depth(item_path)
+                                if self.max_depth is None or current_depth < self.max_depth:
+                                    self.directory_queue.put(item_path)
                                 self.directory_result_queue.put(file_data)  # Mettre dans la queue des répertoires traités
                                 self.stats['total_directories'] += 1
                             else:
@@ -321,6 +334,9 @@ class SMBCrawlerPostgreSQL:
                                 
                                 # Ajouter à la queue appropriée
                                 if item_data['is_directory']:
+                                    current_depth = self._get_path_depth(item_data['path'])
+                                    if self.max_depth is None or current_depth < self.max_depth:
+                                        self.directory_queue.put(item_data['path'])
                                     self.directory_result_queue.put(item_data)  # Mettre dans la queue des répertoires traités
                                     self.stats['total_directories'] += 1
                                 else:
