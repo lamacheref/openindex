@@ -11,9 +11,9 @@
     <link rel="stylesheet" href="/assets/fontawesome/css/all.min.css">
 
     <style>
+        [x-cloak] { display: none !important; }
         .fade-in { animation: fadeIn 0.25s ease-in; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
         .loading {
             display: inline-block;
             width: 20px;
@@ -24,14 +24,12 @@
             animation: spin 1s linear infinite;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
         .card {
             background: rgba(255, 255, 255, 0.94);
             border: 1px solid rgba(148, 163, 184, 0.18);
             border-radius: 18px;
             box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
         }
-
         .table-modern {
             border-collapse: separate;
             border-spacing: 0;
@@ -50,7 +48,6 @@
             vertical-align: top;
         }
         .table-modern tr:hover { background: #f8fafc; }
-
         body {
             background:
                 radial-gradient(circle at top left, rgba(245, 158, 11, 0.12), transparent 28%),
@@ -59,12 +56,12 @@
         }
     </style>
 </head>
-<body x-data="openIndexApp()" class="text-slate-900">
-    <header class="fixed top-0 left-0 right-0 h-16 bg-white/92 backdrop-blur border-b border-slate-200 z-50">
+<body x-data="openIndexApp()" class="overflow-hidden text-slate-900">
+    <header class="fixed top-0 left-0 right-0 z-50 h-16 border-b border-slate-200 bg-white/92 backdrop-blur">
         <div class="h-full px-4 sm:px-6 lg:px-8">
-            <div class="h-full flex items-center justify-between">
-                <div class="flex items-center ml-[1em]">
-                    <div class="h-10 w-10 rounded-2xl bg-teal-700 text-white flex items-center justify-center shadow-sm">
+            <div class="flex h-full items-center justify-between">
+                <div class="ml-[1em] flex items-center">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-teal-700 text-white shadow-sm">
                         <i class="fas fa-folder-tree"></i>
                     </div>
                     <div class="ml-3">
@@ -73,23 +70,51 @@
                     </div>
                 </div>
 
-                <div class="flex items-center gap-2 pr-4">
+                <div class="relative flex items-center gap-2 pr-4">
                     <button @click="showNotifications = !showNotifications"
-                            class="h-10 w-10 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 relative"
+                            class="relative h-10 w-10 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
                             aria-label="Notifications"
                             title="Notifications">
                         <i class="fas fa-bell"></i>
                         <span x-show="unreadNotifications > 0"
-                              class="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center"
+                              class="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white"
                               x-text="unreadNotifications"></span>
                     </button>
+                    <div x-cloak
+                         x-show="showNotifications"
+                         @click.outside="showNotifications = false"
+                         class="absolute right-24 top-12 z-50 w-80 rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-900/10">
+                        <div class="flex items-center justify-between">
+                            <h2 class="text-sm font-semibold text-slate-900">Notifications</h2>
+                            <span class="text-xs text-slate-500" x-text="`${notifications.length}`"></span>
+                        </div>
+                        <div class="mt-4 space-y-3">
+                            <template x-if="notifications.length === 0">
+                                <p class="text-sm text-slate-500">Aucune notification en attente.</p>
+                            </template>
+                            <template x-for="notification in notifications" :key="notification.id">
+                                <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                    <div class="flex items-start gap-3">
+                                        <span class="mt-0.5 h-2.5 w-2.5 rounded-full"
+                                              :class="notification.level === 'warning' ? 'bg-amber-500' : notification.level === 'error' ? 'bg-red-500' : 'bg-teal-600'"></span>
+                                        <div>
+                                            <p class="text-sm font-medium text-slate-900" x-text="notification.title"></p>
+                                            <p class="mt-1 text-xs text-slate-600" x-text="notification.message"></p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
                     <button @click="openConfiguration('crawler')"
-                            title="Configuration"
                             class="h-10 w-10 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
-                            aria-label="Configuration">
+                            aria-label="Configuration"
+                            title="Configuration">
                         <i class="fas fa-gear"></i>
                     </button>
-                    <button class="h-10 w-10 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                    <button @click="openConfiguration('profile')"
+                            class="h-10 w-10 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
                             aria-label="Profil utilisateur"
                             title="Profil utilisateur">
                         <i class="fas fa-user"></i>
@@ -99,17 +124,18 @@
         </div>
     </header>
 
-    <div class="pt-16 h-screen flex">
-        <aside class="w-80 shrink-0 border-r border-slate-200 bg-white/86 backdrop-blur flex flex-col">
-            <div class="p-6 space-y-5">
+    <div class="flex h-screen pt-16">
+        <aside class="flex w-80 shrink-0 flex-col border-r border-slate-200 bg-white/86 backdrop-blur">
+            <div class="space-y-5 p-6">
                 <section class="card p-5">
                     <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">Espace choisi</p>
-                    <p class="mt-3 text-sm font-semibold break-all" x-text="activeSpace || 'Aucun espace détecté'"></p>
+                    <p class="mt-3 break-all text-sm font-semibold" x-text="activeSpaceName"></p>
+                    <p class="mt-1 break-all text-xs text-slate-500" x-text="activeSpacePath"></p>
                     <div class="mt-4 space-y-2" x-show="spaces.length > 0">
                         <label class="text-xs text-slate-500">Basculer d’espace</label>
                         <select x-model="activeSpace" @change="selectSpace(activeSpace)" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
                             <template x-for="space in spaces" :key="space.path_prefix">
-                                <option :value="space.path_prefix" x-text="`${space.name} (${space.file_count})`"></option>
+                                <option :value="space.path_prefix" x-text="`${getSpaceDisplayName(space)} (${space.file_count})`"></option>
                             </template>
                         </select>
                     </div>
@@ -117,8 +143,8 @@
 
                 <section class="card p-5">
                     <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">Dernier lancement</p>
-                    <p class="mt-3 text-sm font-semibold" x-text="crawlOverview.monitoring.latest_run_config_name || '-'"></p>
-                    <p class="mt-1 text-xs text-slate-500" x-text="formatDate(crawlOverview.monitoring.latest_run_triggered_at)"></p>
+                    <p class="mt-3 text-sm font-semibold" x-text="latestRunLabel"></p>
+                    <p class="mt-1 text-xs text-slate-500" x-text="latestRunDateLabel"></p>
                 </section>
 
                 <section class="card p-5">
@@ -135,65 +161,70 @@
 
                 <nav class="space-y-2">
                     <button @click="currentView = 'dashboard'"
-                            class="w-full flex items-center justify-between rounded-2xl px-4 py-3 text-left transition"
+                            class="w-full rounded-2xl px-4 py-3 text-left transition"
                             :class="currentView === 'dashboard' ? 'bg-teal-700 text-white shadow-lg shadow-teal-700/15' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'">
-                        <span class="flex items-center gap-3">
-                            <i class="fas fa-gauge-high"></i>
-                            <span>Tableau de bord</span>
+                        <span class="flex items-center justify-between">
+                            <span class="flex items-center gap-3">
+                                <i class="fas fa-gauge-high"></i>
+                                <span>Tableau de bord</span>
+                            </span>
+                            <span class="text-xs" x-show="currentView === 'dashboard'">Actif</span>
                         </span>
-                        <span class="text-xs" x-show="currentView === 'dashboard'">Actif</span>
                     </button>
                     <button @click="currentView = 'fileExplorer'"
-                            class="w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-left transition"
+                            class="w-full rounded-2xl px-4 py-3 text-left transition"
                             :class="currentView === 'fileExplorer' ? 'bg-teal-700 text-white shadow-lg shadow-teal-700/15' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'">
-                        <i class="fas fa-folder-tree"></i>
-                        <span>Explorateur de fichiers</span>
+                        <span class="flex items-center gap-3">
+                            <i class="fas fa-folder-tree"></i>
+                            <span>Explorateur de fichiers</span>
+                        </span>
                     </button>
                     <button @click="currentView = 'artifacts'"
-                            class="w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-left transition"
+                            class="w-full rounded-2xl px-4 py-3 text-left transition"
                             :class="currentView === 'artifacts' ? 'bg-teal-700 text-white shadow-lg shadow-teal-700/15' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'">
-                        <i class="fas fa-filter-circle-xmark"></i>
-                        <span>Traitements des artefacts</span>
+                        <span class="flex items-center gap-3">
+                            <i class="fas fa-filter-circle-xmark"></i>
+                            <span>Traitements des artefacts</span>
+                        </span>
                     </button>
                 </nav>
             </div>
 
             <div class="mt-auto px-6 pb-6">
-                <div class="card p-5 text-center space-y-2">
+                <div class="card px-5 py-4 text-center">
                     <a :href="systemStatus.newer_version_available ? (systemStatus.newest_version_url || systemStatus.repository_url) : systemStatus.repository_url"
-                       class="block text-sm font-semibold"
+                       class="block text-xs font-semibold"
                        :class="systemStatus.newer_version_available ? 'text-orange-600' : 'text-slate-800'"
                        target="_blank"
                        rel="noreferrer"
                        x-text="`Version ${systemStatus.app_version} (${systemStatus.commit_hash})`"></a>
-                    <p class="text-xs text-slate-500" x-text="`Build: ${systemStatus.build_date}`"></p>
-                    <a class="text-xs text-slate-500 hover:text-slate-700" href="#" x-text="systemStatus.license_label"></a>
-                    <p class="text-xs text-slate-500" x-text="systemStatus.license_owner"></p>
+                    <p class="mt-1 text-[11px] text-slate-500" x-text="`Build: ${systemStatus.build_date}`"></p>
+                    <a class="mt-1 block text-xs text-slate-500 hover:text-slate-700" href="#" x-text="systemStatus.license_label"></a>
+                    <p class="mt-1 text-[11px] text-slate-500" x-text="systemStatus.license_owner"></p>
                 </div>
             </div>
         </aside>
 
-        <main class="flex-1 min-w-0">
+        <main class="min-w-0 flex-1">
             <div class="h-[calc(100vh-4rem)] overflow-y-auto px-8 py-7">
                 <div x-show="currentView === 'dashboard'" class="fade-in space-y-6">
                     <div class="pt-2">
-                        <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
+                        <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                             <div>
                                 <h2 class="text-3xl font-bold tracking-tight">Tableau de bord</h2>
-                                <p class="mt-2 text-sm text-slate-600">Vue centrale de pilotage du crawl, de la base active et du suivi opératoire.</p>
                             </div>
                             <div class="flex flex-wrap gap-3">
                                 <button @click="refreshOperations()" class="rounded-2xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-800">
                                     <i class="fas fa-rotate mr-2"></i>Rafraîchir
                                 </button>
-                                <button @click="openConfiguration('crawler')" class="rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                                <button @click="showCrawlPilot = true" class="rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
                                     <i class="fas fa-sliders mr-2"></i>Piloter le crawl
                                 </button>
                             </div>
                         </div>
                     </div>
 
-                    <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+                    <section class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
                         <div class="card p-5">
                             <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Total fichiers</p>
                             <p class="mt-3 text-3xl font-semibold" x-text="stats.total_files?.toLocaleString() || '0'"></p>
@@ -213,11 +244,10 @@
                     </section>
 
                     <section class="card p-6">
-                        <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
+                        <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                             <div>
                                 <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Avancement du crawl</p>
                                 <h3 class="mt-2 text-xl font-semibold">Bloc opératoire actif</h3>
-                                <p class="mt-2 text-sm text-slate-600">Le suivi est alimenté par l’état des runs et les événements remontés par l’API. Le calcul de masse préalable reste à compléter pour une jauge de progression strictement fiable.</p>
                             </div>
                             <div class="flex flex-wrap gap-3">
                                 <select x-model="selectedConfigId" class="rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm">
@@ -231,11 +261,6 @@
                                         class="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-slate-300">
                                     <i class="fas fa-play mr-2"></i>Lancer
                                 </button>
-                                <button @click="showCrawlerLogs = !showCrawlerLogs"
-                                        class="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                                    <i class="fas fa-align-left mr-2"></i>
-                                    <span x-text="showCrawlerLogs ? 'Masquer les logs' : 'Voir les logs'"></span>
-                                </button>
                             </div>
                         </div>
 
@@ -244,15 +269,23 @@
                                 <span class="text-slate-600">Progression actuelle</span>
                                 <span class="font-semibold text-teal-800" x-text="`${crawlOverview.monitoring.progress_percent ?? 0}%`"></span>
                             </div>
-                            <div class="mt-2 h-4 rounded-full bg-slate-200 overflow-hidden">
+                            <div class="mt-2 h-4 overflow-hidden rounded-full bg-slate-200">
                                 <div class="h-4 rounded-full bg-gradient-to-r from-teal-700 to-emerald-500 transition-all duration-500"
                                      :style="`width: ${crawlOverview.monitoring.progress_percent ?? 0}%`"></div>
                             </div>
                             <p class="mt-3 text-sm text-slate-600" x-text="`Dernier run: ${crawlOverview.monitoring.latest_run_status || 'Aucun run'} • ${crawlOverview.monitoring.latest_run_config_name || '-'}`"></p>
                             <p class="mt-1 text-sm text-slate-600" x-show="implementationStatus" x-text="implementationStatus"></p>
+                            <div class="mt-4">
+                                <button @click="showCrawlerLogs = !showCrawlerLogs"
+                                        :disabled="!crawlIsActive"
+                                        class="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-white">
+                                    <i class="fas fa-align-left mr-2"></i>
+                                    <span x-text="showCrawlerLogs ? 'Masquer les logs' : 'Voir les logs'"></span>
+                                </button>
+                            </div>
                         </div>
 
-                        <div class="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                        <div x-show="crawlIsActive" class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                             <template x-for="queue in queueIndicators" :key="queue.label">
                                 <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
                                     <p class="text-xs uppercase tracking-[0.2em] text-slate-400" x-text="queue.label"></p>
@@ -261,18 +294,21 @@
                                 </div>
                             </template>
                         </div>
+                        <div x-show="!crawlIsActive" class="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                            Aucune queue active. Lance un crawl pour suivre les files de traitement en temps réel.
+                        </div>
 
                         <div x-show="showCrawlerLogs" class="mt-6 fade-in">
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Journal du crawler</label>
-                            <textarea class="w-full rounded-2xl border border-slate-200 bg-slate-950 p-4 text-sm text-emerald-200 font-mono h-[40vh]"
+                            <label class="mb-2 block text-sm font-medium text-slate-700">Journal du crawler</label>
+                            <textarea class="h-[40vh] w-full rounded-2xl border border-slate-200 bg-slate-950 p-4 font-mono text-sm text-emerald-200"
                                       readonly
                                       x-text="operationalLogText"></textarea>
                         </div>
                     </section>
 
-                    <section class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+                    <section class="grid grid-cols-1 gap-5 xl:grid-cols-2">
                         <div class="card p-6">
-                            <div class="flex items-center justify-between mb-4">
+                            <div class="mb-4 flex items-center justify-between">
                                 <h3 class="text-lg font-semibold">Runs récents</h3>
                                 <span class="text-xs text-slate-500">Source: /api/crawls/overview</span>
                             </div>
@@ -296,7 +332,7 @@
                                             <tr>
                                                 <td>
                                                     <p class="font-medium text-slate-900" x-text="run.config_name"></p>
-                                                    <p class="text-xs text-slate-500 break-all" x-text="run.start_path"></p>
+                                                    <p class="break-all text-xs text-slate-500" x-text="run.start_path"></p>
                                                 </td>
                                                 <td>
                                                     <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
@@ -312,7 +348,7 @@
                         </div>
 
                         <div class="card p-6">
-                            <div class="flex items-center justify-between mb-4">
+                            <div class="mb-4 flex items-center justify-between">
                                 <h3 class="text-lg font-semibold">Configuration active</h3>
                                 <button @click="openConfiguration('crawler')" class="text-sm text-teal-700 hover:text-teal-900">Gérer</button>
                             </div>
@@ -323,7 +359,7 @@
                                 </div>
                                 <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                                     <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Chemin de départ</p>
-                                    <p class="mt-2 text-sm break-all" x-text="selectedConfig?.start_path || '-'"></p>
+                                    <p class="mt-2 break-all text-sm" x-text="selectedConfig?.start_path || '-'"></p>
                                 </div>
                                 <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                                     <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Compte</p>
@@ -340,18 +376,25 @@
                 <div x-show="currentView === 'fileExplorer'" class="fade-in">
                     <div class="pt-2">
                         <h2 class="text-3xl font-bold tracking-tight">Explorateur de fichiers</h2>
-                        <p class="mt-2 text-sm text-slate-600">Préparation de la future vue double panneau type explorateur. Le développement détaillé reste planifié dans le backlog.</p>
                     </div>
-                    <div class="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-5">
-                        <div class="card p-6 min-h-[28rem]">
+                    <div class="mt-6 grid grid-cols-1 gap-5 xl:grid-cols-[1fr_auto_1fr]">
+                        <div class="card min-h-[28rem] p-6">
                             <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Panneau source</p>
-                            <div class="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 h-[22rem] flex items-center justify-center text-slate-500 text-sm text-center px-8">
+                            <div class="mt-4 flex h-[22rem] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-8 text-center text-sm text-slate-500">
                                 Vue arborescente source à implémenter.
                             </div>
                         </div>
-                        <div class="card p-6 min-h-[28rem]">
+                        <div class="flex flex-col items-center justify-center gap-3">
+                            <button class="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                                <i class="fas fa-arrow-right"></i>
+                            </button>
+                            <button class="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                                <i class="fas fa-arrow-left"></i>
+                            </button>
+                        </div>
+                        <div class="card min-h-[28rem] p-6">
                             <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Panneau destination</p>
-                            <div class="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 h-[22rem] flex items-center justify-center text-slate-500 text-sm text-center px-8">
+                            <div class="mt-4 flex h-[22rem] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-8 text-center text-sm text-slate-500">
                                 Vue arborescente destination à implémenter.
                             </div>
                         </div>
@@ -361,9 +404,8 @@
                 <div x-show="currentView === 'artifacts'" class="fade-in">
                     <div class="pt-2">
                         <h2 class="text-3xl font-bold tracking-tight">Traitements des artefacts</h2>
-                        <p class="mt-2 text-sm text-slate-600">Préparation de la future page d’action sur les temporaires, doublons et artefacts système.</p>
                     </div>
-                    <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-5">
+                    <div class="mt-6 grid grid-cols-1 gap-5 md:grid-cols-3">
                         <div class="card p-6">
                             <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Temporaires Office</p>
                             <p class="mt-3 text-3xl font-semibold">-</p>
@@ -378,122 +420,15 @@
                         </div>
                     </div>
                     <div class="mt-6 card p-6">
-                        <p class="text-sm text-slate-600">Cette vue sera dédiée aux décisions de suppression, d’ignorance et d’archivage, avec sélection multiple et traitement de masse.</p>
-                    </div>
-                </div>
-
-                <div x-show="currentView === 'configuration'" class="fade-in">
-                    <div class="pt-2 flex items-center justify-between gap-4">
-                        <div>
-                            <h2 class="text-3xl font-bold tracking-tight">Configuration</h2>
-                            <p class="mt-2 text-sm text-slate-600">Accès secondaire aux réglages et diagnostics.</p>
-                        </div>
-                        <button @click="currentView = 'dashboard'" class="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                            Retour au tableau de bord
-                        </button>
-                    </div>
-
-                    <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <button @click="configSection = 'crawler'; loadCrawlConfigs()" class="rounded-2xl px-4 py-3 text-sm font-medium"
-                                :class="configSection === 'crawler' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">Crawler</button>
-                        <button @click="configSection = 'dbAnalysis'; loadDbExplain()" class="rounded-2xl px-4 py-3 text-sm font-medium"
-                                :class="configSection === 'dbAnalysis' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">DB Explain</button>
-                        <button @click="configSection = 'monitoring'; loadMonitoringSummary()" class="rounded-2xl px-4 py-3 text-sm font-medium"
-                                :class="configSection === 'monitoring' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">Monitoring</button>
-                    </div>
-
-                    <div x-show="currentView === 'configuration' && configSection === 'monitoring'" class="fade-in mt-6 card p-6">
                         <div class="flex items-center justify-between">
-                            <div>
-                                <h3 class="text-xl font-semibold">Monitoring</h3>
-                                <p class="mt-1 text-sm text-slate-600">Monitoring temps réel des runs et de la file de traitement.</p>
-                            </div>
-                            <button @click="loadMonitoringSummary()" class="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200">Rafraîchir</button>
+                            <h3 class="text-lg font-semibold">Liste d’artefacts</h3>
+                            <label class="flex items-center gap-2 text-sm text-slate-600">
+                                <input type="checkbox">
+                                <span>Sélectionner tout</span>
+                            </label>
                         </div>
-                        <div x-show="loadingMonitoring" class="text-center py-8">
-                            <div class="loading"></div>
-                        </div>
-                        <div x-show="!loadingMonitoring" class="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                            <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs text-slate-400 uppercase tracking-[0.2em]">Configurations</p><p class="mt-2 text-2xl font-semibold" x-text="monitoring.total_configs ?? 0"></p></div>
-                            <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs text-slate-400 uppercase tracking-[0.2em]">Runs totaux</p><p class="mt-2 text-2xl font-semibold" x-text="monitoring.total_runs ?? 0"></p></div>
-                            <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs text-slate-400 uppercase tracking-[0.2em]">En cours / en file</p><p class="mt-2 text-2xl font-semibold" x-text="`${monitoring.running_runs ?? 0} / ${monitoring.queued_runs ?? 0}`"></p></div>
-                            <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs text-slate-400 uppercase tracking-[0.2em]">Terminés / échecs</p><p class="mt-2 text-2xl font-semibold" x-text="`${monitoring.completed_runs ?? 0} / ${monitoring.failed_runs ?? 0}`"></p></div>
-                        </div>
-                    </div>
-
-                    <div x-show="currentView === 'configuration' && configSection === 'crawler'" class="fade-in mt-6 grid grid-cols-1 xl:grid-cols-2 gap-5">
-                        <div class="card p-6">
-                            <h3 class="text-xl font-semibold">Implémentation rapide</h3>
-                            <form @submit.prevent="createCrawlConfig()" class="mt-5 space-y-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-1">Nom du crawl</label>
-                                    <input type="text" x-model="newCrawl.name" required class="w-full rounded-xl border border-slate-300 px-3 py-2">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-1">Zone de domaine</label>
-                                    <input type="text" x-model="newCrawl.domain_zone" required class="w-full rounded-xl border border-slate-300 px-3 py-2">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-1">Path de départ</label>
-                                    <input type="text" x-model="newCrawl.start_path" placeholder="\\server\share" required class="w-full rounded-xl border border-slate-300 px-3 py-2">
-                                </div>
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                    <input type="text" x-model="newCrawl.connection.username" placeholder="Utilisateur" required class="rounded-xl border border-slate-300 px-3 py-2">
-                                    <input type="password" x-model="newCrawl.connection.password" placeholder="Mot de passe" required class="rounded-xl border border-slate-300 px-3 py-2">
-                                    <input type="text" x-model="newCrawl.connection.domain" placeholder="Domaine" class="rounded-xl border border-slate-300 px-3 py-2">
-                                </div>
-                                <button type="submit" class="rounded-2xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">
-                                    <i class="fas fa-plus mr-2"></i>Créer la configuration
-                                </button>
-                            </form>
-                        </div>
-
-                        <div class="card p-6">
-                            <h3 class="text-xl font-semibold">Configurations disponibles</h3>
-                            <div class="mt-5 space-y-3">
-                                <template x-for="config in crawlConfigs" :key="config.id">
-                                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                                        <div class="flex items-start justify-between gap-3">
-                                            <div>
-                                                <p class="font-semibold" x-text="config.name"></p>
-                                                <p class="text-xs text-slate-500 mt-1" x-text="config.start_path"></p>
-                                            </div>
-                                            <button @click="startCrawl(config.id)" class="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Lancer</button>
-                                        </div>
-                                    </div>
-                                </template>
-                                <div x-show="crawlConfigs.length === 0" class="text-sm text-slate-500">Aucune configuration pour le moment.</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div x-show="currentView === 'configuration' && configSection === 'dbAnalysis'" class="fade-in mt-6 card p-6">
-                        <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
-                            <div>
-                                <h3 class="text-xl font-semibold">Explain / Analyze DB</h3>
-                                <p class="mt-1 text-sm text-slate-600">Diagnostic SQL ciblé sur les requêtes sensibles.</p>
-                            </div>
-                            <div class="flex flex-wrap items-center gap-3">
-                                <select x-model="selectedExplainQuery" class="rounded-xl border border-slate-300 px-3 py-2">
-                                    <option value="files_list">Liste des fichiers</option>
-                                    <option value="duplicates">Doublons</option>
-                                    <option value="stats">Statistiques globales</option>
-                                </select>
-                                <label class="flex items-center text-sm text-slate-700">
-                                    <input type="checkbox" x-model="explainAnalyze" class="mr-2">ANALYZE
-                                </label>
-                                <button @click="loadDbExplain()" class="rounded-2xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">Lancer</button>
-                            </div>
-                        </div>
-                        <div class="mt-5">
-                            <div x-show="loadingDbExplain" class="text-center py-8">
-                                <div class="loading"></div>
-                            </div>
-                            <p x-show="dbExplainError" class="text-red-600" x-text="dbExplainError"></p>
-                            <pre x-show="!loadingDbExplain && dbExplainPlan.length > 0"
-                                 class="rounded-2xl bg-slate-950 p-4 text-sm text-emerald-200 overflow-x-auto"
-                                 x-text="dbExplainPlan.join('\n')"></pre>
-                            <p x-show="!loadingDbExplain && dbExplainPlan.length === 0 && !dbExplainError" class="text-sm text-slate-500">Aucun plan retourné.</p>
+                        <div class="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-sm text-slate-500">
+                            La vue finale présentera les actions Supprimer, Ignorer et Archiver, en masse ou fichier par fichier.
                         </div>
                     </div>
                 </div>
@@ -501,18 +436,222 @@
         </main>
     </div>
 
+    <div x-cloak x-show="showConfigOverlay" class="fixed inset-0 z-40">
+        <div class="absolute inset-0 bg-slate-900/35" @click="closeConfiguration()"></div>
+        <aside class="absolute right-0 top-0 h-full w-full max-w-3xl overflow-y-auto border-l border-slate-200 bg-white shadow-2xl shadow-slate-900/20">
+            <div class="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
+                <div>
+                    <h2 class="text-2xl font-bold tracking-tight">Configuration</h2>
+                    <p class="mt-1 text-sm text-slate-500">Réglages opératoires, base de données et profil utilisateur.</p>
+                </div>
+                <button @click="closeConfiguration()" class="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                    Fermer
+                </button>
+            </div>
+
+            <div class="px-6 py-6">
+                <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+                    <button @click="configSection = 'crawler'; loadCrawlConfigs()" class="rounded-2xl px-4 py-3 text-sm font-medium"
+                            :class="configSection === 'crawler' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">Espaces crawlés</button>
+                    <button @click="configSection = 'dbAnalysis'; loadDbExplain()" class="rounded-2xl px-4 py-3 text-sm font-medium"
+                            :class="configSection === 'dbAnalysis' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">Base de données</button>
+                    <button x-show="currentUser.is_admin" @click="configSection = 'users'" class="rounded-2xl px-4 py-3 text-sm font-medium"
+                            :class="configSection === 'users' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">Utilisateurs</button>
+                    <button @click="configSection = 'profile'" class="rounded-2xl px-4 py-3 text-sm font-medium"
+                            :class="configSection === 'profile' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">Profil</button>
+                    <button @click="configSection = 'monitoring'; loadMonitoringSummary()" class="rounded-2xl px-4 py-3 text-sm font-medium"
+                            :class="configSection === 'monitoring' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">Monitoring</button>
+                </div>
+
+                <div x-show="configSection === 'monitoring'" class="fade-in mt-6 card p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-xl font-semibold">Monitoring</h3>
+                            <p class="mt-1 text-sm text-slate-600">Monitoring temps réel des runs et de la file de traitement.</p>
+                        </div>
+                        <button @click="loadMonitoringSummary()" class="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200">Rafraîchir</button>
+                    </div>
+                    <div x-show="loadingMonitoring" class="py-8 text-center">
+                        <div class="loading"></div>
+                    </div>
+                    <div x-show="!loadingMonitoring" class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs uppercase tracking-[0.2em] text-slate-400">Configurations</p><p class="mt-2 text-2xl font-semibold" x-text="monitoring.total_configs ?? 0"></p></div>
+                        <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs uppercase tracking-[0.2em] text-slate-400">Runs totaux</p><p class="mt-2 text-2xl font-semibold" x-text="monitoring.total_runs ?? 0"></p></div>
+                        <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs uppercase tracking-[0.2em] text-slate-400">En cours / en file</p><p class="mt-2 text-2xl font-semibold" x-text="`${monitoring.running_runs ?? 0} / ${monitoring.queued_runs ?? 0}`"></p></div>
+                        <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs uppercase tracking-[0.2em] text-slate-400">Terminés / échecs</p><p class="mt-2 text-2xl font-semibold" x-text="`${monitoring.completed_runs ?? 0} / ${monitoring.failed_runs ?? 0}`"></p></div>
+                    </div>
+                </div>
+
+                <div x-show="configSection === 'crawler'" class="fade-in mt-6 grid grid-cols-1 gap-5 xl:grid-cols-2">
+                    <div class="card p-6">
+                        <h3 class="text-xl font-semibold">Configurer un espace</h3>
+                        <form @submit.prevent="createCrawlConfig()" class="mt-5 space-y-4">
+                            <div>
+                                <label class="mb-1 block text-sm font-medium text-slate-700">Nom distinctif</label>
+                                <input type="text" x-model="newCrawl.name" required class="w-full rounded-xl border border-slate-300 px-3 py-2">
+                            </div>
+                            <div>
+                                <label class="mb-1 block text-sm font-medium text-slate-700">Zone de domaine</label>
+                                <input type="text" x-model="newCrawl.domain_zone" required class="w-full rounded-xl border border-slate-300 px-3 py-2">
+                            </div>
+                            <div>
+                                <label class="mb-1 block text-sm font-medium text-slate-700">Chemin de départ</label>
+                                <input type="text" x-model="newCrawl.start_path" placeholder="\\server\share" required class="w-full rounded-xl border border-slate-300 px-3 py-2">
+                            </div>
+                            <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+                                <input type="text" x-model="newCrawl.connection.username" placeholder="Utilisateur" required class="rounded-xl border border-slate-300 px-3 py-2">
+                                <input type="password" x-model="newCrawl.connection.password" placeholder="Mot de passe" required class="rounded-xl border border-slate-300 px-3 py-2">
+                                <input type="text" x-model="newCrawl.connection.domain" placeholder="Domaine" class="rounded-xl border border-slate-300 px-3 py-2">
+                            </div>
+                            <button type="submit" class="rounded-2xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">
+                                <i class="fas fa-plus mr-2"></i>Créer la configuration
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="card p-6">
+                        <h3 class="text-xl font-semibold">Configurations disponibles</h3>
+                        <div class="mt-5 space-y-3">
+                            <template x-for="config in crawlConfigs" :key="config.id">
+                                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                    <div class="flex items-start justify-between gap-3">
+                                        <div>
+                                            <p class="font-semibold" x-text="config.name"></p>
+                                            <p class="mt-1 text-xs text-slate-500" x-text="config.start_path"></p>
+                                        </div>
+                                        <button @click="startCrawl(config.id)" class="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Lancer</button>
+                                    </div>
+                                </div>
+                            </template>
+                            <div x-show="crawlConfigs.length === 0" class="text-sm text-slate-500">Aucune configuration pour le moment.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div x-show="configSection === 'users' && currentUser.is_admin" class="fade-in mt-6 card p-6">
+                    <h3 class="text-xl font-semibold">Inscription des utilisateurs</h3>
+                    <div class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Mode actuel</p>
+                            <p class="mt-2 text-base font-semibold">Préparation fonctionnelle</p>
+                            <p class="mt-2 text-sm text-slate-600">Le workflow d’inscription sera raccordé à l’authentification applicative lorsqu’elle sera disponible.</p>
+                        </div>
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Utilisateur connecté</p>
+                            <p class="mt-2 text-base font-semibold" x-text="currentUser.name"></p>
+                            <p class="mt-2 text-sm text-slate-600" x-text="currentUser.role_label"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div x-show="configSection === 'profile'" class="fade-in mt-6 card p-6">
+                    <h3 class="text-xl font-semibold">Profil utilisateur</h3>
+                    <div class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Nom</p>
+                            <p class="mt-2 text-base font-semibold" x-text="currentUser.name"></p>
+                        </div>
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Rôle</p>
+                            <p class="mt-2 text-base font-semibold" x-text="currentUser.role_label"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div x-show="configSection === 'dbAnalysis'" class="fade-in mt-6 card p-6">
+                    <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                        <div>
+                            <h3 class="text-xl font-semibold">Explain / Analyze DB</h3>
+                            <p class="mt-1 text-sm text-slate-600">Diagnostic SQL ciblé sur les requêtes sensibles.</p>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-3">
+                            <select x-model="selectedExplainQuery" class="rounded-xl border border-slate-300 px-3 py-2">
+                                <option value="files_list">Liste des fichiers</option>
+                                <option value="duplicates">Doublons</option>
+                                <option value="stats">Statistiques globales</option>
+                            </select>
+                            <label class="flex items-center text-sm text-slate-700">
+                                <input type="checkbox" x-model="explainAnalyze" class="mr-2">ANALYZE
+                            </label>
+                            <button @click="loadDbExplain()" class="rounded-2xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">Lancer</button>
+                        </div>
+                    </div>
+                    <div class="mt-5">
+                        <div x-show="loadingDbExplain" class="py-8 text-center">
+                            <div class="loading"></div>
+                        </div>
+                        <p x-show="dbExplainError" class="text-red-600" x-text="dbExplainError"></p>
+                        <pre x-show="!loadingDbExplain && dbExplainPlan.length > 0"
+                             class="overflow-x-auto rounded-2xl bg-slate-950 p-4 text-sm text-emerald-200"
+                             x-text="dbExplainPlan.join('\n')"></pre>
+                        <p x-show="!loadingDbExplain && dbExplainPlan.length === 0 && !dbExplainError" class="text-sm text-slate-500">Aucun plan retourné.</p>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <div x-cloak x-show="showCrawlPilot" class="fixed inset-0 z-50">
+        <div class="absolute inset-0 bg-slate-900/40" @click="showCrawlPilot = false"></div>
+        <div class="relative mx-auto mt-24 w-[min(42rem,calc(100vw-2rem))] rounded-[28px] border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-900/20">
+            <div class="flex items-start justify-between gap-4">
+                <div>
+                    <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Pilotage</p>
+                    <h2 class="mt-2 text-2xl font-bold tracking-tight">Piloter le crawl</h2>
+                </div>
+                <button @click="showCrawlPilot = false" class="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                    Fermer
+                </button>
+            </div>
+
+            <div class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <p class="text-xs uppercase tracking-[0.22em] text-slate-400">État courant</p>
+                    <p class="mt-2 text-base font-semibold" x-text="crawlIsActive ? 'Crawler actif' : 'Crawler inactif'"></p>
+                    <p class="mt-2 text-sm text-slate-600" x-text="latestRunLabel"></p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Configuration cible</p>
+                    <select x-model="selectedConfigId" class="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
+                        <option value="">Choisir une configuration</option>
+                        <template x-for="config in crawlOverview.configs" :key="config.id">
+                            <option :value="config.id" x-text="`${config.name} • ${config.start_path}`"></option>
+                        </template>
+                    </select>
+                </div>
+            </div>
+
+            <div class="mt-6 flex flex-wrap gap-3">
+                <button @click="selectedConfigId ? startCrawl(selectedConfigId) : null"
+                        :disabled="!selectedConfigId"
+                        class="rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-slate-300">
+                    <i class="fas fa-play mr-2"></i>Lancer
+                </button>
+                <button @click="selectedConfigId ? startCrawl(selectedConfigId) : null"
+                        :disabled="!selectedConfigId"
+                        class="rounded-2xl border border-teal-300 bg-teal-50 px-4 py-2.5 text-sm font-semibold text-teal-800 hover:bg-teal-100 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
+                    <i class="fas fa-bolt mr-2"></i>Forcer un crawl
+                </button>
+                <button disabled
+                        class="cursor-not-allowed rounded-2xl border border-slate-200 bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-400">
+                    <i class="fas fa-stop mr-2"></i>Arrêter
+                </button>
+            </div>
+            <p class="mt-4 text-sm text-slate-500">L’arrêt de crawl nécessite encore un endpoint backend dédié. Le lancement et le forçage utilisent déjà la configuration active.</p>
+        </div>
+    </div>
+
     <script>
         function openIndexApp() {
             return {
                 currentView: 'dashboard',
                 configSection: 'crawler',
-                loading: false,
-                files: [],
-                duplicates: [],
                 stats: {},
                 wsConnected: false,
                 ws: null,
                 showNotifications: false,
+                showConfigOverlay: false,
+                showCrawlPilot: false,
                 unreadNotifications: 0,
                 showCrawlerLogs: false,
                 selectedExplainQuery: 'files_list',
@@ -523,6 +662,17 @@
                 spaces: [],
                 activeSpace: '',
                 crawlConfigs: [],
+                loadingMonitoring: false,
+                loadingOverview: false,
+                implementationStatus: '',
+                monitoringError: '',
+                selectedConfigId: '',
+                currentUser: {
+                    name: 'Administrateur local',
+                    role: 'admin',
+                    role_label: 'Administrateur',
+                    is_admin: true
+                },
                 crawlOverview: {
                     monitoring: {
                         total_configs: 0,
@@ -551,13 +701,8 @@
                     latest_run_triggered_at: '-',
                     progress_percent: 0
                 },
-                loadingMonitoring: false,
-                loadingOverview: false,
-                implementationStatus: '',
-                monitoringError: '',
-                selectedConfigId: '',
                 systemStatus: {
-                    app_version: '0.1.0',
+                    app_version: '0.3.0',
                     commit_hash: 'dev',
                     build_date: '-',
                     license_label: 'Licence',
@@ -596,11 +741,12 @@
                     await this.loadCrawlOverview();
                     await this.loadSystemStatus();
                     await this.loadCrawlerRuntime();
+                    this.refreshNotifications();
                     this.initWebSocket();
                 },
 
                 openConfiguration(section = 'crawler') {
-                    this.currentView = 'configuration';
+                    this.showConfigOverlay = true;
                     this.configSection = section;
                     if (section === 'crawler') {
                         this.loadCrawlConfigs();
@@ -609,6 +755,10 @@
                     } else if (section === 'monitoring') {
                         this.loadMonitoringSummary();
                     }
+                },
+
+                closeConfiguration() {
+                    this.showConfigOverlay = false;
                 },
 
                 async loadStats() {
@@ -668,6 +818,7 @@
                         if (!this.selectedConfigId && this.crawlOverview.configs.length > 0) {
                             this.selectedConfigId = this.crawlOverview.configs[0].id;
                         }
+                        this.refreshNotifications();
                     } catch (error) {
                         console.error('Erreur overview crawl:', error);
                         this.addLogEntry(`Erreur overview crawl: ${error.message}`);
@@ -686,6 +837,7 @@
                         }
                         this.monitoring = await response.json();
                         this.crawlOverview.monitoring = this.monitoring;
+                        this.refreshNotifications();
                     } catch (error) {
                         this.monitoringError = error.message;
                         this.addLogEntry(`Erreur monitoring: ${error.message}`);
@@ -701,6 +853,7 @@
                             throw new Error('Erreur API system status');
                         }
                         this.systemStatus = await response.json();
+                        this.refreshNotifications();
                     } catch (error) {
                         console.error('Erreur status système:', error);
                         this.addLogEntry(`Erreur status système: ${error.message}`);
@@ -776,6 +929,7 @@
                         const run = await response.json();
                         this.implementationStatus = `Crawl ${run.run_id} en statut ${run.status}`;
                         this.addLogEntry(`Run déclenché: ${run.run_id} (${run.status})`);
+                        this.showCrawlPilot = false;
                         await this.refreshOperations();
                     } catch (error) {
                         this.implementationStatus = `Erreur: ${error.message}`;
@@ -826,6 +980,7 @@
                             this.monitoring = message.data;
                             this.crawlOverview.monitoring = message.data;
                             this.addLogEntry(`Monitoring: ${message.data.latest_run_status || 'mise à jour'}`);
+                            this.refreshNotifications();
                             this.loadCrawlerRuntime();
                         }
                     };
@@ -854,6 +1009,10 @@
                     this.operationalLogs = [`[${stamp}] ${message}`, ...this.operationalLogs].slice(0, 120);
                 },
 
+                refreshNotifications() {
+                    this.unreadNotifications = this.notifications.length;
+                },
+
                 statusBadgeClass(status) {
                     const normalized = (status || '').toLowerCase();
                     if (['completed', 'done', 'success'].includes(normalized)) return 'bg-emerald-100 text-emerald-800';
@@ -864,15 +1023,22 @@
                 },
 
                 formatBytes(bytes) {
-                    if (!bytes) return '0 Bytes';
-                    const k = 1024;
-                    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-                    const i = Math.floor(Math.log(bytes) / Math.log(k));
-                    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+                    if (!bytes) return '0 octet';
+                    if (bytes < 1024) {
+                        return `${new Intl.NumberFormat('fr-FR').format(bytes)} octets`;
+                    }
+                    const units = ['ko', 'Mo', 'Go', 'To'];
+                    let value = bytes / 1024;
+                    let unitIndex = 0;
+                    while (value >= 1024 && unitIndex < units.length - 1) {
+                        value /= 1024;
+                        unitIndex += 1;
+                    }
+                    return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(value)} ${units[unitIndex]}`;
                 },
 
                 formatDate(dateString) {
-                    if (!dateString || dateString === '-') return '-';
+                    if (!dateString || dateString === '-') return 'non défini';
                     return new Date(dateString).toLocaleString('fr-FR');
                 },
 
@@ -906,6 +1072,55 @@
                         return '[aucun événement]';
                     }
                     return this.operationalLogs.join('\n');
+                },
+
+                get notifications() {
+                    const notifications = [];
+                    if (this.systemStatus.newer_version_available) {
+                        notifications.push({
+                            id: 'new-version',
+                            level: 'warning',
+                            title: 'Nouvelle version disponible',
+                            message: 'Une image plus récente est disponible sur GitHub.'
+                        });
+                    }
+                    if ((this.monitoring.failed_runs || 0) > 0) {
+                        notifications.push({
+                            id: 'failed-runs',
+                            level: 'error',
+                            title: 'Runs en erreur',
+                            message: `${this.monitoring.failed_runs} run(s) nécessitent une action opérateur.`
+                        });
+                    }
+                    return notifications;
+                },
+
+                get latestRunLabel() {
+                    return this.crawlOverview.monitoring.latest_run_config_name || 'non défini';
+                },
+
+                get latestRunDateLabel() {
+                    return this.formatDate(this.crawlOverview.monitoring.latest_run_triggered_at);
+                },
+
+                get activeSpaceObject() {
+                    return this.spaces.find((space) => space.path_prefix === this.activeSpace) || null;
+                },
+
+                get activeSpaceName() {
+                    if (!this.activeSpaceObject) return 'Aucun espace détecté';
+                    return this.getSpaceDisplayName(this.activeSpaceObject);
+                },
+
+                get activeSpacePath() {
+                    return this.activeSpaceObject?.path_prefix || 'non défini';
+                },
+
+                getSpaceDisplayName(space) {
+                    const matchingConfig = [...this.crawlOverview.configs, ...this.crawlConfigs].find((config) => {
+                        return config.start_path && (config.start_path.startsWith(space.path_prefix) || space.path_prefix.startsWith(config.start_path));
+                    });
+                    return matchingConfig?.name || space.name || space.path_prefix;
                 }
             };
         }
