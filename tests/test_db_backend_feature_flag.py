@@ -19,14 +19,12 @@ def test_get_db_adapter_invalid_backend(monkeypatch):
 
 def test_get_db_adapter_postgresql(monkeypatch):
     monkeypatch.setenv('OPENINDEX_DB_BACKEND', 'postgresql')
+    api_main._build_postgres_adapter.cache_clear()
 
     calls = {'count': 0}
 
     class FakeCursor:
         def execute(self, query):
-            # Accept both the initial connection test and the table creation queries
-            if query.strip().upper().startswith('SELECT 1'):
-                return
             if 'CREATE TABLE IF NOT EXISTS crawl_configs' in query:
                 return
             if 'CREATE INDEX IF NOT EXISTS idx_crawl_configs_created_at' in query:
@@ -56,13 +54,25 @@ def test_get_db_adapter_postgresql(monkeypatch):
         def commit(self):
             pass
 
-    def fake_connect(**kwargs):
+    class FakePool:
+        def __init__(self, minconn, maxconn, **kwargs):
+            calls['count'] += 1
+            assert kwargs['dbname']
+
+        def getconn(self):
+            return FakeConn()
+
+        def putconn(self, conn):
+            return None
+
+    def fake_connect(**kwargs):  # pragma: no cover - should not be used anymore
         calls['count'] += 1
         assert kwargs['dbname']
         return FakeConn()
 
     monkeypatch.setattr(api_main.psycopg2, 'connect', fake_connect)
+    monkeypatch.setattr(api_main, 'SimpleConnectionPool', FakePool)
 
     adapter = api_main.get_db_adapter()
     assert isinstance(adapter, api_main.PostgreSQLAdapter)
-    assert calls['count'] == 2
+    assert calls['count'] == 1

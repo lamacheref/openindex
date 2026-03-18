@@ -1,0 +1,11 @@
+{
+  "timestamp_utc": "2026-03-18T12:18:11.775691+00:00",
+  "database": "openindex_j4_validation",
+  "dump_path": "/tmp/openindex_j4_validation_rollback_2026-03-18.sql",
+  "pre_counts_csv": "12,7,5,0",
+  "post_counts_csv": "12,7,5,0",
+  "rollback_duration_seconds": 0.41,
+  "restored_identically": true,
+  "status": "completed",
+  "ended_utc": "2026-03-18T12:18:12.183741+00:00"
+}

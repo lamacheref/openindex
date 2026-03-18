@@ -14,12 +14,14 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
   - Vérifier bench comparatif publié avec PostgreSQL.
   - Vérifier rollback relu par un pair.
   - Mettre à jour `CHANGELOG.md` pour le lot de clôture.
-  - Numéro de commit : [commit_hash]
+  - Commit: `124140d`
 
-- [ ] **T-02 — Décision formelle Go/No-Go J4**
+- [x] **T-02 — Décision formelle Go/No-Go J4**
   - Appliquer les critères de `docs/phases/J4_MIGRATION.md`.
-  - Rédiger la décision dans un compte-rendu daté dans `docs/`.
-  - Si No-Go: lister précisément les écarts bloquants et le plan de correction.
+  - Décision rédigée le `2026-03-18` dans `docs/2026-03-18_j4_go-no-go.md`.
+  - Décision retenue: `No-Go`.
+  - Écarts bloquants listés: CI PostgreSQL non validée, rapport d'initialisation/recrawl absent, rollback pairé non prouvé, benchmark J4 incomplet.
+  - Commit: `0f63189`
 
 - [ ] **T-03 — Figer la baseline technique J4**
   - Confirmer PostgreSQL comme backend de données unique dans la doc principale.

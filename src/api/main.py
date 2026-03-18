@@ -11,13 +11,17 @@ from typing import List, Optional, Dict, Any
 import asyncio
 import logging
 import os
+from contextlib import contextmanager
 from datetime import datetime
+from functools import lru_cache
 from uuid import uuid4
 
 try:
     import psycopg2
+    from psycopg2.pool import SimpleConnectionPool
 except ModuleNotFoundError:  # pragma: no cover
     psycopg2 = None
+    SimpleConnectionPool = None
 
 
 # Configuration du logging
@@ -50,12 +54,12 @@ class FileInfo(BaseModel):
     name: str
     size: Optional[int] = None
     checksum: Optional[str] = None
-    last_modified: Optional[str] = None
+    last_modified: Optional[datetime] = None
     is_directory: bool = False
     is_duplicate: bool = False
     duplicate_of: Optional[str] = None
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 class CrawlStats(BaseModel):
@@ -164,6 +168,22 @@ class PostgreSQLAdapter:
 
     def __init__(self, config: Dict[str, Any]):
         self.config = config
+        self._pool = None
+
+    def _get_pool(self):
+        if self._pool is None:
+            if SimpleConnectionPool is None:
+                raise RuntimeError("SimpleConnectionPool indisponible")
+            self._pool = SimpleConnectionPool(1, 5, **self.config)
+        return self._pool
+
+    @contextmanager
+    def get_connection(self):
+        conn = self._get_pool().getconn()
+        try:
+            yield conn
+        finally:
+            self._get_pool().putconn(conn)
 
     def execute_query(self, query: str, params: Optional[List[Any]] = None) -> List[tuple]:
         params = params or []
@@ -171,7 +191,7 @@ class PostgreSQLAdapter:
         if pg_query.startswith("EXPLAIN QUERY PLAN"):
             pg_query = pg_query.replace("EXPLAIN QUERY PLAN", "EXPLAIN", 1)
 
-        with psycopg2.connect(**self.config) as conn:
+        with self.get_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(pg_query, params)
                 return cursor.fetchall()
@@ -190,7 +210,7 @@ class PostgreSQLAdapter:
             query += " WHERE path LIKE %s"
             params.append(f"{space}%")
 
-        with psycopg2.connect(**self.config) as conn:
+        with self.get_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(query, params)
                 row = cursor.fetchone() or (0, 0, 0, 0)
@@ -253,7 +273,7 @@ class PostgreSQLAdapter:
             """,
             "CREATE INDEX IF NOT EXISTS idx_crawl_runs_triggered_at ON crawl_runs(triggered_at)",
         ]
-        with psycopg2.connect(**self.config) as conn:
+        with self.get_connection() as conn:
             with conn.cursor() as cursor:
                 for statement in statements:
                     cursor.execute(statement)
@@ -297,7 +317,7 @@ class PostgreSQLAdapter:
                       connection_username, connection_domain,
                       created_at::text
         """
-        with psycopg2.connect(**self.config) as conn:
+        with self.get_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     query,
@@ -335,7 +355,7 @@ class PostgreSQLAdapter:
             WHERE id::text = %s
             RETURNING id::text, config_id::text, status, triggered_at::text
         """
-        with psycopg2.connect(**self.config) as conn:
+        with self.get_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(query, [config_id])
                 row = cursor.fetchone()
@@ -406,6 +426,21 @@ class PostgreSQLAdapter:
 
 
 # Connexion à la base de données
+@lru_cache(maxsize=1)
+def _build_postgres_adapter(host: str, port: int, dbname: str, user: str, password: str):
+    adapter = PostgreSQLAdapter(
+        {
+            "host": host,
+            "port": port,
+            "dbname": dbname,
+            "user": user,
+            "password": password,
+        }
+    )
+    adapter.ensure_crawl_tables()
+    return adapter
+
+
 def get_db_adapter():
     """Récupère l'adaptateur PostgreSQL (backend unique)."""
     backend = os.getenv("OPENINDEX_DB_BACKEND", "postgresql").strip().lower()
@@ -414,20 +449,13 @@ def get_db_adapter():
         if psycopg2 is None:
             raise HTTPException(status_code=500, detail="psycopg2 non disponible pour le backend PostgreSQL")
 
-        pg_config = {
-            "host": os.getenv("POSTGRES_HOST", "localhost"),
-            "port": int(os.getenv("POSTGRES_PORT", "5432")),
-            "dbname": os.getenv("POSTGRES_DB", "openindex"),
-            "user": os.getenv("POSTGRES_USER", "openindex_user"),
-            "password": os.getenv("POSTGRES_PASSWORD", "openindex_secure_password"),
-        }
+        host = os.getenv("POSTGRES_HOST", "localhost")
+        port = int(os.getenv("POSTGRES_PORT", "5432"))
+        dbname = os.getenv("POSTGRES_DB", "openindex")
+        user = os.getenv("POSTGRES_USER", "openindex_user")
+        password = os.getenv("POSTGRES_PASSWORD", "openindex_secure_password")
         try:
-            with psycopg2.connect(**pg_config) as conn:
-                with conn.cursor() as cursor:
-                    cursor.execute("SELECT 1")
-            adapter = PostgreSQLAdapter(pg_config)
-            adapter.ensure_crawl_tables()
-            return adapter
+            return _build_postgres_adapter(host, port, dbname, user, password)
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Base PostgreSQL indisponible: {exc}") from exc
 
