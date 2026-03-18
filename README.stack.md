@@ -40,3 +40,5 @@ Frontend (3000) -> API FastAPI (8000) -> PostgreSQL (service dédié)
 - PostgreSQL est le backend principal et unique du parcours cible.
 - La migration SQLite est abandonnée sur zone de test: recrawl complet systématique.
 - L’API FastAPI et le frontend actuel sont conservés.
+- La validation J4 est `Go` sur environnement de validation au `2026-03-18`.
+- Références: `docs/2026-03-18_j4_go-no-go.md`, `docs/2026-03-18_j4_execution_report.md`

@@ -1,10 +1,12 @@
-# ROADMAP OpenIndex (J1 relancé — mars 2026)
+# ROADMAP OpenIndex (J4 validé — mars 2026)
 
 ## Vision
 
 Industrialiser OpenIndex pour un usage régulier en environnement SMB volumineux, en sécurisant la chaîne : ingestion -> API -> visualisation -> exploitation.
 
-## Phase J1 (active) — Kickoff opérationnel
+## Phases
+
+## Phase J1 (historique) — Kickoff opérationnel
 
 ### Objectifs J1
 - Cadrer les priorités de sprint et les responsabilités.
@@ -16,7 +18,7 @@ Industrialiser OpenIndex pour un usage régulier en environnement SMB volumineux
 - TODO priorisé avec critères de done explicites.
 - Plan de passage J1 -> J2 validé.
 
-## Phase J2 (prochaine) — Fiabilisation
+## Phase J2 (historique) — Fiabilisation
 
 - Renforcer les tests API/front essentiels.
 - Formaliser procédures d’incident sur la base active.
@@ -28,13 +30,14 @@ Industrialiser OpenIndex pour un usage régulier en environnement SMB volumineux
 - Optimisation des performances de consultation.
 - Durcissement des exécutions longues côté crawler.
 
-## Phase J4 — Consolidation PostgreSQL (active)
+## Phase J4 — Consolidation PostgreSQL (validée)
 
 - Opérer le backend de données principal en PostgreSQL avec vérification de la disponibilité et stabilité.
 - Stabiliser le schéma et la stratégie d’indexation dans PostgreSQL.
 - Exécuter des recrawls complets sur zones de test avec PostgreSQL.
+- Décision `Go` documentée le `2026-03-18`.
 
-## Phase J5 — Qualité et observabilité
+## Phase J5 (prochaine) — Qualité et observabilité
 
 - Couverture de tests mesurée et suivie.
 - Dashboards de santé et alerting.

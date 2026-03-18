@@ -2,9 +2,9 @@
 
 Solution d’indexation de partages SMB avec **crawler Python**, **API FastAPI**, **frontend statique** et **PostgreSQL**.
 
-## État actuel (J4 lancé — mars 2026)
+## État actuel (J4 validé — mars 2026)
 
-Le projet est en **phase J4 (test grandeur nature PostgreSQL)**.
+Le projet a validé sa **phase J4 PostgreSQL** sur environnement de validation avec preuves versionnées.
 
 La base active à date est :
 
@@ -15,6 +15,7 @@ La base active à date est :
 - Build/push d’images automatisé via GitHub Actions (`.github/workflows/docker-stack.yml`).
 
 > La migration SQLite n'est plus nécessaire : la zone de test ayant été massivement modifiée, un recrawl complet est la stratégie de référence.
+> La décision formelle J4 est `Go` : voir `docs/2026-03-18_j4_go-no-go.md` et `docs/2026-03-18_j4_execution_report.md`.
 
 ## Fonctionnalités disponibles
 
@@ -24,6 +25,8 @@ La base active à date est :
 - Détection des doublons (`/api/duplicates`).
 - Monitoring temps réel via WebSocket (`/ws`).
 - Analyse de plan PostgreSQL (`/api/db-explain`).
+
+## Installation
 
 ## Démarrage rapide (socle actuel avec PostgreSQL)
 
@@ -69,6 +72,8 @@ pytest -q tests/test_frontend_structure.py
 - Suivi d’exécution : `TODO.md`
 - Historique : `CHANGELOG.md`
 - Journal détaillé : `docs/`
+- Décision Go/No-Go J4 : `docs/2026-03-18_j4_go-no-go.md`
+- Rapport d'exécution J4 : `docs/2026-03-18_j4_execution_report.md`
 - Runbook hebdo d'exploitation PostgreSQL : `docs/operations/EXPLOITATION.md`
 - Plan d'accélération 2 semaines : `docs/phases/J4_MIGRATION.md`
 
