@@ -82,19 +82,26 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
 - [ ] **T-14 — Revoir l'UI pour le pilotage des tests et crawls**
   - Repenser l'interface actuelle, jugée insuffisante pour le suivi opérationnel.
   - Transformer le tableau de bord en poste opérateur actif: espace courant, dernier lancement, état du crawl, KPI temps réel, progression et journal.
+  - Corriger les finitions demandées dans `docs/definition_ui.md`: nom distinctif d'espace, "non défini" si dernier lancement absent, zone version réduite, suppression du sous-titre inutile, unités en octets, bouton logs déplacé sous la progression et désactivé si le crawler est inactif.
+  - Déporter les explications de conception ou limites techniques hors de l'interface vers `TODO.md` ou la documentation.
   - Rendre visibles les statuts en cours, succès, échecs, durée, artefacts et journaux utiles directement dans l'UI finale.
   - Supprimer les vues de démonstration ou décoratives qui ne servent pas l'exploitation réelle.
   - Prévoir un écran de suivi temps réel orienté exploitation plutôt qu'une simple consultation statique.
+  - Rendre actifs les éléments de shell: cloche de notifications, engrenage de configuration et bouton "Piloter le crawl".
+  - Implémenter l'ouverture de configuration en overlay latéral droite -> gauche pour: espaces crawler, gestion de la base, inscription utilisateurs, profil utilisateur.
+  - Implémenter "Piloter le crawl" sous forme de lightbox permettant de lancer, forcer ou arrêter un crawl.
 
 - [ ] **T-15 — Concevoir l'Explorateur de fichiers double panneau**
   - Définir le comportement cible type Explorateur Windows / Dolphin.
   - Prévoir navigation arborescente, sélection, transfert inter-panneaux et actions contextuelles.
   - Déterminer les endpoints API nécessaires pour une navigation hiérarchique et des opérations de déplacement/copie pilotées.
+  - Prévoir le mode d'entrée dans le menu en cohérence avec les arbitrages de shell validés dans `docs/definition_ui.md`.
 
 - [ ] **T-16 — Concevoir la page de traitements des artefacts**
   - Définir les catégories d'artefacts traitables: temporaires Office, doublons, fichiers système, archives obsolètes.
   - Prévoir KPI dédiés, liste filtrable, sélection multiple et actions de masse.
   - Déterminer les règles métiers entre suppression, ignorance et archivage.
+  - Prévoir les actions unitaires et massives: supprimer, ignorer, archiver, sélectionner tout.
 
 - [ ] **T-13 — Préparer la configuration multi-repository**
   - Définir le modèle de configuration pour plusieurs racines SMB.
