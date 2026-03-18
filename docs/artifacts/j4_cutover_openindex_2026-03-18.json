@@ -1,0 +1,53 @@
+{
+  "timestamp_utc": "2026-03-18T13:02:14.853749+00:00",
+  "status": "completed",
+  "mode": "definitive_cutover",
+  "base_path": "\\\\172.16.252.34\\Public\\SMIDEN",
+  "server": "172.16.252.34",
+  "share_name": "Public",
+  "domain": "SMIDEN",
+  "database": "openindex",
+  "max_depth": null,
+  "automatic_crawler_stopped": true,
+  "crawler_config": {
+    "max_workers": 4,
+    "delay_between_requests": 0.1,
+    "large_file_threshold": 104857600,
+    "max_queue_size": 1000
+  },
+  "stats": {
+    "total_directories": 8,
+    "total_files": 5,
+    "total_size": 251755,
+    "large_files": 0,
+    "duplicate_files": 0,
+    "duplicate_size": 0,
+    "errors": 0,
+    "start_time": 1773838934.8538485,
+    "end_time": 1773838936.9225645,
+    "last_activity": 1773838936.141903
+  },
+  "db_counts": {
+    "files_rows": 12,
+    "directories_rows": 7,
+    "non_directories_rows": 5,
+    "duplicate_rows": 0,
+    "stats_rows": 1
+  },
+  "paths": [
+    "\\\\172.16.252.34\\Public\\SMIDEN\\BESOIN TELEPHONIE (4).xlsx",
+    "\\\\172.16.252.34\\Public\\SMIDEN\\Base des locaux.xlsx",
+    "\\\\172.16.252.34\\Public\\SMIDEN\\Master",
+    "\\\\172.16.252.34\\Public\\SMIDEN\\Mots de passes - codes wifi - carnet d'adresse.xlsx",
+    "\\\\172.16.252.34\\Public\\SMIDEN\\Multim\u00e9dia",
+    "\\\\172.16.252.34\\Public\\SMIDEN\\SCAN",
+    "\\\\172.16.252.34\\Public\\SMIDEN\\SIG",
+    "\\\\172.16.252.34\\Public\\SMIDEN\\Sources bodet",
+    "\\\\172.16.252.34\\Public\\SMIDEN\\Technique",
+    "\\\\172.16.252.34\\Public\\SMIDEN\\bd \u00e9lus smiden mandat 2020-2026.xlsx",
+    "\\\\172.16.252.34\\Public\\SMIDEN\\coordination",
+    "\\\\172.16.252.34\\Public\\SMIDEN\\rh mutualise.docx"
+  ],
+  "error": null,
+  "ended_utc": "2026-03-18T13:02:16.961299+00:00"
+}
