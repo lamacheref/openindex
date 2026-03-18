@@ -8,6 +8,7 @@ import os
 import sys
 import hashlib
 import time
+import argparse
 import threading
 import subprocess
 from datetime import datetime
@@ -846,42 +847,53 @@ class SMBCrawlerPostgreSQL:
         self.stop_event.set()
 
 
-def main():
-    """Fonction principale pour tester le crawler PostgreSQL."""
-    
-    # Configuration
+def parse_unc_start_path(start_path):
+    """Extrait serveur, partage et chemin UNC normalisé depuis start_path."""
+    normalized = start_path.strip().rstrip("\\")
+    parts = [part for part in normalized.split("\\") if part]
+    if len(parts) < 2:
+        raise ValueError(f"Chemin de départ invalide: {start_path}")
+    server = parts[0]
+    share_name = parts[1]
+    base_path = f"\\\\{server}\\{share_name}"
+    if len(parts) > 2:
+        base_path += "\\" + "\\".join(parts[2:])
+    return server, share_name, base_path
+
+
+def build_postgres_config():
+    return {
+        'host': os.getenv('POSTGRES_HOST', 'localhost'),
+        'port': int(os.getenv('POSTGRES_PORT', '5432')),
+        'database': os.getenv('POSTGRES_DB', 'openindex'),
+        'user': os.getenv('POSTGRES_USER', 'openindex_user'),
+        'password': os.getenv('POSTGRES_PASSWORD', 'openindex_secure_password')
+    }
+
+
+def run_single_crawl(run_payload):
+    """Exécute une exploration à partir d'un run réservé en base."""
     config_manager = ConfigManager()
-    
-    # Configuration SMB
-    smb_config = config_manager.get_smb_credentials()
-    
-    # Configuration du crawler
     crawler_config = config_manager.get_crawler_config()
-    
-    # Mode debug
     debug_mode = os.getenv('DEBUG', 'false').lower() == 'true'
-    
-    print("🚀 Démarrage du crawler SMB avec PostgreSQL...")
-    print(f"🖥️ Serveur: {smb_config['server']}")
-    print(f"📁 Partage: {smb_config['share_name']}")
-    print(f"👤 Utilisateur: {smb_config['username']}")
+    server, share_name, base_path = parse_unc_start_path(run_payload["start_path"])
+
+    print("🚀 Démarrage de l'exploration SMB avec PostgreSQL...")
+    print(f"🖥️ Serveur: {server}")
+    print(f"📁 Partage: {share_name}")
+    print(f"📍 Chemin: {base_path}")
+    print(f"👤 Utilisateur: {run_payload['connection_username']}")
     print(f"🔧 Workers: {crawler_config['max_workers']}")
     print(f"⏱️ Délai: {crawler_config['delay_between_requests']}s")
-    
-    # Créer le crawler
+
     crawler = SMBCrawlerPostgreSQL(
-        server=smb_config["server"],
-        username=smb_config["username"],
-        password=smb_config["password"],
-        share_name=smb_config["share_name"],
-        domain=smb_config["domain"],
-        postgres_config={
-            'host': os.getenv('POSTGRES_HOST', 'localhost'),
-            'port': int(os.getenv('POSTGRES_PORT', '5432')),
-            'database': os.getenv('POSTGRES_DB', 'openindex'),
-            'user': os.getenv('POSTGRES_USER', 'openindex_user'),
-            'password': os.getenv('POSTGRES_PASSWORD', 'openindex_secure_password')
-        },
+        server=server,
+        username=run_payload["connection_username"],
+        password=run_payload["connection_password"],
+        share_name=share_name,
+        domain=run_payload.get("connection_domain") or '',
+        crawl_config_id=run_payload["config_id"],
+        postgres_config=build_postgres_config(),
         max_workers=crawler_config["max_workers"],
         delay_between_requests=crawler_config["delay_between_requests"],
         max_queue_size=crawler_config["max_queue_size"],
@@ -889,27 +901,47 @@ def main():
         large_file_threshold=crawler_config["large_file_threshold"],
         debug=debug_mode
     )
-    
-    # Afficher la configuration du logging
+
     print(f"📝 Logs configurés dans: logs/openindex.log")
     print(f"🔧 Seuil des gros fichiers: {crawler_config['large_file_threshold'] / 1024 / 1024:.1f} MB")
     print(f"🐘 Base de données: PostgreSQL 17")
-    
-    print("\nDémarrage du crawl récursif complet...")
+
+    print("\nDémarrage de l'exploration récursive...")
     print("Appuyez sur Ctrl+C pour arrêter")
-    
-    try:
-        # Démarrer le crawl
-        stats = crawler.start_crawl()
-        
-        print("\n✅ Crawl terminé avec succès!")
-        
-    except KeyboardInterrupt:
-        print("\n⚠️ Arrêt demandé par l'utilisateur")
-        crawler.stop()
-    except Exception as e:
-        print(f"\n❌ Erreur lors du crawl: {e}")
-        crawler.stop()
+
+    return crawler.start_crawl(base_path=base_path)
+
+
+def worker_loop(poll_interval_seconds=5):
+    """Boucle principale du service d'exploration, pilotée par crawl_runs."""
+    adapter = PostgreSQLAdapter(build_postgres_config())
+    adapter.initialize_database()
+    print("👂 Worker d'exploration prêt, en attente de runs...")
+
+    while True:
+        run_payload = adapter.wait_for_next_run(poll_interval_seconds=poll_interval_seconds)
+        run_id = run_payload["run_id"]
+        try:
+            print(f"▶️ Run réservé: {run_id} pour {run_payload['name']} ({run_payload['start_path']})")
+            run_single_crawl(run_payload)
+            adapter.update_crawl_run_status(run_id, "completed")
+            print(f"✅ Run terminé: {run_id}")
+        except KeyboardInterrupt:
+            adapter.update_crawl_run_status(run_id, "failed")
+            raise
+        except Exception as exc:
+            adapter.update_crawl_run_status(run_id, "failed")
+            print(f"❌ Run en échec {run_id}: {exc}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Service d'exploration OpenIndex")
+    parser.add_argument("mode", nargs="?", default="worker", choices=["worker"])
+    parser.add_argument("--poll-interval", type=int, default=5)
+    args = parser.parse_args()
+
+    if args.mode == "worker":
+        worker_loop(poll_interval_seconds=args.poll_interval)
 
 
 if __name__ == "__main__":

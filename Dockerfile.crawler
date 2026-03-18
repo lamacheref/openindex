@@ -45,4 +45,4 @@ ENV OPENINDEX_BUILD_DATE=${OPENINDEX_BUILD_DATE}
 
 # Point d'entrée par défaut
 ENTRYPOINT ["python", "src/smb_crawler_postgresql.py"]
-CMD ["--help"]
+CMD ["worker"]

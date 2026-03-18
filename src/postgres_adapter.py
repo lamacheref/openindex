@@ -9,6 +9,7 @@ import psycopg2.extras
 from psycopg2.extras import execute_values
 import os
 import logging
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -424,6 +425,82 @@ class PostgreSQLAdapter:
         except Exception as e:
             self.logger.error(f"Échec de connexion PostgreSQL: {e}")
             return False
+
+    def claim_next_crawl_run(self) -> Optional[Dict[str, Any]]:
+        """Réserve le prochain run en attente et retourne sa configuration complète."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            try:
+                cursor.execute(
+                    """
+                    WITH next_run AS (
+                        SELECT id
+                        FROM crawl_runs
+                        WHERE LOWER(status) IN ('queued', 'pending')
+                        ORDER BY triggered_at ASC
+                        LIMIT 1
+                        FOR UPDATE SKIP LOCKED
+                    )
+                    UPDATE crawl_runs AS r
+                    SET status = 'running'
+                    FROM next_run
+                    WHERE r.id = next_run.id
+                    RETURNING r.id::text AS run_id, r.config_id::text AS config_id, r.triggered_at::text
+                    """
+                )
+                run = cursor.fetchone()
+                if not run:
+                    conn.commit()
+                    return None
+
+                cursor.execute(
+                    """
+                    SELECT
+                        id::text AS config_id,
+                        name,
+                        domain_zone,
+                        start_path,
+                        include_paths,
+                        exclude_paths,
+                        connection_username,
+                        connection_password,
+                        connection_domain
+                    FROM crawl_configs
+                    WHERE id::text = %s
+                    """,
+                    [run["config_id"]],
+                )
+                config = cursor.fetchone()
+                conn.commit()
+                if not config:
+                    return None
+                payload = dict(run)
+                payload.update(dict(config))
+                return payload
+            except Exception:
+                conn.rollback()
+                raise
+
+    def update_crawl_run_status(self, run_id: str, status: str) -> None:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    "UPDATE crawl_runs SET status = %s WHERE id::text = %s",
+                    [status, run_id],
+                )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+
+    def wait_for_next_run(self, poll_interval_seconds: int = 5) -> Dict[str, Any]:
+        """Boucle de polling simple jusqu'à trouver un run à traiter."""
+        while True:
+            run = self.claim_next_crawl_run()
+            if run:
+                return run
+            time.sleep(poll_interval_seconds)
 
 # Fonction utilitaire pour créer l'adaptateur à partir de la configuration
 def create_postgres_adapter(config_manager) -> PostgreSQLAdapter:
