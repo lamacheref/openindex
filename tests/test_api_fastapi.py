@@ -367,3 +367,34 @@ def test_get_system_status_endpoint(client, monkeypatch):
     assert payload["commit_hash"] == "abc1234"
     assert payload["build_date"] == "2026-03-18"
     assert payload["newer_version_available"] is True
+
+
+def test_get_crawler_runtime_endpoint(client, monkeypatch, tmp_path):
+    log_file = tmp_path / "smb_crawler_postgresql.log"
+    log_file.write_text("line 1\nline 2\nline 3\n", encoding="utf-8")
+    monkeypatch.setenv("OPENINDEX_CRAWLER_LOG_PATH", str(log_file))
+
+    created = client(
+        "POST",
+        "/api/crawl-configs",
+        json={
+            "name": "Crawl Runtime",
+            "domain_zone": "FR",
+            "start_path": "\\\\172.16.252.34\\Public\\SMIDEN",
+            "include_paths": [],
+            "exclude_paths": [],
+            "connection": {
+                "username": "adminsmiden",
+                "password": "secret",
+                "domain": None,
+            },
+        },
+    ).json()
+    client("POST", "/api/crawls/start", json={"config_id": created["id"]})
+
+    response = client("GET", "/api/crawler/runtime", params={"log_limit": 2})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["latest_config_name"] == "Crawl Runtime"
+    assert len(payload["queue_indicators"]) == 4
+    assert payload["log_lines"] == ["line 2", "line 3"]

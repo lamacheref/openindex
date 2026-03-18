@@ -14,6 +14,7 @@ import os
 from contextlib import contextmanager
 from datetime import datetime
 from functools import lru_cache
+from pathlib import Path
 from uuid import uuid4
 
 try:
@@ -165,6 +166,23 @@ class SystemStatus(BaseModel):
     repository_url: str
     newer_version_available: bool
     newest_version_url: Optional[str] = None
+
+
+class QueueIndicator(BaseModel):
+    key: str
+    label: str
+    value: int
+    detail: str
+
+
+class CrawlerRuntime(BaseModel):
+    active: bool
+    latest_status: str
+    latest_config_name: str
+    progress_percent: float
+    queue_indicators: List[QueueIndicator]
+    log_lines: List[str]
+    log_source: str
 
 
 def extract_space_prefix(path: str) -> Optional[str]:
@@ -759,6 +777,18 @@ def ensure_crawl_storage_ready(db: Any) -> None:
         db.ensure_crawl_tables()
 
 
+def _tail_log_lines(log_path: Path, limit: int = 80) -> List[str]:
+    if not log_path.exists() or not log_path.is_file():
+        return []
+
+    try:
+        with log_path.open("r", encoding="utf-8", errors="replace") as handle:
+            lines = handle.readlines()
+        return [line.rstrip("\n") for line in lines[-limit:]]
+    except OSError:
+        return []
+
+
 @app.get("/api/crawl-configs", response_model=List[CrawlConfigPublic])
 async def list_crawl_configs():
     try:
@@ -854,6 +884,57 @@ async def get_system_status():
     except Exception as e:
         logger.error(f"Erreur get_system_status: {e}")
         raise HTTPException(status_code=500, detail="Erreur lors du chargement du statut système")
+
+
+@app.get("/api/crawler/runtime", response_model=CrawlerRuntime)
+async def get_crawler_runtime(log_limit: int = 80):
+    try:
+        db = get_db_adapter()
+        ensure_crawl_storage_ready(db)
+        monitoring = db.get_monitoring_summary()
+
+        queue_indicators = [
+            QueueIndicator(
+                key="queued_runs",
+                label="Queue en file",
+                value=monitoring["queued_runs"],
+                detail="Runs en attente de traitement",
+            ),
+            QueueIndicator(
+                key="running_runs",
+                label="Queue active",
+                value=monitoring["running_runs"],
+                detail="Runs en cours",
+            ),
+            QueueIndicator(
+                key="completed_runs",
+                label="Queue terminee",
+                value=monitoring["completed_runs"],
+                detail="Runs valides",
+            ),
+            QueueIndicator(
+                key="failed_runs",
+                label="Queue en erreur",
+                value=monitoring["failed_runs"],
+                detail="Runs a diagnostiquer",
+            ),
+        ]
+
+        log_path = Path(os.getenv("OPENINDEX_CRAWLER_LOG_PATH", "logs/smb_crawler_postgresql.log"))
+        log_lines = _tail_log_lines(log_path, limit=log_limit)
+
+        return CrawlerRuntime(
+            active=monitoring["running_runs"] > 0,
+            latest_status=monitoring["latest_run_status"],
+            latest_config_name=monitoring["latest_run_config_name"],
+            progress_percent=monitoring["progress_percent"],
+            queue_indicators=queue_indicators,
+            log_lines=log_lines,
+            log_source=str(log_path),
+        )
+    except Exception as e:
+        logger.error(f"Erreur get_crawler_runtime: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors du chargement du runtime crawler")
 
 
 @app.websocket("/ws")

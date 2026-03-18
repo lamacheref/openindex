@@ -567,6 +567,15 @@
                     newer_version_available: false,
                     newest_version_url: null
                 },
+                crawlerRuntime: {
+                    active: false,
+                    latest_status: 'Aucun run',
+                    latest_config_name: '-',
+                    progress_percent: 0,
+                    queue_indicators: [],
+                    log_lines: [],
+                    log_source: 'logs/smb_crawler_postgresql.log'
+                },
                 operationalLogs: [],
                 newCrawl: {
                     name: '',
@@ -587,6 +596,7 @@
                     await this.loadMonitoringSummary();
                     await this.loadCrawlOverview();
                     await this.loadSystemStatus();
+                    await this.loadCrawlerRuntime();
                     this.initWebSocket();
                 },
 
@@ -698,6 +708,19 @@
                     }
                 },
 
+                async loadCrawlerRuntime() {
+                    try {
+                        const response = await fetch('/api/crawler/runtime?log_limit=120');
+                        if (!response.ok) {
+                            throw new Error('Erreur API crawler runtime');
+                        }
+                        this.crawlerRuntime = await response.json();
+                    } catch (error) {
+                        console.error('Erreur runtime crawler:', error);
+                        this.addLogEntry(`Erreur runtime crawler: ${error.message}`);
+                    }
+                },
+
                 async createCrawlConfig() {
                     try {
                         const payload = {
@@ -804,6 +827,7 @@
                             this.monitoring = message.data;
                             this.crawlOverview.monitoring = message.data;
                             this.addLogEntry(`Monitoring: ${message.data.latest_run_status || 'mise à jour'}`);
+                            this.loadCrawlerRuntime();
                         }
                     };
 
@@ -820,7 +844,8 @@
                         this.loadCrawlConfigs(),
                         this.loadMonitoringSummary(),
                         this.loadCrawlOverview(),
-                        this.loadSystemStatus()
+                        this.loadSystemStatus(),
+                        this.loadCrawlerRuntime()
                     ]);
                     this.addLogEntry('Rafraîchissement manuel exécuté');
                 },
@@ -853,7 +878,7 @@
                 },
 
                 get crawlIsActive() {
-                    return (this.crawlOverview.monitoring.running_runs || 0) > 0;
+                    return this.crawlerRuntime.active || (this.crawlOverview.monitoring.running_runs || 0) > 0;
                 },
 
                 get selectedConfig() {
@@ -868,31 +893,16 @@
                 },
 
                 get queueIndicators() {
-                    return [
-                        {
-                            label: 'Queue en file',
-                            value: this.monitoring.queued_runs ?? 0,
-                            detail: 'Runs en attente de traitement'
-                        },
-                        {
-                            label: 'Queue active',
-                            value: this.monitoring.running_runs ?? 0,
-                            detail: 'Runs en cours'
-                        },
-                        {
-                            label: 'Queue terminée',
-                            value: this.monitoring.completed_runs ?? 0,
-                            detail: 'Runs validés'
-                        },
-                        {
-                            label: 'Queue en erreur',
-                            value: this.monitoring.failed_runs ?? 0,
-                            detail: 'Runs à diagnostiquer'
-                        }
-                    ];
+                    if (this.crawlerRuntime.queue_indicators && this.crawlerRuntime.queue_indicators.length > 0) {
+                        return this.crawlerRuntime.queue_indicators;
+                    }
+                    return [];
                 },
 
                 get operationalLogText() {
+                    if (this.crawlerRuntime.log_lines && this.crawlerRuntime.log_lines.length > 0) {
+                        return this.crawlerRuntime.log_lines.join('\n');
+                    }
                     if (this.operationalLogs.length === 0) {
                         return '[aucun événement]';
                     }
