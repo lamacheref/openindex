@@ -25,7 +25,7 @@ def test_frontend_has_expected_views_and_bindings():
     assert "Configurer un espace" in html
     assert "Monitoring temps réel" in html
     assert "Explain / Analyze DB" in html
-    assert "Journal du crawler" in html
+    assert "Journal de l'explorateur" in html
     assert "Version" in html
 
 
@@ -79,12 +79,12 @@ def test_configuration_access_and_sections_exist():
 def test_dashboard_has_active_crawl_block_and_log_toggle():
     html = read_frontend_html()
 
-    assert "Avancement du crawl" in html
+    assert "Avancement de l'exploration" in html
     assert "Voir les logs" in html
     assert "showCrawlerLogs" in html
-    assert "Journal du crawler" in html
+    assert "Journal de l'explorateur" in html
     assert "showCrawlPilot = true" in html
-    assert "Piloter le crawl" in html
+    assert "Piloter l'exploration" in html
 
 
 def test_notifications_and_operator_overlays_are_present():

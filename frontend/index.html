@@ -70,7 +70,7 @@
                     </div>
                 </div>
 
-                <div class="relative flex items-center gap-2 pr-4">
+                <div class="flex items-center gap-2 pr-4">
                     <button @click="showNotifications = !showNotifications"
                             class="relative h-10 w-10 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
                             aria-label="Notifications"
@@ -83,7 +83,7 @@
                     <div x-cloak
                          x-show="showNotifications"
                          @click.outside="showNotifications = false"
-                         class="absolute right-24 top-12 z-50 w-80 rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-900/10">
+                         class="fixed right-[1em] top-[calc(4rem+1em)] z-[70] w-[min(24rem,calc(100vw-2em))] rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-900/10">
                         <div class="flex items-center justify-between">
                             <h2 class="text-sm font-semibold text-slate-900">Notifications</h2>
                             <span class="text-xs text-slate-500" x-text="`${notifications.length}`"></span>
@@ -148,7 +148,7 @@
                 </section>
 
                 <section class="card p-5">
-                    <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">État du crawl</p>
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">État de l'exploration</p>
                     <div class="mt-3 flex items-center justify-between">
                         <span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium"
                               :class="crawlIsActive ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'">
@@ -218,7 +218,7 @@
                                     <i class="fas fa-rotate mr-2"></i>Rafraîchir
                                 </button>
                                 <button @click="showCrawlPilot = true" class="rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                                    <i class="fas fa-sliders mr-2"></i>Piloter le crawl
+                                    <i class="fas fa-sliders mr-2"></i>Piloter l'exploration
                                 </button>
                             </div>
                         </div>
@@ -246,18 +246,12 @@
                     <section class="card p-6">
                         <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                             <div>
-                                <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Avancement du crawl</p>
+                                <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Avancement de l'exploration</p>
                                 <h3 class="mt-2 text-xl font-semibold">Bloc opératoire actif</h3>
                             </div>
                             <div class="flex flex-wrap gap-3">
-                                <select x-model="selectedConfigId" class="rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm">
-                                    <option value="">Choisir une configuration</option>
-                                    <template x-for="config in crawlOverview.configs" :key="config.id">
-                                        <option :value="config.id" x-text="`${config.name} • ${config.start_path}`"></option>
-                                    </template>
-                                </select>
-                                <button @click="selectedConfigId ? startCrawl(selectedConfigId) : null"
-                                        :disabled="!selectedConfigId"
+                                <button @click="activeSpaceConfigId ? startCrawl(activeSpaceConfigId) : null"
+                                        :disabled="!activeSpaceConfigId"
                                         class="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-slate-300">
                                     <i class="fas fa-play mr-2"></i>Lancer
                                 </button>
@@ -295,11 +289,11 @@
                             </template>
                         </div>
                         <div x-show="!crawlIsActive" class="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm text-slate-500">
-                            Aucune queue active. Lance un crawl pour suivre les files de traitement en temps réel.
+                            Aucune queue active. Lance une exploration pour suivre les files de traitement en temps réel.
                         </div>
 
                         <div x-show="showCrawlerLogs" class="mt-6 fade-in">
-                            <label class="mb-2 block text-sm font-medium text-slate-700">Journal du crawler</label>
+                            <label class="mb-2 block text-sm font-medium text-slate-700">Journal de l'explorateur</label>
                             <textarea class="h-[40vh] w-full rounded-2xl border border-slate-200 bg-slate-950 p-4 font-mono text-sm text-emerald-200"
                                       readonly
                                       x-text="operationalLogText"></textarea>
@@ -436,7 +430,7 @@
         </main>
     </div>
 
-    <div x-cloak x-show="showConfigOverlay" class="fixed inset-0 z-40">
+    <div x-cloak x-show="showConfigOverlay" class="fixed inset-0 z-[80]">
         <div class="absolute inset-0 bg-slate-900/35" @click="closeConfiguration()"></div>
         <aside class="absolute right-0 top-0 h-full w-full max-w-3xl overflow-y-auto border-l border-slate-200 bg-white shadow-2xl shadow-slate-900/20">
             <div class="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
@@ -452,7 +446,7 @@
             <div class="px-6 py-6">
                 <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
                     <button @click="configSection = 'crawler'; loadCrawlConfigs()" class="rounded-2xl px-4 py-3 text-sm font-medium"
-                            :class="configSection === 'crawler' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">Espaces crawlés</button>
+                            :class="configSection === 'crawler' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">Espaces explorés</button>
                     <button @click="configSection = 'dbAnalysis'; loadDbExplain()" class="rounded-2xl px-4 py-3 text-sm font-medium"
                             :class="configSection === 'dbAnalysis' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">Base de données</button>
                     <button x-show="currentUser.is_admin" @click="configSection = 'users'" class="rounded-2xl px-4 py-3 text-sm font-medium"
@@ -597,7 +591,7 @@
             <div class="flex items-start justify-between gap-4">
                 <div>
                     <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Pilotage</p>
-                    <h2 class="mt-2 text-2xl font-bold tracking-tight">Piloter le crawl</h2>
+                    <h2 class="mt-2 text-2xl font-bold tracking-tight">Piloter l'exploration</h2>
                 </div>
                 <button @click="showCrawlPilot = false" class="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
                     Fermer
@@ -607,7 +601,7 @@
             <div class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <p class="text-xs uppercase tracking-[0.22em] text-slate-400">État courant</p>
-                    <p class="mt-2 text-base font-semibold" x-text="crawlIsActive ? 'Crawler actif' : 'Crawler inactif'"></p>
+                    <p class="mt-2 text-base font-semibold" x-text="crawlIsActive ? 'Explorateur actif' : 'Explorateur inactif'"></p>
                     <p class="mt-2 text-sm text-slate-600" x-text="latestRunLabel"></p>
                 </div>
                 <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -630,14 +624,14 @@
                 <button @click="selectedConfigId ? startCrawl(selectedConfigId) : null"
                         :disabled="!selectedConfigId"
                         class="rounded-2xl border border-teal-300 bg-teal-50 px-4 py-2.5 text-sm font-semibold text-teal-800 hover:bg-teal-100 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
-                    <i class="fas fa-bolt mr-2"></i>Forcer un crawl
+                    <i class="fas fa-bolt mr-2"></i>Forcer une exploration
                 </button>
                 <button disabled
                         class="cursor-not-allowed rounded-2xl border border-slate-200 bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-400">
                     <i class="fas fa-stop mr-2"></i>Arrêter
                 </button>
             </div>
-            <p class="mt-4 text-sm text-slate-500">L’arrêt de crawl nécessite encore un endpoint backend dédié. Le lancement et le forçage utilisent déjà la configuration active.</p>
+            <p class="mt-4 text-sm text-slate-500">L’arrêt de l'exploration nécessite encore un endpoint backend dédié. Le lancement et le forçage utilisent déjà la configuration active.</p>
         </div>
     </div>
 
@@ -782,6 +776,7 @@
                         if (!this.activeSpace && this.spaces.length > 0) {
                             this.activeSpace = this.spaces[0].path_prefix;
                         }
+                        this.syncSelectedConfigWithActiveSpace();
                     } catch (error) {
                         console.error('Erreur espaces:', error);
                         this.addLogEntry(`Erreur espaces: ${error.message}`);
@@ -790,6 +785,7 @@
 
                 async selectSpace(spacePrefix) {
                     this.activeSpace = spacePrefix;
+                    this.syncSelectedConfigWithActiveSpace();
                     await this.loadStats();
                     this.addLogEntry(`Espace actif: ${spacePrefix}`);
                 },
@@ -798,12 +794,10 @@
                     try {
                         const response = await fetch('/api/crawl-configs');
                         this.crawlConfigs = await response.json();
-                        if (!this.selectedConfigId && this.crawlConfigs.length > 0) {
-                            this.selectedConfigId = this.crawlConfigs[0].id;
-                        }
+                        this.syncSelectedConfigWithActiveSpace();
                     } catch (error) {
-                        console.error('Erreur configs crawl:', error);
-                        this.addLogEntry(`Erreur configs crawl: ${error.message}`);
+                        console.error('Erreur configs exploration:', error);
+                        this.addLogEntry(`Erreur configs exploration: ${error.message}`);
                     }
                 },
 
@@ -815,13 +809,11 @@
                             throw new Error('Erreur API overview');
                         }
                         this.crawlOverview = await response.json();
-                        if (!this.selectedConfigId && this.crawlOverview.configs.length > 0) {
-                            this.selectedConfigId = this.crawlOverview.configs[0].id;
-                        }
+                        this.syncSelectedConfigWithActiveSpace();
                         this.refreshNotifications();
                     } catch (error) {
-                        console.error('Erreur overview crawl:', error);
-                        this.addLogEntry(`Erreur overview crawl: ${error.message}`);
+                        console.error('Erreur overview exploration:', error);
+                        this.addLogEntry(`Erreur overview exploration: ${error.message}`);
                     } finally {
                         this.loadingOverview = false;
                     }
@@ -864,12 +856,12 @@
                     try {
                         const response = await fetch('/api/crawler/runtime?log_limit=120');
                         if (!response.ok) {
-                            throw new Error('Erreur API crawler runtime');
+                            throw new Error('Erreur API explorateur runtime');
                         }
                         this.crawlerRuntime = await response.json();
                     } catch (error) {
-                        console.error('Erreur runtime crawler:', error);
-                        this.addLogEntry(`Erreur runtime crawler: ${error.message}`);
+                        console.error('Erreur runtime explorateur:', error);
+                        this.addLogEntry(`Erreur runtime explorateur: ${error.message}`);
                     }
                 },
 
@@ -927,13 +919,13 @@
                             throw new Error('Démarrage impossible');
                         }
                         const run = await response.json();
-                        this.implementationStatus = `Crawl ${run.run_id} en statut ${run.status}`;
+                        this.implementationStatus = `Exploration ${run.run_id} en statut ${run.status}`;
                         this.addLogEntry(`Run déclenché: ${run.run_id} (${run.status})`);
                         this.showCrawlPilot = false;
                         await this.refreshOperations();
                     } catch (error) {
                         this.implementationStatus = `Erreur: ${error.message}`;
-                        this.addLogEntry(`Erreur lancement crawl: ${error.message}`);
+                        this.addLogEntry(`Erreur lancement exploration: ${error.message}`);
                     }
                 },
 
@@ -1009,6 +1001,15 @@
                     this.operationalLogs = [`[${stamp}] ${message}`, ...this.operationalLogs].slice(0, 120);
                 },
 
+                syncSelectedConfigWithActiveSpace() {
+                    const config = this.findConfigForSpace(this.activeSpace);
+                    if (config) {
+                        this.selectedConfigId = config.id;
+                    } else if (!this.selectedConfigId && this.crawlConfigs.length > 0) {
+                        this.selectedConfigId = this.crawlConfigs[0].id;
+                    }
+                },
+
                 refreshNotifications() {
                     this.unreadNotifications = this.notifications.length;
                 },
@@ -1050,6 +1051,10 @@
                     return this.crawlOverview.configs.find((config) => config.id === this.selectedConfigId)
                         || this.crawlConfigs.find((config) => config.id === this.selectedConfigId)
                         || null;
+                },
+
+                get activeSpaceConfigId() {
+                    return this.findConfigForSpace(this.activeSpace)?.id || '';
                 },
 
                 get selectedConfigAccount() {
@@ -1117,10 +1122,22 @@
                 },
 
                 getSpaceDisplayName(space) {
-                    const matchingConfig = [...this.crawlOverview.configs, ...this.crawlConfigs].find((config) => {
-                        return config.start_path && (config.start_path.startsWith(space.path_prefix) || space.path_prefix.startsWith(config.start_path));
-                    });
+                    const matchingConfig = this.findConfigForSpace(space.path_prefix);
                     return matchingConfig?.name || space.name || space.path_prefix;
+                },
+
+                findConfigForSpace(spacePath) {
+                    if (!spacePath) {
+                        return null;
+                    }
+                    const allConfigs = [...this.crawlOverview.configs, ...this.crawlConfigs];
+                    return allConfigs.find((config) => config.start_path === spacePath)
+                        || allConfigs.find((config) => {
+                            return config.start_path && (
+                                config.start_path.startsWith(spacePath) || spacePath.startsWith(config.start_path)
+                            );
+                        })
+                        || null;
                 }
             };
         }

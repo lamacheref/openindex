@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 # Initialisation de FastAPI
 app = FastAPI(
     title="OpenIndex API",
-    description="API moderne pour l'indexation SMB",
+    description="API moderne pour l'exploration SMB",
     version=APP_VERSION,
     docs_url="/docs",
     redoc_url="/redoc"
@@ -82,6 +82,7 @@ class SpaceInfo(BaseModel):
     name: str
     path_prefix: str
     file_count: int
+    config_id: Optional[str] = None
 
 
 class WebSocketMessage(BaseModel):
@@ -247,6 +248,24 @@ class PostgreSQLAdapter:
                 cursor.execute(pg_query, params)
                 return cursor.fetchall()
 
+    def resolve_space_config_id(self, space: Optional[str]) -> Optional[str]:
+        if not space:
+            return None
+
+        rows = self.execute_query(
+            """
+            SELECT id::text
+            FROM crawl_configs
+            WHERE start_path = %s
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            [space],
+        )
+        if not rows:
+            return None
+        return rows[0][0]
+
     def get_statistics(self, space: Optional[str] = None) -> Dict[str, Any]:
         query = """
             SELECT
@@ -258,8 +277,13 @@ class PostgreSQLAdapter:
         """
         params: List[Any] = []
         if space:
-            query += " WHERE path LIKE %s"
-            params.append(f"{space}%")
+            config_id = self.resolve_space_config_id(space)
+            if config_id:
+                query += " WHERE crawl_config_id::text = %s"
+                params.append(config_id)
+            else:
+                query += " WHERE path LIKE %s"
+                params.append(f"{space}%")
 
         with self.get_connection() as conn:
             with conn.cursor() as cursor:
@@ -274,6 +298,31 @@ class PostgreSQLAdapter:
                 }
 
     def get_spaces(self) -> List[Dict[str, Any]]:
+        self.ensure_crawl_tables()
+        config_rows = self.execute_query(
+            """
+            SELECT
+                c.id::text,
+                c.name,
+                c.start_path,
+                COUNT(f.id)
+            FROM crawl_configs c
+            LEFT JOIN files f ON f.crawl_config_id = c.id
+            GROUP BY c.id, c.name, c.start_path
+            ORDER BY c.name ASC, c.created_at DESC
+            """
+        )
+        if config_rows:
+            return [
+                {
+                    "config_id": row[0],
+                    "name": row[1],
+                    "path_prefix": row[2],
+                    "file_count": row[3] or 0,
+                }
+                for row in config_rows
+            ]
+
         paths = self.execute_query("SELECT path FROM files WHERE path IS NOT NULL")
         spaces: Dict[str, Dict[str, Any]] = {}
 
@@ -288,6 +337,7 @@ class PostgreSQLAdapter:
 
             if prefix not in spaces:
                 spaces[prefix] = {
+                    "config_id": None,
                     "name": prefix.replace("/", "").replace("\\", "") or prefix,
                     "path_prefix": prefix,
                     "file_count": 0,
@@ -323,11 +373,34 @@ class PostgreSQLAdapter:
             )
             """,
             "CREATE INDEX IF NOT EXISTS idx_crawl_runs_triggered_at ON crawl_runs(triggered_at)",
+            """
+            ALTER TABLE files
+            ADD COLUMN IF NOT EXISTS crawl_config_id UUID REFERENCES crawl_configs(id) ON DELETE SET NULL
+            """,
+            "CREATE INDEX IF NOT EXISTS idx_files_crawl_config_id ON files(crawl_config_id)",
         ]
         with self.get_connection() as conn:
             with conn.cursor() as cursor:
                 for statement in statements:
                     cursor.execute(statement)
+                cursor.execute(
+                    """
+                    UPDATE files AS f
+                    SET crawl_config_id = matched.config_id
+                    FROM (
+                        SELECT DISTINCT ON (f.id)
+                            f.id AS file_id,
+                            c.id AS config_id
+                        FROM files AS f
+                        JOIN crawl_configs AS c
+                          ON f.path LIKE c.start_path || '%%'
+                        WHERE f.crawl_config_id IS NULL
+                        ORDER BY f.id, LENGTH(c.start_path) DESC, c.created_at DESC
+                    ) AS matched
+                    WHERE f.id = matched.file_id
+                      AND f.crawl_config_id IS NULL
+                    """
+                )
             conn.commit()
 
     def list_crawl_configs(self) -> List[Dict[str, Any]]:
@@ -634,8 +707,13 @@ async def get_files(path: Optional[str] = None, limit: int = 100, offset: int = 
             params.append(f"{path}%")
 
         if space:
-            where_clause += " AND path LIKE ?"
-            params.append(f"{space}%")
+            config_id = db.resolve_space_config_id(space) if hasattr(db, "resolve_space_config_id") else None
+            if config_id:
+                where_clause += " AND crawl_config_id::text = ?"
+                params.append(config_id)
+            else:
+                where_clause += " AND path LIKE ?"
+                params.append(f"{space}%")
 
         query = f"""
             SELECT id, path, name, size, checksum, last_modified,
@@ -703,8 +781,13 @@ async def get_duplicates(space: Optional[str] = None):
         """
         params: List[Any] = []
         if space:
-            query += " AND f1.path LIKE ?"
-            params.append(f"{space}%")
+            config_id = db.resolve_space_config_id(space) if hasattr(db, "resolve_space_config_id") else None
+            if config_id:
+                query += " AND f1.crawl_config_id::text = ?"
+                params.append(config_id)
+            else:
+                query += " AND f1.path LIKE ?"
+                params.append(f"{space}%")
         query += " ORDER BY f1.size DESC"
         results = db.execute_query(query, params)
         return [
@@ -803,7 +886,7 @@ async def list_crawl_configs():
         return [CrawlConfigPublic(**config) for config in db.list_crawl_configs()]
     except Exception as e:
         logger.error(f"Erreur list_crawl_configs: {e}")
-        raise HTTPException(status_code=500, detail="Erreur lors du chargement des configurations de crawl")
+        raise HTTPException(status_code=500, detail="Erreur lors du chargement des configurations d'exploration")
 
 
 @app.post("/api/crawl-configs", response_model=CrawlConfigPublic)
@@ -815,7 +898,7 @@ async def create_crawl_config(payload: CrawlConfigCreate):
         return CrawlConfigPublic(**config)
     except Exception as e:
         logger.error(f"Erreur create_crawl_config: {e}")
-        raise HTTPException(status_code=500, detail="Erreur lors de la création de la configuration de crawl")
+        raise HTTPException(status_code=500, detail="Erreur lors de la création de la configuration d'exploration")
 
 
 @app.post("/api/crawls/start", response_model=CrawlRun)
@@ -825,13 +908,13 @@ async def start_crawl(payload: CrawlStartRequest):
         ensure_crawl_storage_ready(db)
         run = db.start_crawl(payload.config_id)
         if not run:
-            raise HTTPException(status_code=404, detail="Configuration de crawl introuvable")
+            raise HTTPException(status_code=404, detail="Configuration d'exploration introuvable")
         return CrawlRun(**run)
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Erreur start_crawl: {e}")
-        raise HTTPException(status_code=500, detail="Erreur lors du lancement du crawl")
+        raise HTTPException(status_code=500, detail="Erreur lors du lancement de l'exploration")
 
 
 @app.get("/api/monitoring", response_model=MonitoringSummary)
@@ -859,7 +942,7 @@ async def get_crawl_overview(limit: int = 10):
         )
     except Exception as e:
         logger.error(f"Erreur get_crawl_overview: {e}")
-        raise HTTPException(status_code=500, detail="Erreur lors du chargement de la vue d'ensemble des crawls")
+        raise HTTPException(status_code=500, detail="Erreur lors du chargement de la vue d'ensemble des explorations")
 
 
 @app.get("/api/system/status", response_model=SystemStatus)
@@ -940,7 +1023,7 @@ async def get_crawler_runtime(log_limit: int = 80):
         )
     except Exception as e:
         logger.error(f"Erreur get_crawler_runtime: {e}")
-        raise HTTPException(status_code=500, detail="Erreur lors du chargement du runtime crawler")
+        raise HTTPException(status_code=500, detail="Erreur lors du chargement du runtime explorateur")
 
 
 @app.websocket("/ws")

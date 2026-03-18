@@ -23,8 +23,8 @@ from config_manager import ConfigManager
 class SMBCrawlerPostgreSQL:
     """Classe principale pour le crawler SMB avec PostgreSQL."""
 
-    def __init__(self, server, username, password, share_name, domain='', 
-                 postgres_config=None, max_workers=4, delay_between_requests=0.1, 
+    def __init__(self, server, username, password, share_name, domain='',
+                 crawl_config_id=None, postgres_config=None, max_workers=4, delay_between_requests=0.1,
                  max_queue_size=1000, max_depth=None, debug=False, 
                  large_file_threshold=104857600):
         """
@@ -49,6 +49,7 @@ class SMBCrawlerPostgreSQL:
         self.password = password
         self.share_name = share_name
         self.domain = domain
+        self.crawl_config_id = crawl_config_id
         self.postgres_config = postgres_config or {
             'host': os.getenv('POSTGRES_HOST', 'localhost'),
             'port': int(os.getenv('POSTGRES_PORT', '5432')),
@@ -225,6 +226,7 @@ class SMBCrawlerPostgreSQL:
                     'name': name,
                     'size': int(size_str) if size_str.isdigit() else 0,
                     'is_directory': is_directory,
+                    'crawl_config_id': self.crawl_config_id,
                     'last_modified': datetime.now().isoformat(),
                     'created_at': datetime.now(),
                     'updated_at': datetime.now()
@@ -279,6 +281,7 @@ class SMBCrawlerPostgreSQL:
                                 'name': item_name,
                                 'size': stat.st_size,
                                 'is_directory': stat.st_mode & 0o040000 == 0o040000,
+                                'crawl_config_id': self.crawl_config_id,
                                 'last_modified': datetime.fromtimestamp(stat.st_mtime).isoformat(),
                                 'created_at': datetime.now(),
                                 'updated_at': datetime.now()
