@@ -10,6 +10,7 @@ from psycopg2.extras import execute_values
 import os
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Optional, Any
 from contextlib import contextmanager
 
@@ -51,12 +52,37 @@ class PostgreSQLAdapter:
     
     def initialize_database(self):
         """Initialise la base de données (crée les tables si nécessaire)"""
-        # La base est initialisée par le script init.sql de Docker
-        # On vérifie juste que la connexion fonctionne
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT 1")
-            self.logger.info("Base de données PostgreSQL initialisée et accessible")
+            cursor.execute(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM information_schema.tables
+                    WHERE table_schema = 'public' AND table_name = 'files'
+                )
+                """
+            )
+            files_table_exists = cursor.fetchone()[0]
+
+            if files_table_exists:
+                self.logger.info("Base de données PostgreSQL initialisée et accessible")
+                return
+
+            init_sql_path = Path(__file__).resolve().parents[1] / "database" / "init.sql"
+            with init_sql_path.open("r", encoding="utf-8") as sql_file:
+                cursor.execute(sql_file.read())
+            conn.commit()
+            self.logger.info(f"Schéma PostgreSQL initialisé depuis {init_sql_path}")
+
+    def execute_query(self, query: str, params: Optional[List[Any]] = None) -> List[Any]:
+        """Exécute une requête SQL simple et retourne toutes les lignes."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params or [])
+            rows = cursor.fetchall()
+            conn.commit()
+            return rows
     
     def save_files_batch(self, files_data: List[Dict[str, Any]]) -> int:
         """
@@ -134,7 +160,7 @@ class PostgreSQLAdapter:
             
             try:
                 # Garantir la présence de la fonction même sur une base déjà existante
-                self._ensure_calculate_duplicates_function(cursor)
+                self._ensure_calculate_duplicates_function(conn)
 
                 # Utiliser explicitement le schéma public pour éviter les problèmes de search_path
                 cursor.execute("SELECT public.calculate_duplicates()")
@@ -149,8 +175,14 @@ class PostgreSQLAdapter:
                 self.logger.error(f"Erreur lors du calcul des doublons: {e}")
                 raise
 
-    def _ensure_calculate_duplicates_function(self, cursor):
-        """Crée la fonction calculate_duplicates() si elle est absente."""
+    def _ensure_calculate_duplicates_function(self, conn):
+        """
+        Crée la fonction calculate_duplicates() si elle est absente.
+        
+        Args:
+            conn: Connexion PostgreSQL active
+        """
+        cursor = conn.cursor()
         cursor.execute(
             """
             CREATE OR REPLACE FUNCTION public.calculate_duplicates()
@@ -187,6 +219,7 @@ class PostgreSQLAdapter:
             $$ LANGUAGE plpgsql;
             """
         )
+        conn.commit()
     
     def get_statistics(self) -> Dict[str, Any]:
         """

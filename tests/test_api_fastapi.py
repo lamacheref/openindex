@@ -3,9 +3,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
-import httpx
 
 # Permet d'importer src/api/main.py et ses dépendances locales
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -126,22 +124,32 @@ class DummyDB:
         return run
 
 
+def run_request(method, path, *, params=None, json=None):
+    async def _request():
+        async with AsyncClient(
+            transport=ASGITransport(app=api_main.app),
+            base_url="http://testserver",
+        ) as client:
+            return await client.request(method, path, params=params, json=json)
+
+    return asyncio.run(_request())
+
+
 @pytest.fixture
 def client(monkeypatch):
     db = DummyDB()
     monkeypatch.setattr(api_main, "get_db_adapter", lambda: db)
-    # Use TestClient from fastapi.testclient for compatibility
-    return TestClient(api_main.app)
+    return run_request
 
 
 def test_health_endpoint(client):
-    response = client.get("/health")
+    response = client("GET", "/health")
     assert response.status_code == 200
     assert response.json()["status"] == "healthy"
 
 
 def test_get_files_endpoint(client):
-    response = client.get("/api/files", params={"search": "readme", "limit": 50, "offset": 0})
+    response = client("GET", "/api/files", params={"search": "readme", "limit": 50, "offset": 0})
     assert response.status_code == 200
     payload = response.json()
     assert len(payload) == 2
@@ -149,20 +157,20 @@ def test_get_files_endpoint(client):
 
 
 def test_get_stats_endpoint(client):
-    response = client.get("/api/stats")
+    response = client("GET", "/api/stats")
     assert response.status_code == 200
     assert response.json()["total_files"] == 2
 
 
 def test_get_duplicates_endpoint(client):
-    response = client.get("/api/duplicates")
+    response = client("GET", "/api/duplicates")
     assert response.status_code == 200
     payload = response.json()
     assert payload[0]["duplicate_of"] == "/share/original/a.txt"
 
 
 def test_get_spaces_endpoint(client):
-    response = client.get("/api/spaces")
+    response = client("GET", "/api/spaces")
     assert response.status_code == 200
     payload = response.json()
     assert payload[0]["path_prefix"] == "/share"
@@ -170,11 +178,15 @@ def test_get_spaces_endpoint(client):
 
 
 def test_api_concurrent_health_requests():
-    # Use synchronous client for concurrent requests
-    transport = httpx.ASGITransport(app=api_main.app)
-    with httpx.Client(transport=transport, base_url="http://test") as client:
-        responses = [client.get("/health") for _ in range(250)]
-    
+    async def _run():
+        async with AsyncClient(
+            transport=ASGITransport(app=api_main.app),
+            base_url="http://test",
+        ) as client:
+            return await asyncio.gather(*[client.get("/health") for _ in range(250)])
+
+    responses = asyncio.run(_run())
+
     assert all(resp.status_code == 200 for resp in responses)
 
 
@@ -201,7 +213,7 @@ def test_connection_manager_broadcast_removes_dead_connection():
 
 
 def test_get_db_explain_endpoint(client):
-    response = client.get('/api/db-explain', params={'query_name': 'files_list', 'analyze': True})
+    response = client("GET", "/api/db-explain", params={"query_name": "files_list", "analyze": True})
     assert response.status_code == 200
     payload = response.json()
     assert payload['query_name'] == 'files_list'
@@ -210,7 +222,7 @@ def test_get_db_explain_endpoint(client):
 
 
 def test_get_db_explain_invalid_query(client):
-    response = client.get('/api/db-explain', params={'query_name': 'not_allowed'})
+    response = client("GET", "/api/db-explain", params={"query_name": "not_allowed"})
     assert response.status_code == 400
 
 
@@ -228,14 +240,14 @@ def test_create_and_list_crawl_configs(client):
         },
     }
 
-    create_response = client.post('/api/crawl-configs', json=payload)
+    create_response = client("POST", "/api/crawl-configs", json=payload)
     assert create_response.status_code == 200
     created = create_response.json()
     assert created['name'] == 'Crawl Finance'
     assert 'connection_username' in created
     assert '_secret_password' not in created
 
-    list_response = client.get('/api/crawl-configs')
+    list_response = client("GET", "/api/crawl-configs")
     assert list_response.status_code == 200
     listed = list_response.json()
     assert len(listed) == 1
@@ -244,11 +256,12 @@ def test_create_and_list_crawl_configs(client):
 
 def test_start_crawl_requires_existing_config(client):
 
-    missing = client.post('/api/crawls/start', json={'config_id': 'missing'})
+    missing = client("POST", "/api/crawls/start", json={"config_id": "missing"})
     assert missing.status_code == 404
 
-    created = client.post(
-        '/api/crawl-configs',
+    created = client(
+        "POST",
+        "/api/crawl-configs",
         json={
             "name": "Crawl RH",
             "domain_zone": "FR",
@@ -263,7 +276,7 @@ def test_start_crawl_requires_existing_config(client):
         },
     ).json()
 
-    started = client.post('/api/crawls/start', json={'config_id': created['id']})
+    started = client("POST", "/api/crawls/start", json={"config_id": created["id"]})
     assert started.status_code == 200
     payload = started.json()
     assert payload['status'] == 'queued'

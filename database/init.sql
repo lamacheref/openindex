@@ -102,6 +102,7 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
+DROP TRIGGER IF EXISTS update_files_updated_at ON files;
 CREATE TRIGGER update_files_updated_at 
     BEFORE UPDATE ON files 
     FOR EACH ROW 
@@ -126,36 +127,33 @@ ORDER BY f1.checksum, f1.path;
 -- Vue pour les statistiques par taille
 CREATE OR REPLACE VIEW file_size_distribution AS
 SELECT 
-    CASE 
-        WHEN size < 1024 THEN '< 1 KB'
-        WHEN size < 1024*1024 THEN '1 KB - 1 MB'
-        WHEN size < 1024*1024*10 THEN '1 MB - 10 MB'
-        WHEN size < 1024*1024*100 THEN '10 MB - 100 MB'
-        WHEN size < 1024*1024*1024 THEN '100 MB - 1 GB'
-        ELSE '> 1 GB'
-    END as size_category,
+    size_category,
     COUNT(*) as file_count,
     SUM(size) as total_size
-FROM files 
-WHERE is_directory = FALSE
-GROUP BY 
-    CASE 
-        WHEN size < 1024 THEN '< 1 KB'
-        WHEN size < 1024*1024 THEN '1 KB - 1 MB'
-        WHEN size < 1024*1024*10 THEN '1 MB - 10 MB'
-        WHEN size < 1024*1024*100 THEN '10 MB - 100 MB'
-        WHEN size < 1024*1024*1024 THEN '100 MB - 1 GB'
-        ELSE '> 1 GB'
-    END
-ORDER BY 
-    CASE 
-        WHEN size < 1024 THEN 1
-        WHEN size < 1024*1024 THEN 2
-        WHEN size < 1024*1024*10 THEN 3
-        WHEN size < 1024*1024*100 THEN 4
-        WHEN size < 1024*1024*1024 THEN 5
-        ELSE 6
-    END;
+FROM (
+    SELECT
+        size,
+        CASE
+            WHEN size < 1024 THEN '< 1 KB'
+            WHEN size < 1024*1024 THEN '1 KB - 1 MB'
+            WHEN size < 1024*1024*10 THEN '1 MB - 10 MB'
+            WHEN size < 1024*1024*100 THEN '10 MB - 100 MB'
+            WHEN size < 1024*1024*1024 THEN '100 MB - 1 GB'
+            ELSE '> 1 GB'
+        END as size_category,
+        CASE
+            WHEN size < 1024 THEN 1
+            WHEN size < 1024*1024 THEN 2
+            WHEN size < 1024*1024*10 THEN 3
+            WHEN size < 1024*1024*100 THEN 4
+            WHEN size < 1024*1024*1024 THEN 5
+            ELSE 6
+        END as size_order
+    FROM files
+    WHERE is_directory = FALSE
+) AS categorized_files
+GROUP BY size_category, size_order
+ORDER BY size_order;
 
 -- Fonction pour calculer les doublons
 CREATE OR REPLACE FUNCTION calculate_duplicates()

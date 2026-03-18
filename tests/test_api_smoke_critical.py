@@ -1,8 +1,9 @@
 import sys
+import asyncio
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "api"))
@@ -46,22 +47,33 @@ class DummyDB:
         }
 
 
+def run_request(method, path, *, params=None):
+    async def _request():
+        async with AsyncClient(
+            transport=ASGITransport(app=api_main.app),
+            base_url="http://testserver",
+        ) as client:
+            return await client.request(method, path, params=params)
+
+    return asyncio.run(_request())
+
+
 @pytest.fixture
 def client(monkeypatch):
     monkeypatch.setattr(api_main, "get_db_adapter", lambda: DummyDB())
-    return TestClient(api_main.app)
+    return run_request
 
 
 @pytest.mark.parametrize("repeat_index", range(5))
 def test_critical_health(client, repeat_index):
-    response = client.get("/health")
+    response = client("GET", "/health")
     assert response.status_code == 200
     assert response.json()["status"] == "healthy"
 
 
 @pytest.mark.parametrize("repeat_index", range(5))
 def test_critical_stats(client, repeat_index):
-    response = client.get("/api/stats")
+    response = client("GET", "/api/stats")
     assert response.status_code == 200
     payload = response.json()
     assert payload["total_files"] == 1
@@ -70,7 +82,7 @@ def test_critical_stats(client, repeat_index):
 
 @pytest.mark.parametrize("repeat_index", range(5))
 def test_critical_files(client, repeat_index):
-    response = client.get("/api/files", params={"limit": 10, "offset": 0})
+    response = client("GET", "/api/files", params={"limit": 10, "offset": 0})
     assert response.status_code == 200
     payload = response.json()
     assert len(payload) == 1
@@ -79,7 +91,7 @@ def test_critical_files(client, repeat_index):
 
 @pytest.mark.parametrize("repeat_index", range(5))
 def test_critical_db_explain(client, repeat_index):
-    response = client.get("/api/db-explain", params={"query_name": "files_list", "analyze": True})
+    response = client("GET", "/api/db-explain", params={"query_name": "files_list", "analyze": True})
     assert response.status_code == 200
     payload = response.json()
     assert payload["query_name"] == "files_list"

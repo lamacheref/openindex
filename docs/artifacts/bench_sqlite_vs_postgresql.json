@@ -12,15 +12,81 @@
     }
   },
   "postgresql": {
-    "/api/stats": {
-      "samples": 10,
-      "mean_ms": 12.6,
-      "p95_ms": 14.99
-    },
-    "/api/files": {
-      "samples": 10,
-      "mean_ms": 18.4,
-      "p95_ms": 21.6
+    "asgi_app": "src.api.main:app",
+    "runs": [
+      {
+        "run_index": 1,
+        "metrics": {
+          "/api/stats": {
+            "samples": 30,
+            "mean_ms": 0.45,
+            "p95_ms": 0.55
+          },
+          "/api/files": {
+            "samples": 30,
+            "mean_ms": 0.54,
+            "p95_ms": 0.71
+          }
+        }
+      },
+      {
+        "run_index": 2,
+        "metrics": {
+          "/api/stats": {
+            "samples": 30,
+            "mean_ms": 0.42,
+            "p95_ms": 0.49
+          },
+          "/api/files": {
+            "samples": 30,
+            "mean_ms": 0.5,
+            "p95_ms": 0.51
+          }
+        }
+      },
+      {
+        "run_index": 3,
+        "metrics": {
+          "/api/stats": {
+            "samples": 30,
+            "mean_ms": 0.4,
+            "p95_ms": 0.42
+          },
+          "/api/files": {
+            "samples": 30,
+            "mean_ms": 0.5,
+            "p95_ms": 0.52
+          }
+        }
+      }
+    ],
+    "summary": {
+      "/api/stats": {
+        "runs": 3,
+        "samples_per_run": 30,
+        "mean_ms_avg": 0.42,
+        "p95_ms_avg": 0.49,
+        "p95_ms_min": 0.42,
+        "p95_ms_max": 0.55,
+        "p95_ms_values": [
+          0.55,
+          0.49,
+          0.42
+        ]
+      },
+      "/api/files": {
+        "runs": 3,
+        "samples_per_run": 30,
+        "mean_ms_avg": 0.51,
+        "p95_ms_avg": 0.58,
+        "p95_ms_min": 0.51,
+        "p95_ms_max": 0.71,
+        "p95_ms_values": [
+          0.71,
+          0.51,
+          0.52
+        ]
+      }
     }
   }
 }
