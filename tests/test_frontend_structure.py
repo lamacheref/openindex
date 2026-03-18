@@ -32,10 +32,12 @@ def test_frontend_has_expected_views_and_bindings():
 def test_frontend_uses_realtime_libs_and_fixed_header_shell():
     html = read_frontend_html()
 
-    assert "chart.js" in html.lower()
     assert "WebSocket" in html
     assert "fixed top-0 left-0 right-0" in html
     assert "overflow-y-auto" in html
+    assert "/assets/alpine.min.js" in html
+    assert "/assets/tailwind.css" in html
+    assert "/assets/fontawesome/css/all.min.css" in html
 
 
 def test_frontend_sidebar_contains_expected_operator_navigation():
