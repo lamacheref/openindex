@@ -34,6 +34,12 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
 
 ## 2) Exécution J4 (prochaines 2 semaines)
 
+- [ ] **T-04a — Corriger le faux crawl complet PostgreSQL**
+  - Le résultat J4 actif du `2026-03-18` est invalide: le crawler PostgreSQL ne descendait pas récursivement dans les sous-répertoires.
+  - Finaliser le correctif de récursion dans `src/smb_crawler_postgresql.py`.
+  - Rejouer un crawl complet sur `\\172.16.252.34\Public\SMIDEN` et invalider les artefacts précédents trop superficiels.
+  - Produire un artefact final cohérent avec la volumétrie réelle du référentiel.
+
 - [ ] **T-04 — Initialisation contrôlée J4 sur PostgreSQL en environnement de référence**
   - Initialiser PostgreSQL sur un dataset représentatif recrawlé.
   - Exécuter un recrawl complet sur environnement cible avec PostgreSQL (pas de migration SQLite).
@@ -72,6 +78,28 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
   - Standardiser les logs applicatifs (format, niveau, corrélation).
   - Définir un dashboard santé + une vue incidents.
   - Définir la procédure d'escalade en cas de dérive.
+
+- [ ] **T-14 — Revoir l'UI pour le pilotage des tests et crawls**
+  - Repenser l'interface actuelle, jugée insuffisante pour le suivi opérationnel.
+  - Transformer le tableau de bord en poste opérateur actif: espace courant, dernier lancement, état du crawl, KPI temps réel, progression et journal.
+  - Rendre visibles les statuts en cours, succès, échecs, durée, artefacts et journaux utiles directement dans l'UI finale.
+  - Supprimer les vues de démonstration ou décoratives qui ne servent pas l'exploitation réelle.
+  - Prévoir un écran de suivi temps réel orienté exploitation plutôt qu'une simple consultation statique.
+
+- [ ] **T-15 — Concevoir l'Explorateur de fichiers double panneau**
+  - Définir le comportement cible type Explorateur Windows / Dolphin.
+  - Prévoir navigation arborescente, sélection, transfert inter-panneaux et actions contextuelles.
+  - Déterminer les endpoints API nécessaires pour une navigation hiérarchique et des opérations de déplacement/copie pilotées.
+
+- [ ] **T-16 — Concevoir la page de traitements des artefacts**
+  - Définir les catégories d'artefacts traitables: temporaires Office, doublons, fichiers système, archives obsolètes.
+  - Prévoir KPI dédiés, liste filtrable, sélection multiple et actions de masse.
+  - Déterminer les règles métiers entre suppression, ignorance et archivage.
+
+- [ ] **T-13 — Préparer la configuration multi-repository**
+  - Définir le modèle de configuration pour plusieurs racines SMB.
+  - Déterminer la stratégie d'identification par source/référentiel.
+  - Adapter la doc opératoire pour éviter les recrawls monolithiques sur base active.
 
 ---
 

@@ -42,3 +42,6 @@ Industrialiser OpenIndex pour un usage régulier en environnement SMB volumineux
 - Couverture de tests mesurée et suivie.
 - Dashboards de santé et alerting.
 - Processus de release strict (DoD + checklist publication).
+- Préparer la configuration multi-repository et la segmentation des sources de crawl.
+- Faire converger l'UI finale vers une console opératoire active, centrée sur le crawl réel et l'exploitation.
+- Concevoir un explorateur de fichiers double panneau et une page dédiée aux traitements des artefacts.

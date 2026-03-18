@@ -123,6 +123,46 @@ class DummyDB:
         self.crawl_runs.append(run)
         return run
 
+    def get_monitoring_summary(self):
+        latest = self.crawl_runs[-1] if self.crawl_runs else None
+        return {
+            "total_configs": len(self.crawl_configs),
+            "total_runs": len(self.crawl_runs),
+            "queued_runs": sum(1 for run in self.crawl_runs if run["status"] == "queued"),
+            "running_runs": 0,
+            "completed_runs": sum(1 for run in self.crawl_runs if run["status"] == "completed"),
+            "failed_runs": sum(1 for run in self.crawl_runs if run["status"] == "failed"),
+            "latest_run_status": latest["status"] if latest else "Aucun run",
+            "latest_run_config_name": self.crawl_configs[0]["name"] if latest and self.crawl_configs else "-",
+            "latest_run_triggered_at": latest["triggered_at"] if latest else "-",
+            "progress_percent": 0.0,
+        }
+
+    def list_recent_crawl_runs(self, limit=10):
+        runs = list(reversed(self.crawl_runs))[:limit]
+        config_names = {cfg["id"]: cfg["name"] for cfg in self.crawl_configs}
+        config_zones = {cfg["id"]: cfg["domain_zone"] for cfg in self.crawl_configs}
+        config_paths = {cfg["id"]: cfg["start_path"] for cfg in self.crawl_configs}
+        return [
+            {
+                "run_id": run["run_id"],
+                "config_id": run["config_id"],
+                "config_name": config_names.get(run["config_id"], "Unknown"),
+                "domain_zone": config_zones.get(run["config_id"], ""),
+                "start_path": config_paths.get(run["config_id"], ""),
+                "status": run["status"],
+                "triggered_at": run["triggered_at"],
+            }
+            for run in runs
+        ]
+
+    def get_crawl_overview(self, limit=10):
+        return {
+            "monitoring": self.get_monitoring_summary(),
+            "configs": self.list_crawl_configs(),
+            "recent_runs": self.list_recent_crawl_runs(limit=limit),
+        }
+
 
 def run_request(method, path, *, params=None, json=None):
     async def _request():
@@ -281,3 +321,80 @@ def test_start_crawl_requires_existing_config(client):
     payload = started.json()
     assert payload['status'] == 'queued'
     assert payload['config_id'] == created['id']
+
+
+def test_get_crawl_overview_returns_real_operational_data(client):
+    created = client(
+        "POST",
+        "/api/crawl-configs",
+        json={
+            "name": "Crawl SMIDEN",
+            "domain_zone": "FR",
+            "start_path": "\\\\172.16.252.34\\Public\\SMIDEN",
+            "include_paths": [],
+            "exclude_paths": [],
+            "connection": {
+                "username": "adminsmiden",
+                "password": "secret",
+                "domain": None,
+            },
+        },
+    ).json()
+
+    client("POST", "/api/crawls/start", json={"config_id": created["id"]})
+
+    response = client("GET", "/api/crawls/overview", params={"limit": 5})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["monitoring"]["total_configs"] == 1
+    assert payload["monitoring"]["total_runs"] == 1
+    assert payload["configs"][0]["name"] == "Crawl SMIDEN"
+    assert payload["recent_runs"][0]["config_name"] == "Crawl SMIDEN"
+    assert payload["recent_runs"][0]["start_path"] == "\\\\172.16.252.34\\Public\\SMIDEN"
+
+
+def test_get_system_status_endpoint(client, monkeypatch):
+    monkeypatch.setenv("OPENINDEX_APP_VERSION", "1.4.0")
+    monkeypatch.setenv("OPENINDEX_BUILD_COMMIT", "abc1234")
+    monkeypatch.setenv("OPENINDEX_BUILD_DATE", "2026-03-18")
+    monkeypatch.setenv("OPENINDEX_NEWER_VERSION_AVAILABLE", "true")
+    monkeypatch.setenv("OPENINDEX_NEWEST_VERSION_URL", "https://github.com/lamacheref/openindex/releases/tag/v1.4.1")
+
+    response = client("GET", "/api/system/status")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["app_version"] == "1.4.0"
+    assert payload["commit_hash"] == "abc1234"
+    assert payload["build_date"] == "2026-03-18"
+    assert payload["newer_version_available"] is True
+
+
+def test_get_crawler_runtime_endpoint(client, monkeypatch, tmp_path):
+    log_file = tmp_path / "smb_crawler_postgresql.log"
+    log_file.write_text("line 1\nline 2\nline 3\n", encoding="utf-8")
+    monkeypatch.setenv("OPENINDEX_CRAWLER_LOG_PATH", str(log_file))
+
+    created = client(
+        "POST",
+        "/api/crawl-configs",
+        json={
+            "name": "Crawl Runtime",
+            "domain_zone": "FR",
+            "start_path": "\\\\172.16.252.34\\Public\\SMIDEN",
+            "include_paths": [],
+            "exclude_paths": [],
+            "connection": {
+                "username": "adminsmiden",
+                "password": "secret",
+                "domain": None,
+            },
+        },
+    ).json()
+    client("POST", "/api/crawls/start", json={"config_id": created["id"]})
+
+    response = client("GET", "/api/crawler/runtime", params={"log_limit": 2})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["latest_config_name"] == "Crawl Runtime"
+    assert len(payload["queue_indicators"]) == 4
+    assert payload["log_lines"] == ["line 2", "line 3"]
