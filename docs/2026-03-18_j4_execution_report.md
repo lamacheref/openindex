@@ -2,6 +2,7 @@
 
 Date: 2026-03-18
 Périmètre: exécution contrôlée J4 sur cible SMB `\\172.16.252.34\Public\SMIDEN`
+Statut final: Go
 
 ## Résumé
 
@@ -81,7 +82,13 @@ Critères:
 - Initialisation + recrawl journalisés: `OK`
 - Rollback testé: `OK`
 - Rollback validé par le responsable opérationnel: `OK`
-- CI PostgreSQL de référence: tests locaux `OK`, statut CI hébergé non prouvé dans le dépôt
+- CI PostgreSQL de référence: `OK`
+
+Preuve CI:
+- PR GitHub: `#41` `https://github.com/lamacheref/openindex/pull/41`
+- Workflow: `Docker Stack CI`
+- Job PostgreSQL: `api-tests-postgresql` en statut `pass`
+- Artefact versionné: `docs/artifacts/j4_ci_pr41_2026-03-18.json`
 
 Décision opérationnelle:
-- Le statut global reste `No-Go` tant que la validation pair du rollback et la preuve CI PostgreSQL hébergée ne sont pas closes.
+- Le statut global passe à `Go` pour l'environnement de validation du 2026-03-18.

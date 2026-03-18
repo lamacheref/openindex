@@ -19,9 +19,9 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
 - [x] **T-02 — Décision formelle Go/No-Go J4**
   - Appliquer les critères de `docs/phases/J4_MIGRATION.md`.
   - Décision rédigée le `2026-03-18` dans `docs/2026-03-18_j4_go-no-go.md`.
-  - Décision retenue: `No-Go`.
-  - Écarts bloquants listés: CI PostgreSQL non validée, rapport d'initialisation/recrawl absent, rollback pairé non prouvé, benchmark J4 incomplet.
-  - Commit: `0f63189`
+  - Décision retenue: `Go`.
+  - Preuves: recrawl contrôlé, benchmark 3 runs stable, rollback drill validé, CI GitHub PostgreSQL verte sur PR `#41`.
+  - Commit: `17f5806`
 
 - [ ] **T-03 — Figer la baseline technique J4**
   - Confirmer PostgreSQL comme backend de données unique dans la doc principale.

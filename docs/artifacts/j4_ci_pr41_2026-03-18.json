@@ -1,0 +1,35 @@
+{
+  "timestamp_utc": "2026-03-18T12:29:00Z",
+  "repository": "lamacheref/openindex",
+  "pull_request": 41,
+  "pull_request_url": "https://github.com/lamacheref/openindex/pull/41",
+  "workflow": "Docker Stack CI",
+  "run_url": "https://github.com/lamacheref/openindex/actions/runs/23244669250",
+  "checks": [
+    {
+      "name": "api-tests-postgresql",
+      "status": "pass",
+      "job_url": "https://github.com/lamacheref/openindex/actions/runs/23244669250/job/67569806980"
+    },
+    {
+      "name": "changes",
+      "status": "pass",
+      "job_url": "https://github.com/lamacheref/openindex/actions/runs/23244669250/job/67569806903"
+    },
+    {
+      "name": "docker-build-api",
+      "status": "pass",
+      "job_url": "https://github.com/lamacheref/openindex/actions/runs/23244669250/job/67569826850"
+    },
+    {
+      "name": "docker-build-crawler",
+      "status": "pass",
+      "job_url": "https://github.com/lamacheref/openindex/actions/runs/23244669250/job/67569826906"
+    },
+    {
+      "name": "docker-build-ui",
+      "status": "skipping",
+      "job_url": "https://github.com/lamacheref/openindex/actions/runs/23244669250/job/67569827387"
+    }
+  ]
+}
