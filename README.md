@@ -25,6 +25,11 @@ La base active à date est :
 - Détection des doublons (`/api/duplicates`).
 - Monitoring temps réel via WebSocket (`/ws`).
 - Analyse de plan PostgreSQL (`/api/db-explain`).
+- Pilotage des explorations par espace avec un seul run actif par configuration.
+- Arrêt et suppression des runs récents depuis l'interface opérateur.
+- Progression d'exploration basée sur le volume découvert/traité et non sur un simple compteur d'objets.
+- Affichage des vraies files du worker (`Dossiers`, `Fichiers`, `Somme de contrôle`, `Gros fichiers`).
+- Consultation des logs réels du worker d'exploration dans l'interface.
 
 ## Installation
 

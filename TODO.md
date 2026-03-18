@@ -83,6 +83,7 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
   - Repenser l'interface actuelle, jugée insuffisante pour le suivi opérationnel.
   - Transformer le tableau de bord en poste opérateur actif: espace courant, dernier lancement, état du crawl, KPI temps réel, progression et journal.
   - Corriger les finitions demandées dans `docs/definition_ui.md`: nom distinctif d'espace, "non défini" si dernier lancement absent, zone version réduite, suppression du sous-titre inutile, unités en octets, bouton logs déplacé sous la progression et désactivé si le crawler est inactif.
+  - Déjà livré le `2026-03-18`: vocabulaire exploration/explorateur, logs réels du worker, progression par volume, queues réelles, actions arrêter/supprimer sur les runs récents et garde-fou un seul run actif par espace.
   - Déporter les explications de conception ou limites techniques hors de l'interface vers `TODO.md` ou la documentation.
   - Rendre visibles les statuts en cours, succès, échecs, durée, artefacts et journaux utiles directement dans l'UI finale.
   - Supprimer les vues de démonstration ou décoratives qui ne servent pas l'exploitation réelle.

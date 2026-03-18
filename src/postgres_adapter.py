@@ -494,6 +494,31 @@ class PostgreSQLAdapter:
                 conn.rollback()
                 raise
 
+    def get_crawl_run_status(self, run_id: str) -> Optional[str]:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT status FROM crawl_runs WHERE id::text = %s",
+                [run_id],
+            )
+            row = cursor.fetchone()
+            conn.commit()
+            if not row:
+                return None
+            return row[0]
+
+    def reset_stale_running_runs(self) -> None:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE crawl_runs
+                SET status = 'failed'
+                WHERE LOWER(status) IN ('running', 'in_progress', 'cancelling')
+                """
+            )
+            conn.commit()
+
     def wait_for_next_run(self, poll_interval_seconds: int = 5) -> Dict[str, Any]:
         """Boucle de polling simple jusqu'à trouver un run à traiter."""
         while True:

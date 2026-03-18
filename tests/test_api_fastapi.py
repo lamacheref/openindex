@@ -140,16 +140,39 @@ class DummyDB:
         return item
 
     def start_crawl(self, config_id):
+        if any(run["config_id"] == config_id and run["status"] in {"queued", "running", "pending", "in_progress", "cancelling"} for run in self.crawl_runs):
+            raise ValueError("Une exploration est deja active pour cette configuration (queued).")
         if not any(cfg["id"] == config_id for cfg in self.crawl_configs):
             return None
         run = {
-            "run_id": "run-1",
+            "run_id": f"run-{len(self.crawl_runs) + 1}",
             "config_id": config_id,
             "status": "queued",
             "triggered_at": "2026-03-10T12:05:00+00:00",
         }
         self.crawl_runs.append(run)
         return run
+
+    def request_stop_run(self, run_id):
+        for run in self.crawl_runs:
+            if run["run_id"] != run_id:
+                continue
+            if run["status"] in {"queued", "pending"}:
+                run["status"] = "cancelled"
+            elif run["status"] in {"running", "in_progress"}:
+                run["status"] = "cancelling"
+            return {"run_id": run_id, "status": run["status"]}
+        return None
+
+    def delete_run(self, run_id):
+        for index, run in enumerate(self.crawl_runs):
+            if run["run_id"] != run_id:
+                continue
+            if run["status"] in {"queued", "pending", "running", "in_progress", "cancelling"}:
+                return False
+            del self.crawl_runs[index]
+            return True
+        return False
 
     def get_monitoring_summary(self):
         latest = self.crawl_runs[-1] if self.crawl_runs else None
@@ -437,6 +460,37 @@ def test_start_crawl_requires_existing_config(client):
     payload = started.json()
     assert payload['status'] == 'queued'
     assert payload['config_id'] == created['id']
+
+    duplicated = client("POST", "/api/crawls/start", json={"config_id": created["id"]})
+    assert duplicated.status_code == 409
+
+
+def test_stop_and_delete_run_endpoints(client):
+    created = client(
+        "POST",
+        "/api/crawl-configs",
+        json={
+            "name": "Crawl Stop",
+            "domain_zone": "FR",
+            "start_path": "\\\\srv\\stop",
+            "include_paths": [],
+            "exclude_paths": [],
+            "connection": {
+                "username": "svc_stop",
+                "password": "secret",
+                "domain": "CORP",
+            },
+        },
+    ).json()
+
+    started = client("POST", "/api/crawls/start", json={"config_id": created["id"]}).json()
+    stopped = client("POST", f"/api/crawls/{started['run_id']}/stop")
+    assert stopped.status_code == 200
+    assert stopped.json()["status"] == "cancelled"
+
+    deleted = client("DELETE", f"/api/crawls/{started['run_id']}")
+    assert deleted.status_code == 200
+    assert deleted.json()["status"] == "deleted"
 
 
 def test_get_crawl_overview_returns_real_operational_data(client):
