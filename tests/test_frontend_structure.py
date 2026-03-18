@@ -15,14 +15,14 @@ def test_frontend_has_expected_views_and_bindings():
         "dashboard": "Tableau de bord",
         "fileExplorer": "Explorateur de fichiers",
         "artifacts": "Traitements des artefacts",
-        "configuration": "Configuration",
     }
 
     for view_key, view_label in expected_main_views.items():
         assert f"currentView = '{view_key}'" in html
         assert view_label in html
 
-    assert "Implémentation rapide" in html
+    assert "Configuration" in html
+    assert "Configurer un espace" in html
     assert "Monitoring temps réel" in html
     assert "Explain / Analyze DB" in html
     assert "Journal du crawler" in html
@@ -62,13 +62,18 @@ def test_configuration_access_and_sections_exist():
     assert "title=\"Configuration\"" in html
     assert "fa-gear" in html
     assert "openConfiguration('crawler')" in html
+    assert "showConfigOverlay = true" in html or "this.showConfigOverlay = true" in html
 
     assert "configSection = 'crawler'" in html
     assert "configSection = 'dbAnalysis'" in html
     assert "configSection = 'monitoring'" in html
-    assert "currentView === 'configuration' && configSection === 'crawler'" in html
-    assert "currentView === 'configuration' && configSection === 'dbAnalysis'" in html
-    assert "currentView === 'configuration' && configSection === 'monitoring'" in html
+    assert "configSection = 'users'" in html
+    assert "configSection = 'profile'" in html
+    assert "x-show=\"configSection === 'crawler'\"" in html
+    assert "x-show=\"configSection === 'dbAnalysis'\"" in html
+    assert "x-show=\"configSection === 'monitoring'\"" in html
+    assert "x-show=\"configSection === 'users' && currentUser.is_admin\"" in html
+    assert "x-show=\"configSection === 'profile'\"" in html
 
 
 def test_dashboard_has_active_crawl_block_and_log_toggle():
@@ -78,3 +83,15 @@ def test_dashboard_has_active_crawl_block_and_log_toggle():
     assert "Voir les logs" in html
     assert "showCrawlerLogs" in html
     assert "Journal du crawler" in html
+    assert "showCrawlPilot = true" in html
+    assert "Piloter le crawl" in html
+
+
+def test_notifications_and_operator_overlays_are_present():
+    html = read_frontend_html()
+
+    assert "showNotifications = !showNotifications" in html
+    assert "Notifications" in html
+    assert "Aucune notification en attente." in html
+    assert "Inscription des utilisateurs" in html
+    assert "Profil utilisateur" in html
