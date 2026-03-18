@@ -1,5 +1,17 @@
 # Changelog OpenIndex avec PostgreSQL
 
+## 2026-03-18 — Pilotage des explorations et synchronisation UI/worker
+
+- Liaison explicite des résultats d'exploration aux espaces via la configuration de crawl.
+- Alignement du vocabulaire UI sur `exploration` / `explorateur`.
+- Passage du déploiement local Docker sur build des images du workspace pour éviter les écarts avec `latest`.
+- Transformation du service `crawler` en worker piloté par `crawl_runs`, sans auto-démarrage autonome au boot.
+- Ajout du suivi réel de progression par volume découvert/traité et exposition des vraies files du worker dans l'UI.
+- Remplacement des logs synthétiques UI par les logs réels du conteneur `crawler`.
+- Ajout des actions opérateur `Arrêter` et `Supprimer` sur les runs récents.
+- Interdiction de plusieurs runs actifs simultanés sur une même configuration.
+- Requalification automatique des anciens runs bloqués au redémarrage du worker.
+
 ## 2026-03-10 — Stack runtime unifiée GHCR + déploiement complet
 
 - Refonte de `docker-compose.yml` vers une stack complète `postgres:17-alpine` + `api` + `crawler` + `ui`.

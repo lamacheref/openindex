@@ -11,6 +11,7 @@ from typing import List, Optional, Dict, Any
 import asyncio
 import logging
 import os
+import re
 from contextlib import contextmanager
 from datetime import datetime
 from functools import lru_cache
@@ -145,6 +146,11 @@ class CrawlRunHistoryItem(BaseModel):
     triggered_at: str
 
 
+class CrawlRunActionResult(BaseModel):
+    run_id: str
+    status: str
+
+
 class MonitoringSummary(BaseModel):
     total_configs: int
     total_runs: int
@@ -187,6 +193,8 @@ class CrawlerRuntime(BaseModel):
     latest_status: str
     latest_config_name: str
     progress_percent: float
+    processed_bytes: int = 0
+    discovered_bytes: int = 0
     queue_indicators: List[QueueIndicator]
     log_lines: List[str]
     log_source: str
@@ -472,6 +480,22 @@ class PostgreSQLAdapter:
         }
 
     def start_crawl(self, config_id: str) -> Optional[Dict[str, Any]]:
+        existing_run = self.execute_query(
+            """
+            SELECT id::text, status
+            FROM crawl_runs
+            WHERE config_id::text = %s
+              AND LOWER(status) IN ('queued', 'pending', 'running', 'in_progress', 'cancelling')
+            ORDER BY triggered_at DESC
+            LIMIT 1
+            """,
+            [config_id],
+        )
+        if existing_run:
+            raise ValueError(
+                f"Une exploration est deja active pour cette configuration ({existing_run[0][1]})."
+            )
+
         query = """
             INSERT INTO crawl_runs (config_id, status)
             SELECT id, 'queued'
@@ -494,6 +518,45 @@ class PostgreSQLAdapter:
             "status": row[2],
             "triggered_at": row[3],
         }
+
+    def request_stop_run(self, run_id: str) -> Optional[Dict[str, Any]]:
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE crawl_runs
+                    SET status = CASE
+                        WHEN LOWER(status) IN ('queued', 'pending') THEN 'cancelled'
+                        WHEN LOWER(status) IN ('running', 'in_progress') THEN 'cancelling'
+                        ELSE status
+                    END
+                    WHERE id::text = %s
+                    RETURNING id::text, status
+                    """,
+                    [run_id],
+                )
+                row = cursor.fetchone()
+            conn.commit()
+
+        if not row:
+            return None
+        return {"run_id": row[0], "status": row[1]}
+
+    def delete_run(self, run_id: str) -> bool:
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    DELETE FROM crawl_runs
+                    WHERE id::text = %s
+                      AND LOWER(status) NOT IN ('running', 'in_progress', 'cancelling')
+                    RETURNING id::text
+                    """,
+                    [run_id],
+                )
+                row = cursor.fetchone()
+            conn.commit()
+        return bool(row)
 
     def get_monitoring_summary(self) -> Dict[str, Any]:
         total_configs = self.execute_query("SELECT COUNT(*) FROM crawl_configs")[0][0] or 0
@@ -878,6 +941,63 @@ def _tail_log_lines(log_path: Path, limit: int = 80) -> List[str]:
         return []
 
 
+PROGRESS_RE = re.compile(
+    r"Progression:\s*(?P<files>\d+)\s*fichiers,\s*"
+    r"(?P<dirs>\d+)\s*répertoires.*?"
+    r"Queues:\s*Dossiers=(?P<queue_dirs>\d+),\s*"
+    r"Fichiers=(?P<queue_files>\d+),\s*"
+    r"Somme de contrôle=(?P<queue_checksums>\d+),\s*"
+    r"Gros fichiers=(?P<queue_large>\d+)\s*\|\s*"
+    r"Volume traité=(?P<processed_bytes>\d+)\s*octets,\s*"
+    r"Volume découvert=(?P<discovered_bytes>\d+)\s*octets,\s*"
+    r"Progression volume=(?P<progress_percent>\d+(?:\.\d+)?)%",
+    re.IGNORECASE,
+)
+
+
+def _extract_progress_percent(log_lines: List[str]) -> float:
+    for line in reversed(log_lines):
+        match = PROGRESS_RE.search(line)
+        if not match:
+            continue
+        return float(match.group("progress_percent"))
+    return 0.0
+
+
+def _extract_queue_snapshot(log_lines: List[str]) -> Dict[str, int]:
+    for line in reversed(log_lines):
+        match = PROGRESS_RE.search(line)
+        if not match:
+            continue
+        return {
+            "directories": int(match.group("queue_dirs")),
+            "files": int(match.group("queue_files")),
+            "checksums": int(match.group("queue_checksums")),
+            "large_files": int(match.group("queue_large")),
+        }
+    return {
+        "directories": 0,
+        "files": 0,
+        "checksums": 0,
+        "large_files": 0,
+    }
+
+
+def _extract_volume_snapshot(log_lines: List[str]) -> Dict[str, int]:
+    for line in reversed(log_lines):
+        match = PROGRESS_RE.search(line)
+        if not match:
+            continue
+        return {
+            "processed_bytes": int(match.group("processed_bytes")),
+            "discovered_bytes": int(match.group("discovered_bytes")),
+        }
+    return {
+        "processed_bytes": 0,
+        "discovered_bytes": 0,
+    }
+
+
 @app.get("/api/crawl-configs", response_model=List[CrawlConfigPublic])
 async def list_crawl_configs():
     try:
@@ -912,9 +1032,42 @@ async def start_crawl(payload: CrawlStartRequest):
         return CrawlRun(**run)
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
         logger.error(f"Erreur start_crawl: {e}")
         raise HTTPException(status_code=500, detail="Erreur lors du lancement de l'exploration")
+
+
+@app.post("/api/crawls/{run_id}/stop", response_model=CrawlRunActionResult)
+async def stop_crawl_run(run_id: str):
+    try:
+        db = get_db_adapter()
+        ensure_crawl_storage_ready(db)
+        result = db.request_stop_run(run_id)
+        if not result:
+            raise HTTPException(status_code=404, detail="Run d'exploration introuvable")
+        return CrawlRunActionResult(**result)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur stop_crawl_run: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors de l'arrêt de l'exploration")
+
+
+@app.delete("/api/crawls/{run_id}", response_model=CrawlRunActionResult)
+async def delete_crawl_run(run_id: str):
+    try:
+        db = get_db_adapter()
+        ensure_crawl_storage_ready(db)
+        if not db.delete_run(run_id):
+            raise HTTPException(status_code=409, detail="Suppression impossible pour un run actif ou introuvable")
+        return CrawlRunActionResult(run_id=run_id, status="deleted")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur delete_crawl_run: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la suppression du run")
 
 
 @app.get("/api/monitoring", response_model=MonitoringSummary)
@@ -981,42 +1134,46 @@ async def get_crawler_runtime(log_limit: int = 80):
         db = get_db_adapter()
         ensure_crawl_storage_ready(db)
         monitoring = db.get_monitoring_summary()
+        log_path = Path(os.getenv("OPENINDEX_CRAWLER_LOG_PATH", "logs/smb_crawler_postgresql.log"))
+        log_lines = _tail_log_lines(log_path, limit=log_limit)
+        runtime_progress = _extract_progress_percent(log_lines)
+        queue_snapshot = _extract_queue_snapshot(log_lines)
+        volume_snapshot = _extract_volume_snapshot(log_lines)
 
         queue_indicators = [
             QueueIndicator(
-                key="queued_runs",
-                label="Queue en file",
-                value=monitoring["queued_runs"],
-                detail="Runs en attente de traitement",
+                key="directories",
+                label="Dossiers",
+                value=queue_snapshot["directories"],
+                detail="Répertoires à explorer",
             ),
             QueueIndicator(
-                key="running_runs",
-                label="Queue active",
-                value=monitoring["running_runs"],
-                detail="Runs en cours",
+                key="files",
+                label="Fichiers",
+                value=queue_snapshot["files"],
+                detail="Éléments en attente d'écriture",
             ),
             QueueIndicator(
-                key="completed_runs",
-                label="Queue terminee",
-                value=monitoring["completed_runs"],
-                detail="Runs valides",
+                key="checksums",
+                label="Somme de contrôle",
+                value=queue_snapshot["checksums"],
+                detail="Fichiers en attente de calcul",
             ),
             QueueIndicator(
-                key="failed_runs",
-                label="Queue en erreur",
-                value=monitoring["failed_runs"],
-                detail="Runs a diagnostiquer",
+                key="large_files",
+                label="Gros fichiers",
+                value=queue_snapshot["large_files"],
+                detail="Fichiers lourds en attente de calcul",
             ),
         ]
-
-        log_path = Path(os.getenv("OPENINDEX_CRAWLER_LOG_PATH", "logs/smb_crawler_postgresql.log"))
-        log_lines = _tail_log_lines(log_path, limit=log_limit)
 
         return CrawlerRuntime(
             active=monitoring["running_runs"] > 0,
             latest_status=monitoring["latest_run_status"],
             latest_config_name=monitoring["latest_run_config_name"],
-            progress_percent=monitoring["progress_percent"],
+            progress_percent=runtime_progress if monitoring["running_runs"] > 0 else monitoring["progress_percent"],
+            processed_bytes=volume_snapshot["processed_bytes"],
+            discovered_bytes=volume_snapshot["discovered_bytes"],
             queue_indicators=queue_indicators,
             log_lines=log_lines,
             log_source=str(log_path),

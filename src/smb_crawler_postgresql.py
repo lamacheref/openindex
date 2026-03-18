@@ -51,6 +51,7 @@ class SMBCrawlerPostgreSQL:
         self.share_name = share_name
         self.domain = domain
         self.crawl_config_id = crawl_config_id
+        self.run_id = None
         self.postgres_config = postgres_config or {
             'host': os.getenv('POSTGRES_HOST', 'localhost'),
             'port': int(os.getenv('POSTGRES_PORT', '5432')),
@@ -90,6 +91,7 @@ class SMBCrawlerPostgreSQL:
             'total_directories': 0,
             'total_files': 0,
             'total_size': 0,
+            'processed_size': 0,
             'large_files': 0,  # Nouveau: compteur de gros fichiers
             'duplicate_files': 0,
             'duplicate_size': 0,
@@ -106,6 +108,16 @@ class SMBCrawlerPostgreSQL:
         """Configure le logging avec rotation automatique."""
         self.logger_manager = get_logger_manager()
         self.logger = self.logger_manager.get_logger("smb_crawler_postgresql")
+
+    def should_stop_requested_run(self):
+        if not self.run_id:
+            return False
+        try:
+            status = self.postgres_adapter.get_crawl_run_status(self.run_id)
+        except Exception as exc:
+            self.logger.warning(f"Impossible de verifier le statut du run {self.run_id}: {exc}")
+            return False
+        return (status or "").lower() == "cancelling"
 
     def setup_smb_credentials(self):
         """Configure smbclient avec les informations d'identification fournies."""
@@ -465,6 +477,7 @@ class SMBCrawlerPostgreSQL:
                 
                 # Ajouter au lot
                 batch_files.append(file_data)
+                self.stats['processed_size'] += file_data.get('size', 0) or 0
                 
                 # Sauvegarder le lot si nécessaire
                 if len(batch_files) >= batch_size:
@@ -580,6 +593,7 @@ class SMBCrawlerPostgreSQL:
                 
                 # Ajouter au lot
                 batch_files.append(file_data)
+                self.stats['processed_size'] += file_data.get('size', 0) or 0
                 
                 # Sauvegarder le lot si nécessaire
                 if len(batch_files) >= batch_size:
@@ -805,18 +819,36 @@ class SMBCrawlerPostgreSQL:
 
     def _progress_callback(self):
         """Callback pour afficher la progression."""
+        if self.should_stop_requested_run():
+            self.logger.info(f"⏹️ Arrêt demandé pour le run {self.run_id}")
+            self.stop()
+            return
+
         duration = time.time() - self.stats['start_time']
         dirs_in_queue = self.directory_queue.qsize()
         dirs_result_in_queue = self.directory_result_queue.qsize()
         files_in_queue = self.file_queue.qsize()
         large_files_in_queue = self.large_file_queue.qsize()
-        
-        print(f"\r📊 Progression: {self.stats['total_files']} fichiers, "
-              f"{self.stats['total_directories']} répertoires, "
-              f"{self.stats['large_files']} gros fichiers | "
-              f"Queue: {dirs_in_queue} dirs → {dirs_result_in_queue} saved, "
-              f"{files_in_queue} files, {large_files_in_queue} large | "
-              f"Durée: {duration:.1f}s | Erreurs: {self.stats['errors']}", end="")
+        known_total_bytes = self.stats['total_size']
+        processed_bytes = min(self.stats['processed_size'], known_total_bytes) if known_total_bytes > 0 else 0
+        progress_percent = round((processed_bytes / known_total_bytes) * 100, 1) if known_total_bytes > 0 else 0.0
+
+        progress_line = (
+            f"📊 Progression: {self.stats['total_files']} fichiers, "
+            f"{self.stats['total_directories']} répertoires, "
+            f"{self.stats['large_files']} gros fichiers | "
+            f"Queues: Dossiers={dirs_in_queue}, "
+            f"Fichiers={dirs_result_in_queue}, "
+            f"Somme de contrôle={files_in_queue}, "
+            f"Gros fichiers={large_files_in_queue} | "
+            f"Volume traité={processed_bytes} octets, "
+            f"Volume découvert={known_total_bytes} octets, "
+            f"Progression volume={progress_percent}% | "
+            f"Durée: {duration:.1f}s | Erreurs: {self.stats['errors']}"
+        )
+
+        print(f"\r{progress_line}", end="")
+        self.logger.info(progress_line)
 
     def _print_final_stats(self):
         """Affiche les statistiques finales du crawl."""
@@ -901,6 +933,7 @@ def run_single_crawl(run_payload):
         large_file_threshold=crawler_config["large_file_threshold"],
         debug=debug_mode
     )
+    crawler.run_id = run_payload["run_id"]
 
     print(f"📝 Logs configurés dans: logs/openindex.log")
     print(f"🔧 Seuil des gros fichiers: {crawler_config['large_file_threshold'] / 1024 / 1024:.1f} MB")
@@ -909,13 +942,16 @@ def run_single_crawl(run_payload):
     print("\nDémarrage de l'exploration récursive...")
     print("Appuyez sur Ctrl+C pour arrêter")
 
-    return crawler.start_crawl(base_path=base_path)
+    stats = crawler.start_crawl(base_path=base_path)
+    stats["cancelled"] = crawler.stop_event.is_set()
+    return stats
 
 
 def worker_loop(poll_interval_seconds=5):
     """Boucle principale du service d'exploration, pilotée par crawl_runs."""
     adapter = PostgreSQLAdapter(build_postgres_config())
     adapter.initialize_database()
+    adapter.reset_stale_running_runs()
     print("👂 Worker d'exploration prêt, en attente de runs...")
 
     while True:
@@ -923,11 +959,12 @@ def worker_loop(poll_interval_seconds=5):
         run_id = run_payload["run_id"]
         try:
             print(f"▶️ Run réservé: {run_id} pour {run_payload['name']} ({run_payload['start_path']})")
-            run_single_crawl(run_payload)
-            adapter.update_crawl_run_status(run_id, "completed")
-            print(f"✅ Run terminé: {run_id}")
+            stats = run_single_crawl(run_payload)
+            final_status = "cancelled" if stats.get("cancelled") else "completed"
+            adapter.update_crawl_run_status(run_id, final_status)
+            print(f"✅ Run terminé: {run_id} ({final_status})")
         except KeyboardInterrupt:
-            adapter.update_crawl_run_status(run_id, "failed")
+            adapter.update_crawl_run_status(run_id, "cancelled")
             raise
         except Exception as exc:
             adapter.update_crawl_run_status(run_id, "failed")

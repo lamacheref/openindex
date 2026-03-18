@@ -261,14 +261,15 @@
                         <div class="mt-6">
                             <div class="flex items-center justify-between text-sm">
                                 <span class="text-slate-600">Progression actuelle</span>
-                                <span class="font-semibold text-teal-800" x-text="`${crawlOverview.monitoring.progress_percent ?? 0}%`"></span>
+                                <span class="font-semibold text-teal-800" x-text="`${effectiveProgressPercent}%`"></span>
                             </div>
                             <div class="mt-2 h-4 overflow-hidden rounded-full bg-slate-200">
                                 <div class="h-4 rounded-full bg-gradient-to-r from-teal-700 to-emerald-500 transition-all duration-500"
-                                     :style="`width: ${crawlOverview.monitoring.progress_percent ?? 0}%`"></div>
+                                     :style="`width: ${effectiveProgressPercent}%`"></div>
                             </div>
                             <p class="mt-3 text-sm text-slate-600" x-text="`Dernier run: ${crawlOverview.monitoring.latest_run_status || 'Aucun run'} • ${crawlOverview.monitoring.latest_run_config_name || '-'}`"></p>
-                            <p class="mt-1 text-sm text-slate-600" x-show="implementationStatus" x-text="implementationStatus"></p>
+                            <p class="mt-1 text-sm text-slate-600" x-text="volumeProgressLabel"></p>
+                            <p class="mt-1 text-sm text-slate-600" x-show="liveImplementationStatus" x-text="liveImplementationStatus"></p>
                             <div class="mt-4">
                                 <button @click="showCrawlerLogs = !showCrawlerLogs"
                                         :disabled="!crawlIsActive"
@@ -319,21 +320,36 @@
                                             <th>Configuration</th>
                                             <th>Statut</th>
                                             <th>Déclenché à</th>
+                                            <th class="text-right">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <template x-for="run in crawlOverview.recent_runs" :key="run.run_id">
-                                            <tr>
-                                                <td>
-                                                    <p class="font-medium text-slate-900" x-text="run.config_name"></p>
-                                                    <p class="break-all text-xs text-slate-500" x-text="run.start_path"></p>
-                                                </td>
+                                        <tr>
+                                            <td>
+                                                <p class="font-medium text-slate-900" x-text="run.config_name"></p>
+                                                <p class="break-all text-xs text-slate-500" x-text="run.start_path"></p>
+                                            </td>
                                                 <td>
                                                     <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
                                                           :class="statusBadgeClass(run.status)"
                                                           x-text="run.status"></span>
                                                 </td>
                                                 <td class="text-sm text-slate-600" x-text="formatDate(run.triggered_at)"></td>
+                                                <td class="text-right">
+                                                    <div class="flex justify-end gap-2">
+                                                        <button @click="stopRun(run.run_id)"
+                                                                :disabled="!canStopRun(run.status)"
+                                                                class="rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
+                                                            Arrêter
+                                                        </button>
+                                                        <button @click="deleteRun(run.run_id)"
+                                                                :disabled="!canDeleteRun(run.status)"
+                                                                class="rounded-xl border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-800 hover:bg-red-100 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
+                                                            Supprimer
+                                                        </button>
+                                                    </div>
+                                                </td>
                                             </tr>
                                         </template>
                                     </tbody>
@@ -727,7 +743,6 @@
                 },
 
                 async init() {
-                    this.addLogEntry('UI initialisée');
                     await this.loadSpaces();
                     await this.loadStats();
                     await this.loadCrawlConfigs();
@@ -929,6 +944,32 @@
                     }
                 },
 
+                async stopRun(runId) {
+                    try {
+                        const response = await fetch(`/api/crawls/${runId}/stop`, { method: 'POST' });
+                        if (!response.ok) {
+                            const details = await response.json();
+                            throw new Error(details.detail || 'Arrêt impossible');
+                        }
+                        await this.refreshOperations();
+                    } catch (error) {
+                        this.addLogEntry(`Erreur arrêt exploration: ${error.message}`);
+                    }
+                },
+
+                async deleteRun(runId) {
+                    try {
+                        const response = await fetch(`/api/crawls/${runId}`, { method: 'DELETE' });
+                        if (!response.ok) {
+                            const details = await response.json();
+                            throw new Error(details.detail || 'Suppression impossible');
+                        }
+                        await this.refreshOperations();
+                    } catch (error) {
+                        this.addLogEntry(`Erreur suppression run: ${error.message}`);
+                    }
+                },
+
                 async loadDbExplain() {
                     this.loadingDbExplain = true;
                     this.dbExplainError = '';
@@ -960,7 +1001,6 @@
 
                     this.ws.onopen = () => {
                         this.wsConnected = true;
-                        this.addLogEntry('WebSocket connecté');
                     };
 
                     this.ws.onmessage = (event) => {
@@ -971,7 +1011,6 @@
                         if (message.type === 'monitoring_update') {
                             this.monitoring = message.data;
                             this.crawlOverview.monitoring = message.data;
-                            this.addLogEntry(`Monitoring: ${message.data.latest_run_status || 'mise à jour'}`);
                             this.refreshNotifications();
                             this.loadCrawlerRuntime();
                         }
@@ -979,7 +1018,6 @@
 
                     this.ws.onclose = () => {
                         this.wsConnected = false;
-                        this.addLogEntry('WebSocket déconnecté');
                         setTimeout(() => this.initWebSocket(), 5000);
                     };
                 },
@@ -993,7 +1031,6 @@
                         this.loadSystemStatus(),
                         this.loadCrawlerRuntime()
                     ]);
-                    this.addLogEntry('Rafraîchissement manuel exécuté');
                 },
 
                 addLogEntry(message) {
@@ -1021,6 +1058,14 @@
                     if (['queued', 'pending'].includes(normalized)) return 'bg-amber-100 text-amber-800';
                     if (['failed', 'error'].includes(normalized)) return 'bg-red-100 text-red-800';
                     return 'bg-slate-100 text-slate-800';
+                },
+
+                canStopRun(status) {
+                    return ['queued', 'pending', 'running', 'in_progress'].includes((status || '').toLowerCase());
+                },
+
+                canDeleteRun(status) {
+                    return !['queued', 'pending', 'running', 'in_progress', 'cancelling'].includes((status || '').toLowerCase());
                 },
 
                 formatBytes(bytes) {
@@ -1073,10 +1118,7 @@
                     if (this.crawlerRuntime.log_lines && this.crawlerRuntime.log_lines.length > 0) {
                         return this.crawlerRuntime.log_lines.join('\n');
                     }
-                    if (this.operationalLogs.length === 0) {
-                        return '[aucun événement]';
-                    }
-                    return this.operationalLogs.join('\n');
+                    return '[aucun log explorateur]';
                 },
 
                 get notifications() {
@@ -1102,6 +1144,32 @@
 
                 get latestRunLabel() {
                     return this.crawlOverview.monitoring.latest_run_config_name || 'non défini';
+                },
+
+                get effectiveProgressPercent() {
+                    if (this.crawlIsActive) {
+                        return this.crawlerRuntime.progress_percent ?? 0;
+                    }
+                    return this.crawlOverview.monitoring.progress_percent ?? 0;
+                },
+
+                get volumeProgressLabel() {
+                    const processed = this.crawlerRuntime.processed_bytes ?? 0;
+                    const discovered = this.crawlerRuntime.discovered_bytes ?? 0;
+                    if (this.crawlIsActive && discovered > 0) {
+                        return `${this.formatBytes(processed)} explorés sur ${this.formatBytes(discovered)} découverts`;
+                    }
+                    if (processed > 0) {
+                        return `${this.formatBytes(processed)} explorés`;
+                    }
+                    return 'Volume exploré non disponible';
+                },
+
+                get liveImplementationStatus() {
+                    if (this.crawlOverview.monitoring.latest_run_status && this.crawlOverview.monitoring.latest_run_config_name) {
+                        return `Exploration ${this.crawlOverview.monitoring.latest_run_config_name} en statut ${this.crawlOverview.monitoring.latest_run_status}`;
+                    }
+                    return this.implementationStatus;
                 },
 
                 get latestRunDateLabel() {
