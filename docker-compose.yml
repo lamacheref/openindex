@@ -25,7 +25,10 @@ services:
       start_period: 20s
 
   api:
-    image: ${OPENINDEX_API_IMAGE:-ghcr.io/lamacheref/openindex-api:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    image: openindex-api:local
     container_name: openindex-api
     restart: unless-stopped
     environment:
@@ -44,7 +47,10 @@ services:
       - openindex-network
 
   crawler:
-    image: ${OPENINDEX_CRAWLER_IMAGE:-ghcr.io/lamacheref/openindex-crawler:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile.crawler
+    image: openindex-crawler:local
     container_name: openindex-crawler
     restart: unless-stopped
     environment:
@@ -64,7 +70,10 @@ services:
       - openindex-network
 
   ui:
-    image: ${OPENINDEX_UI_IMAGE:-ghcr.io/lamacheref/openindex-ui:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    image: openindex-ui:local
     container_name: openindex-ui
     restart: unless-stopped
     ports:

@@ -16,6 +16,9 @@ class DummyDB:
     def __init__(self):
         self.crawl_configs = []
         self.crawl_runs = []
+        self.space_stats = {}
+        self.files_by_config = {}
+        self.duplicates_by_config = {}
 
     def execute_query(self, query, params=None):
         params = params or []
@@ -28,6 +31,9 @@ class DummyDB:
             ]
 
         if "FROM files" in query and "JOIN files f2" in query:
+            config_id = params[0] if params and "crawl_config_id::text" in query else None
+            if config_id is not None:
+                return self.duplicates_by_config.get(config_id, [])
             return [
                 (
                     "00000000-0000-0000-0000-000000000001",
@@ -47,6 +53,10 @@ class DummyDB:
                 ("/share/docs",),
                 ("/share/original/a.txt",),
             ]
+
+        if params and "crawl_config_id::text" in query:
+            config_id = params[0]
+            return self.files_by_config.get(config_id, [])
 
         # /api/files
         return [
@@ -79,6 +89,17 @@ class DummyDB:
         ]
 
     def get_statistics(self, space=None):
+        if space is not None:
+            return self.space_stats.get(
+                space,
+                {
+                    "total_files": 0,
+                    "total_directories": 0,
+                    "total_size": 0,
+                    "duplicate_files": 0,
+                    "crawl_duration": None,
+                },
+            )
         return {
             "total_files": 2,
             "total_directories": 1,
@@ -86,6 +107,12 @@ class DummyDB:
             "duplicate_files": 1,
             "crawl_duration": 4.2,
         }
+
+    def resolve_space_config_id(self, space):
+        for config in self.crawl_configs:
+            if config["start_path"] == space:
+                return config["id"]
+        return None
 
     def get_spaces(self):
         return [
@@ -97,8 +124,9 @@ class DummyDB:
         return list(self.crawl_configs)
 
     def create_crawl_config(self, payload):
+        config_index = len(self.crawl_configs) + 1
         item = {
-            "id": "cfg-1",
+            "id": f"cfg-{config_index}",
             "name": payload.name,
             "domain_zone": payload.domain_zone,
             "start_path": payload.start_path,
@@ -108,7 +136,7 @@ class DummyDB:
             "connection_domain": payload.connection.domain,
             "created_at": "2026-03-10T12:00:00+00:00",
         }
-        self.crawl_configs = [item]
+        self.crawl_configs.append(item)
         return item
 
     def start_crawl(self, config_id):
@@ -215,6 +243,94 @@ def test_get_spaces_endpoint(client):
     payload = response.json()
     assert payload[0]["path_prefix"] == "/share"
     assert payload[0]["file_count"] == 2
+
+
+def test_space_scoping_uses_config_link_instead_of_path_guessing(client):
+    db = api_main.get_db_adapter()
+
+    smiden = db.create_crawl_config(
+        api_main.CrawlConfigCreate(
+            name="SMIDEN",
+            domain_zone="FR",
+            start_path="\\\\172.16.252.34\\Public\\SMIDEN",
+            include_paths=[],
+            exclude_paths=[],
+            connection=api_main.CrawlConnectionConfig(
+                username="svc_smiden",
+                password="secret",
+                domain=None,
+            ),
+        )
+    )
+    finance = db.create_crawl_config(
+        api_main.CrawlConfigCreate(
+            name="FINANCE",
+            domain_zone="FR",
+            start_path="\\\\172.16.252.34\\Public\\FINANCE",
+            include_paths=[],
+            exclude_paths=[],
+            connection=api_main.CrawlConnectionConfig(
+                username="svc_finance",
+                password="secret",
+                domain=None,
+            ),
+        )
+    )
+
+    db.space_stats[smiden["start_path"]] = {
+        "total_files": 0,
+        "total_directories": 0,
+        "total_size": 0,
+        "duplicate_files": 0,
+        "crawl_duration": None,
+    }
+    db.space_stats[finance["start_path"]] = {
+        "total_files": 1,
+        "total_directories": 1,
+        "total_size": 128,
+        "duplicate_files": 1,
+        "crawl_duration": 3.1,
+    }
+    db.files_by_config[finance["id"]] = [
+        (
+            "00000000-0000-0000-0000-000000000021",
+            "\\\\172.16.252.34\\Public\\FINANCE\\budget.xlsx",
+            "budget.xlsx",
+            128,
+            "xyz",
+            "2026-02-27T10:00:00Z",
+            False,
+            False,
+            None,
+            None,
+            None,
+        ),
+    ]
+    db.duplicates_by_config[finance["id"]] = [
+        (
+            "00000000-0000-0000-0000-000000000022",
+            "\\\\172.16.252.34\\Public\\FINANCE\\copy.xlsx",
+            "copy.xlsx",
+            128,
+            "xyz",
+            "2026-02-27T10:00:00Z",
+            None,
+            None,
+            "\\\\172.16.252.34\\Public\\FINANCE\\budget.xlsx",
+        )
+    ]
+
+    stats = client("GET", "/api/stats", params={"space": smiden["start_path"]})
+    assert stats.status_code == 200
+    assert stats.json()["total_files"] == 0
+
+    files = client("GET", "/api/files", params={"space": smiden["start_path"]})
+    assert files.status_code == 200
+    assert files.json() == []
+
+    duplicates = client("GET", "/api/duplicates", params={"space": smiden["start_path"]})
+    assert duplicates.status_code == 200
+    assert duplicates.json() == []
 
 
 def test_api_concurrent_health_requests():

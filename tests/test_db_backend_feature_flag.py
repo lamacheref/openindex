@@ -33,6 +33,12 @@ def test_get_db_adapter_postgresql(monkeypatch):
                 return
             if 'CREATE INDEX IF NOT EXISTS idx_crawl_runs_triggered_at' in query:
                 return
+            if 'ALTER TABLE files' in query:
+                return
+            if 'CREATE INDEX IF NOT EXISTS idx_files_crawl_config_id' in query:
+                return
+            if 'UPDATE files AS f' in query:
+                return
             raise AssertionError(f"Unexpected query: {query}")
 
         def __enter__(self):

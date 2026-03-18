@@ -66,6 +66,11 @@ class PostgreSQLAdapter:
             files_table_exists = cursor.fetchone()[0]
 
             if files_table_exists:
+                init_sql_path = Path(__file__).resolve().parents[1] / "database" / "init.sql"
+                with init_sql_path.open("r", encoding="utf-8") as sql_file:
+                    cursor.execute(sql_file.read())
+                conn.commit()
+                self.ensure_file_space_linking()
                 self.logger.info("Base de données PostgreSQL initialisée et accessible")
                 return
 
@@ -74,6 +79,40 @@ class PostgreSQLAdapter:
                 cursor.execute(sql_file.read())
             conn.commit()
             self.logger.info(f"Schéma PostgreSQL initialisé depuis {init_sql_path}")
+        self.ensure_file_space_linking()
+
+    def ensure_file_space_linking(self):
+        """Ajoute et rétro-remplit le lien entre fichiers et configuration de crawl."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                ALTER TABLE files
+                ADD COLUMN IF NOT EXISTS crawl_config_id UUID REFERENCES crawl_configs(id) ON DELETE SET NULL
+                """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_files_crawl_config_id ON files(crawl_config_id)"
+            )
+            cursor.execute(
+                """
+                UPDATE files AS f
+                SET crawl_config_id = matched.config_id
+                FROM (
+                    SELECT DISTINCT ON (f.id)
+                        f.id AS file_id,
+                        c.id AS config_id
+                    FROM files AS f
+                    JOIN crawl_configs AS c
+                      ON f.path LIKE c.start_path || '%%'
+                    WHERE f.crawl_config_id IS NULL
+                    ORDER BY f.id, LENGTH(c.start_path) DESC, c.created_at DESC
+                ) AS matched
+                WHERE f.id = matched.file_id
+                  AND f.crawl_config_id IS NULL
+                """
+            )
+            conn.commit()
 
     def execute_query(self, query: str, params: Optional[List[Any]] = None) -> List[Any]:
         """Exécute une requête SQL simple et retourne toutes les lignes."""
@@ -113,6 +152,7 @@ class PostgreSQLAdapter:
                         file_data.get('is_directory', False),
                         file_data.get('is_duplicate', False),
                         file_data.get('duplicate_of'),
+                        file_data.get('crawl_config_id'),
                         file_data.get('created_at', datetime.now()),
                         file_data.get('updated_at', datetime.now())
                     ))
@@ -123,7 +163,7 @@ class PostgreSQLAdapter:
                     """
                     INSERT INTO files (
                         path, name, size, checksum, last_modified,
-                        is_directory, is_duplicate, duplicate_of,
+                        is_directory, is_duplicate, duplicate_of, crawl_config_id,
                         created_at, updated_at
                     ) VALUES %s
                     ON CONFLICT (path) DO UPDATE SET
@@ -134,6 +174,7 @@ class PostgreSQLAdapter:
                         is_directory = EXCLUDED.is_directory,
                         is_duplicate = EXCLUDED.is_duplicate,
                         duplicate_of = EXCLUDED.duplicate_of,
+                        crawl_config_id = COALESCE(EXCLUDED.crawl_config_id, files.crawl_config_id),
                         updated_at = EXCLUDED.updated_at
                     """,
                     values

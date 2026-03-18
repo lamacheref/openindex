@@ -74,6 +74,11 @@ CREATE TABLE IF NOT EXISTS crawl_runs (
     triggered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+ALTER TABLE files
+ADD COLUMN IF NOT EXISTS crawl_config_id UUID REFERENCES crawl_configs(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_files_crawl_config_id ON files(crawl_config_id);
+
 CREATE INDEX IF NOT EXISTS idx_crawl_runs_config_id ON crawl_runs(config_id);
 CREATE INDEX IF NOT EXISTS idx_crawl_runs_status ON crawl_runs(status);
 CREATE INDEX IF NOT EXISTS idx_crawl_runs_triggered_at ON crawl_runs(triggered_at);
