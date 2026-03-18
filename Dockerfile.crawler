@@ -1,10 +1,17 @@
 # Dockerfile pour le service Crawler Python
 FROM python:3.11-slim
 
+ARG OPENINDEX_APP_VERSION=0.2.1
+ARG OPENINDEX_BUILD_COMMIT=dev
+ARG OPENINDEX_BUILD_DATE=unknown
+
 # Métadonnées
 LABEL maintainer="OpenIndex Team"
 LABEL description="OpenIndex Crawler Service"
-LABEL version="0.1.0"
+LABEL version="${OPENINDEX_APP_VERSION}"
+LABEL org.opencontainers.image.version="${OPENINDEX_APP_VERSION}"
+LABEL org.opencontainers.image.revision="${OPENINDEX_BUILD_COMMIT}"
+LABEL org.opencontainers.image.created="${OPENINDEX_BUILD_DATE}"
 
 # Configuration
 WORKDIR /app
@@ -21,6 +28,7 @@ COPY Archives/legacy/requirements/requirements.crawler.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copier les sources du crawler
+COPY VERSION ./VERSION
 COPY src/ ./src/
 COPY config/ ./config/
 COPY database/ ./database/
@@ -31,6 +39,9 @@ RUN mkdir -p logs archives data
 # Variables d'environnement
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
+ENV OPENINDEX_APP_VERSION=${OPENINDEX_APP_VERSION}
+ENV OPENINDEX_BUILD_COMMIT=${OPENINDEX_BUILD_COMMIT}
+ENV OPENINDEX_BUILD_DATE=${OPENINDEX_BUILD_DATE}
 
 # Point d'entrée par défaut
 ENTRYPOINT ["python", "src/smb_crawler_postgresql.py"]

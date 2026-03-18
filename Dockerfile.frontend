@@ -1,8 +1,11 @@
 # Dockerfile pour le service Frontend VanillaJS
 FROM node:22-alpine AS frontend-builder
 
+ARG OPENINDEX_APP_VERSION=0.2.1
+
 WORKDIR /build
 
+COPY VERSION ./
 COPY package.json ./
 COPY tailwind.config.js ./
 RUN npm install
@@ -16,10 +19,17 @@ RUN mkdir -p frontend/assets/fontawesome/css \
 
 FROM nginx:alpine
 
+ARG OPENINDEX_APP_VERSION=0.2.1
+ARG OPENINDEX_BUILD_COMMIT=dev
+ARG OPENINDEX_BUILD_DATE=unknown
+
 # Métadonnées
 LABEL maintainer="OpenIndex Team"
 LABEL description="OpenIndex Frontend Service"
-LABEL version="0.1.0"
+LABEL version="${OPENINDEX_APP_VERSION}"
+LABEL org.opencontainers.image.version="${OPENINDEX_APP_VERSION}"
+LABEL org.opencontainers.image.revision="${OPENINDEX_BUILD_COMMIT}"
+LABEL org.opencontainers.image.created="${OPENINDEX_BUILD_DATE}"
 
 # Installation des utilitaires
 RUN apk add --no-cache \
@@ -38,6 +48,9 @@ RUN mkdir -p /var/cache/nginx /var/log/nginx
 # Variables d'environnement
 ENV NGINX_HOST=0.0.0.0
 ENV NGINX_PORT=3000
+ENV OPENINDEX_APP_VERSION=${OPENINDEX_APP_VERSION}
+ENV OPENINDEX_BUILD_COMMIT=${OPENINDEX_BUILD_COMMIT}
+ENV OPENINDEX_BUILD_DATE=${OPENINDEX_BUILD_DATE}
 
 # Health check pour le frontend
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \

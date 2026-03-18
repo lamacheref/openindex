@@ -16,6 +16,10 @@ from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from uuid import uuid4
+try:
+    from src.versioning import get_current_version
+except ModuleNotFoundError:  # pragma: no cover
+    from versioning import get_current_version
 
 try:
     import psycopg2
@@ -25,6 +29,8 @@ except ModuleNotFoundError:  # pragma: no cover
     SimpleConnectionPool = None
 
 
+APP_VERSION = get_current_version()
+
 # Configuration du logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -33,7 +39,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="OpenIndex API",
     description="API moderne pour l'indexation SMB",
-    version="0.1.0",
+    version=APP_VERSION,
     docs_url="/docs",
     redoc_url="/redoc"
 )
