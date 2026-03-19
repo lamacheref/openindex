@@ -1499,8 +1499,8 @@ def _run_estimation_in_container(run_details: Dict[str, Any], container_name: st
             f"OPENINDEX_ESTIMATE_MOUNT_BASE={ESTIMATE_MOUNT_BASE}",
         ],
         "HostConfig": {
-            "CapAdd": ["SYS_ADMIN"],
-            "SecurityOpt": ["apparmor:unconfined"],
+            "CapAdd": ["SYS_ADMIN", "DAC_READ_SEARCH"],
+            "SecurityOpt": ["apparmor:unconfined", "seccomp:unconfined"],
         },
     }
     container_id = docker_client.create_container(container_name, payload)
