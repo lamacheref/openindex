@@ -96,6 +96,7 @@ def unmount_share(mount_dir: Path) -> None:
 
 def run_du(target_path: Path) -> int:
     try:
+        print(f"[estimate] demarrage du -sb sur {target_path}", file=sys.stderr, flush=True)
         du_result = subprocess.run(
             ["du", "-sb", str(target_path)],
             check=True,
@@ -104,6 +105,7 @@ def run_du(target_path: Path) -> int:
         )
     except subprocess.CalledProcessError as exc:
         raise RuntimeError(format_subprocess_failure(exc)) from exc
+    print(f"[estimate] fin du -sb sur {target_path}", file=sys.stderr, flush=True)
     return int(du_result.stdout.split()[0])
 
 

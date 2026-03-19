@@ -9,7 +9,11 @@
   - L'API doit piloter la séquence `estimation -> validation du retour -> lancement explorateur`, avec contrôle explicite du cleanup du conteneur temporaire.
   - Prévoir les fallbacks SMB si le montage n'est pas possible.
   - État actuel: fallback SMB récursif implémenté avant le crawl avec baseline `Volume cible` exposée au runtime.
-  - Reste à faire: finaliser l'orchestration Docker côté API, le cleanup robuste des workers `estimate-*` et la preuve opératoire en environnement réel.
+  - Avancement validé: worker `estimate-{hash}` lancé par l'API via le socket Docker, montage CIFS read-only fonctionnel après ajustement des capacités (`SYS_ADMIN`, `DAC_READ_SEARCH`, AppArmor/seccomp relâchés uniquement pour ce worker), logs JSON relus côté API.
+  - Avancement validé en plus: le timeout parasite sur l'attente Docker `/wait` a été allongé; l'API ne coupe plus artificiellement l'estimation après 30 s, et le worker peut rester en exécution réelle au-delà d'une minute.
+  - Dette de validation restante: confirmer la durée nominale du `du -sb` sur `\\172.16.252.34\Public\SMIDEN\` puis la transition complète `estimating -> queued/running` une fois l'estimation revenue.
+  - Dette d'exploitation restante: éviter que la suppression d'un run failed depuis l'UI fasse disparaître trop vite la preuve de diagnostic du dernier `estimate-*`; conserver au moins l'erreur d'estimation visible tant que l'opérateur n'a pas confirmé le nettoyage.
+  - Reste à faire: finaliser la preuve opératoire complète `estimating -> queued/running`, valider le cleanup robuste des workers `estimate-*` en fin normale et documenter le protocole de diagnostic associé.
 
 - [ ] **P-02 — Indicateurs de progression lisibles et fiables**
   - Exploiter les retours actuels du moteur pour des indicateurs de progression fiables.
