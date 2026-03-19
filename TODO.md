@@ -2,6 +2,20 @@
 
 ## Priorités opérateur à traiter en tête
 
+- [ ] **P-00 — Finalisation fiable des runs d'exploration**
+  - Corriger la chaîne de fin de run pour qu'un crawl terminé ou timeouté écrive toujours un statut final explicite en base.
+  - Ajouter un signal et une trace `run terminé` / `run en échec` côté moteur.
+  - Empêcher qu'un run reste `running` en base sans activité réelle du moteur.
+
+- [ ] **P-00b — Réconciliation des runs zombies**
+  - Ajouter une logique défensive pour reclassifier les runs stale laissés `running` par le moteur.
+  - Exposer un état opérateur clair quand le moteur n'émet plus mais que la base n'est pas cohérente.
+
+- [ ] **P-00c — Fuseau horaire homogène et configurable**
+  - Aligner les conteneurs Docker sur un fuseau horaire explicite.
+  - Rendre le fuseau d'affichage configurable dans l'interface via l'engrenage.
+  - Afficher les dates de build et d'exécution dans le fuseau choisi.
+
 - [ ] **P-01 — Pré-estimation volumétrique avant exploration**
   - Revoir le protocole moteur pour obtenir une estimation la plus fidèle possible du volume total avant exploration.
   - Priorité cible: montage CIFS temporaire + `du -sb`, selon `docs/operations/CRAWL_PRE_ESTIMATION_PROTOCOL.md`.

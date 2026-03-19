@@ -6,6 +6,7 @@ services:
     container_name: openindex-postgres
     restart: unless-stopped
     environment:
+      TZ: ${OPENINDEX_TIMEZONE:-Europe/Paris}
       POSTGRES_DB: ${POSTGRES_DB:-openindex}
       POSTGRES_USER: ${POSTGRES_USER:-openindex_user}
       POSTGRES_PASSWORD: openindex_secure_password
@@ -36,6 +37,8 @@ services:
     container_name: openindex-api
     restart: unless-stopped
     environment:
+      TZ: ${OPENINDEX_TIMEZONE:-Europe/Paris}
+      OPENINDEX_TIMEZONE: ${OPENINDEX_TIMEZONE:-Europe/Paris}
       OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.3.2}
       OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-dev}
       OPENINDEX_BUILD_DATE: ${OPENINDEX_BUILD_DATE:-unknown}
@@ -68,6 +71,8 @@ services:
     container_name: openindex-crawler
     restart: unless-stopped
     environment:
+      TZ: ${OPENINDEX_TIMEZONE:-Europe/Paris}
+      OPENINDEX_TIMEZONE: ${OPENINDEX_TIMEZONE:-Europe/Paris}
       OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.3.2}
       OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-dev}
       OPENINDEX_BUILD_DATE: ${OPENINDEX_BUILD_DATE:-unknown}
@@ -98,6 +103,8 @@ services:
     container_name: openindex-ui
     restart: unless-stopped
     environment:
+      TZ: ${OPENINDEX_TIMEZONE:-Europe/Paris}
+      OPENINDEX_TIMEZONE: ${OPENINDEX_TIMEZONE:-Europe/Paris}
       OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.3.2}
       OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-dev}
       OPENINDEX_BUILD_DATE: ${OPENINDEX_BUILD_DATE:-unknown}

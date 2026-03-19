@@ -151,9 +151,9 @@
                     <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">État de l'exploration</p>
                     <div class="mt-3 flex items-center justify-between">
                         <span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium"
-                              :class="crawlIsActive ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'">
-                            <span class="h-2.5 w-2.5 rounded-full" :class="crawlIsActive ? 'bg-emerald-500' : 'bg-slate-400'"></span>
-                            <span x-text="crawlIsActive ? 'Actif' : 'Inactif'"></span>
+                              :class="engineStatusBadgeClass">
+                            <span class="h-2.5 w-2.5 rounded-full" :class="engineStatusDotClass"></span>
+                            <span x-text="engineStatusLabel"></span>
                         </span>
                         <span class="text-xs text-slate-500" x-text="wsConnected ? 'WebSocket actif' : 'WebSocket hors ligne'"></span>
                     </div>
@@ -198,7 +198,7 @@
                        target="_blank"
                        rel="noreferrer"
                        x-text="`Version ${systemStatus.app_version} (${systemStatus.commit_hash})`"></a>
-                    <p class="mt-1 text-[11px] text-slate-500" x-text="`Build: ${systemStatus.build_date}`"></p>
+                    <p class="mt-1 text-[11px] text-slate-500" x-text="`Build: ${formatDate(systemStatus.build_date)} (${displayTimezone})`"></p>
                     <a class="mt-1 block text-xs text-slate-500 hover:text-slate-700" href="#" x-text="systemStatus.license_label"></a>
                     <p class="mt-1 text-[11px] text-slate-500" x-text="systemStatus.license_owner"></p>
                 </div>
@@ -228,26 +228,26 @@
                         <div class="card p-5">
                             <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Total fichiers</p>
                             <p class="mt-3 font-semibold"
-                               :class="engineHasRunningRun ? 'text-sm uppercase tracking-[0.18em] text-amber-700' : 'text-3xl'"
-                               x-text="engineHasRunningRun ? (engineIsIdle ? 'Moteur idle' : 'Exploration en cours') : (stats.total_files?.toLocaleString() || '0')"></p>
+                               class="text-3xl"
+                               x-text="stats.total_files?.toLocaleString() || '0'"></p>
                         </div>
                         <div class="card p-5">
                             <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Total dossiers</p>
                             <p class="mt-3 font-semibold"
-                               :class="engineHasRunningRun ? 'text-sm uppercase tracking-[0.18em] text-amber-700' : 'text-3xl'"
-                               x-text="engineHasRunningRun ? (engineIsIdle ? 'Moteur idle' : 'Exploration en cours') : (stats.total_directories?.toLocaleString() || '0')"></p>
+                               class="text-3xl"
+                               x-text="stats.total_directories?.toLocaleString() || '0'"></p>
                         </div>
                         <div class="card p-5">
                             <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Doublons</p>
                             <p class="mt-3 font-semibold"
-                               :class="engineHasRunningRun ? 'text-sm uppercase tracking-[0.18em] text-amber-700' : 'text-3xl'"
-                               x-text="engineHasRunningRun ? (engineIsIdle ? 'Moteur idle' : 'Exploration en cours') : (stats.duplicate_files?.toLocaleString() || '0')"></p>
+                               class="text-3xl"
+                               x-text="stats.duplicate_files?.toLocaleString() || '0'"></p>
                         </div>
                         <div class="card p-5">
                             <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Volume indexé</p>
                             <p class="mt-3 font-semibold"
-                               :class="engineHasRunningRun ? 'text-sm uppercase tracking-[0.18em] text-amber-700' : 'text-3xl'"
-                               x-text="engineHasRunningRun ? (engineIsIdle ? 'Moteur idle' : 'Exploration en cours') : formatBytes(stats.total_size || 0)"></p>
+                               class="text-3xl"
+                               x-text="formatBytes(stats.total_size || 0)"></p>
                         </div>
                     </section>
 
@@ -594,6 +594,15 @@
                             <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Rôle</p>
                             <p class="mt-2 text-base font-semibold" x-text="currentUser.role_label"></p>
                         </div>
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <label class="text-xs uppercase tracking-[0.22em] text-slate-400">Fuseau horaire d'affichage</label>
+                            <select x-model="displayTimezone" @change="saveDisplayTimezone()" class="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
+                                <template x-for="timezone in timezoneOptions" :key="timezone">
+                                    <option :value="timezone" x-text="timezone"></option>
+                                </template>
+                            </select>
+                            <p class="mt-2 text-sm text-slate-600" x-text="`Fuseau serveur/conteneurs: ${systemStatus.timezone || 'UTC'}`"></p>
+                        </div>
                     </div>
                 </div>
 
@@ -742,12 +751,15 @@
                     app_version: '0.3.0',
                     commit_hash: 'dev',
                     build_date: '-',
+                    timezone: 'UTC',
                     license_label: 'Licence',
                     license_owner: 'Copyright 2026 SMIDEN',
                     repository_url: 'https://github.com/lamacheref/openindex',
                     newer_version_available: false,
                     newest_version_url: null
                 },
+                displayTimezone: 'Europe/Paris',
+                timezoneOptions: ['Europe/Paris', 'UTC'],
                 crawlerRuntime: {
                     active: false,
                     idle: false,
@@ -781,6 +793,7 @@
                 },
 
                 async init() {
+                    this.displayTimezone = localStorage.getItem('openindex.displayTimezone') || 'Europe/Paris';
                     await this.loadSpaces();
                     await this.loadStats();
                     await this.loadCrawlConfigs();
@@ -806,6 +819,10 @@
 
                 closeConfiguration() {
                     this.showConfigOverlay = false;
+                },
+
+                saveDisplayTimezone() {
+                    localStorage.setItem('openindex.displayTimezone', this.displayTimezone);
                 },
 
                 async loadStats() {
@@ -898,6 +915,9 @@
                             throw new Error('Erreur API system status');
                         }
                         this.systemStatus = await response.json();
+                        if (!localStorage.getItem('openindex.displayTimezone')) {
+                            this.displayTimezone = this.systemStatus.timezone || 'Europe/Paris';
+                        }
                         this.refreshNotifications();
                     } catch (error) {
                         console.error('Erreur status système:', error);
@@ -1132,7 +1152,7 @@
 
                 formatDate(dateString) {
                     if (!dateString || dateString === '-') return 'non défini';
-                    return new Date(dateString).toLocaleString('fr-FR');
+                    return new Date(dateString).toLocaleString('fr-FR', { timeZone: this.displayTimezone });
                 },
 
                 get crawlIsActive() {
@@ -1219,7 +1239,7 @@
                 get engineStatusLabel() {
                     const normalized = (this.crawlOverview.monitoring.latest_run_status || '').toLowerCase();
                     if (this.engineIsIdle) {
-                        return 'Idle';
+                        return 'À vérifier';
                     }
                     if (this.crawlIsActive) {
                         return this.crawlerRuntime.estimating_total ? 'Estimation en cours' : 'Exploration active';
@@ -1239,7 +1259,7 @@
                 get engineStatusBadgeClass() {
                     const normalized = (this.crawlOverview.monitoring.latest_run_status || '').toLowerCase();
                     if (this.engineIsIdle) {
-                        return 'bg-amber-100 text-amber-800';
+                        return 'bg-red-100 text-red-800';
                     }
                     if (this.crawlIsActive) {
                         return this.crawlerRuntime.estimating_total ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800';
@@ -1253,7 +1273,7 @@
                 get engineStatusDotClass() {
                     const normalized = (this.crawlOverview.monitoring.latest_run_status || '').toLowerCase();
                     if (this.engineIsIdle) {
-                        return 'bg-amber-500';
+                        return 'bg-red-500';
                     }
                     if (this.crawlIsActive) {
                         return this.crawlerRuntime.estimating_total ? 'bg-amber-500' : 'bg-emerald-500';

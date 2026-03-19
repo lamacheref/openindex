@@ -174,6 +174,7 @@ class SystemStatus(BaseModel):
     app_version: str
     commit_hash: str
     build_date: str
+    timezone: str
     license_label: str
     license_owner: str
     repository_url: str
@@ -214,6 +215,9 @@ class CrawlerRuntime(BaseModel):
     queue_indicators: List[QueueIndicator]
     log_lines: List[str]
     log_source: str
+
+
+STALE_RUN_TIMEOUT_SECONDS = int(os.getenv("OPENINDEX_CRAWLER_STALE_TIMEOUT_SECONDS", "1200"))
 
 
 def extract_space_prefix(path: str) -> Optional[str]:
@@ -573,6 +577,20 @@ class PostgreSQLAdapter:
                 row = cursor.fetchone()
             conn.commit()
         return bool(row)
+
+    def fail_active_runs(self) -> int:
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE crawl_runs
+                    SET status = 'failed'
+                    WHERE LOWER(status) IN ('running', 'in_progress', 'cancelling')
+                    """
+                )
+                updated = cursor.rowcount or 0
+            conn.commit()
+        return updated
 
     def get_monitoring_summary(self) -> Dict[str, Any]:
         total_configs = self.execute_query("SELECT COUNT(*) FROM crawl_configs")[0][0] or 0
@@ -1115,6 +1133,33 @@ def _extract_last_progress_timestamp(log_lines: List[str]) -> Optional[datetime]
     return None
 
 
+def _reconcile_stale_running_runs(db, raw_log_lines: List[str]) -> Dict[str, Any]:
+    monitoring = db.get_monitoring_summary()
+    if monitoring["running_runs"] <= 0:
+        return monitoring
+
+    last_activity = _extract_last_progress_timestamp(raw_log_lines)
+    if last_activity is None:
+        return monitoring
+
+    stale_seconds = (datetime.utcnow() - last_activity).total_seconds()
+    if stale_seconds <= STALE_RUN_TIMEOUT_SECONDS:
+        return monitoring
+
+    updated = 0
+    if hasattr(db, "fail_active_runs"):
+        updated = db.fail_active_runs()
+
+    if updated:
+        logger.warning(
+            "Run(s) marques en echec apres %.1f s sans signal moteur recent.",
+            stale_seconds,
+        )
+        return db.get_monitoring_summary()
+
+    return monitoring
+
+
 def _extract_large_file_metrics(raw_log_lines: List[str]) -> Dict[str, int]:
     last_run_start_index = 0
     for index, line in enumerate(raw_log_lines):
@@ -1213,7 +1258,8 @@ async def get_monitoring_summary():
     try:
         db = get_db_adapter()
         ensure_crawl_storage_ready(db)
-        summary = db.get_monitoring_summary()
+        raw_log_lines = _read_log_lines(Path(os.getenv("OPENINDEX_CRAWLER_LOG_PATH", "logs/smb_crawler_postgresql.log")))
+        summary = _reconcile_stale_running_runs(db, raw_log_lines)
         return MonitoringSummary(**summary)
     except Exception as e:
         logger.error(f"Erreur get_monitoring_summary: {e}")
@@ -1225,6 +1271,10 @@ async def get_crawl_overview(limit: int = 10):
     try:
         db = get_db_adapter()
         ensure_crawl_storage_ready(db)
+        _reconcile_stale_running_runs(
+            db,
+            _read_log_lines(Path(os.getenv("OPENINDEX_CRAWLER_LOG_PATH", "logs/smb_crawler_postgresql.log"))),
+        )
         overview = db.get_crawl_overview(limit=limit)
         return CrawlOverview(
             monitoring=MonitoringSummary(**overview["monitoring"]),
@@ -1242,6 +1292,7 @@ async def get_system_status():
         version = os.getenv("OPENINDEX_APP_VERSION", app.version)
         commit_hash = os.getenv("OPENINDEX_BUILD_COMMIT", "dev")
         build_date = os.getenv("OPENINDEX_BUILD_DATE", datetime.now().date().isoformat())
+        timezone_name = os.getenv("OPENINDEX_TIMEZONE") or os.getenv("TZ") or "UTC"
         repository_url = os.getenv("OPENINDEX_REPOSITORY_URL", "https://github.com/lamacheref/openindex")
         newer_version_available = os.getenv("OPENINDEX_NEWER_VERSION_AVAILABLE", "false").strip().lower() in {
             "1",
@@ -1255,6 +1306,7 @@ async def get_system_status():
             app_version=version,
             commit_hash=commit_hash,
             build_date=build_date,
+            timezone=timezone_name,
             license_label="Licence",
             license_owner="Copyright 2026 SMIDEN",
             repository_url=repository_url,
@@ -1271,9 +1323,9 @@ async def get_crawler_runtime(log_limit: int = 80):
     try:
         db = get_db_adapter()
         ensure_crawl_storage_ready(db)
-        monitoring = db.get_monitoring_summary()
         log_path = Path(os.getenv("OPENINDEX_CRAWLER_LOG_PATH", "logs/smb_crawler_postgresql.log"))
         raw_log_lines = _read_log_lines(log_path)
+        monitoring = _reconcile_stale_running_runs(db, raw_log_lines)
         log_lines = [_normalize_runtime_log_line(line) for line in raw_log_lines[-log_limit:]]
         runtime_metrics = _extract_runtime_metrics(log_lines)
         large_file_metrics = _extract_large_file_metrics(raw_log_lines)
