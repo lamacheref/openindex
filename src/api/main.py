@@ -224,6 +224,8 @@ DOCKER_SOCKET_PATH = os.getenv("OPENINDEX_DOCKER_SOCKET_PATH", "/var/run/docker.
 ESTIMATE_WORKER_IMAGE = os.getenv("OPENINDEX_ESTIMATE_WORKER_IMAGE", "openindex-estimate-worker:local")
 ESTIMATE_CONTAINER_PREFIX = os.getenv("OPENINDEX_ESTIMATE_CONTAINER_PREFIX", "estimate")
 ESTIMATE_MOUNT_BASE = os.getenv("OPENINDEX_ESTIMATE_MOUNT_BASE", "/mnt")
+DOCKER_SOCKET_TIMEOUT_SECONDS = int(os.getenv("OPENINDEX_DOCKER_SOCKET_TIMEOUT_SECONDS", "30"))
+ESTIMATE_WAIT_TIMEOUT_SECONDS = int(os.getenv("OPENINDEX_ESTIMATE_WAIT_TIMEOUT_SECONDS", "3600"))
 
 
 class DockerSocketError(RuntimeError):
@@ -240,6 +242,7 @@ class DockerSocketClient:
         path: str,
         body: Optional[Dict[str, Any]] = None,
         expected_statuses: Optional[List[int]] = None,
+        timeout_seconds: Optional[int] = None,
     ) -> Any:
         expected_statuses = expected_statuses or [200, 201, 204]
         payload = b""
@@ -257,7 +260,7 @@ class DockerSocketClient:
         ).encode("utf-8") + payload
 
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.settimeout(30)
+        sock.settimeout(timeout_seconds or DOCKER_SOCKET_TIMEOUT_SECONDS)
         try:
             sock.connect(self.socket_path)
             sock.sendall(request_bytes)
@@ -349,6 +352,7 @@ class DockerSocketClient:
             "POST",
             f"/containers/{container_id}/wait?condition=not-running",
             expected_statuses=[200],
+            timeout_seconds=ESTIMATE_WAIT_TIMEOUT_SECONDS,
         )
 
     def get_logs(self, container_id: str) -> str:
