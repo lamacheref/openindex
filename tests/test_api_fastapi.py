@@ -239,6 +239,20 @@ def test_health_endpoint(client):
     assert response.json()["status"] == "healthy"
 
 
+def test_extract_runtime_metrics_handles_pre_estimation_phase():
+    metrics = api_main._extract_runtime_metrics(
+        [
+            "2026-03-19 13:00:00 - smb_crawler_postgresql - INFO - 🔎 Pré-estimation: 120 fichiers, 15 dossiers | Volume cible=11051758928 octets | Dossiers restants=3 | Durée: 12.0s | Erreurs: 0"
+        ]
+    )
+
+    assert metrics["estimating_total"] is True
+    assert metrics["discovered_files"] == 120
+    assert metrics["discovered_directories"] == 15
+    assert metrics["target_bytes"] == 11051758928
+    assert metrics["queue_dirs"] == 3
+
+
 def test_get_files_endpoint(client):
     response = client("GET", "/api/files", params={"search": "readme", "limit": 50, "offset": 0})
     assert response.status_code == 200

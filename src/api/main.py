@@ -999,9 +999,18 @@ PROGRESS_RE = re.compile(
     r"(?:Fichiers|Dossiers à indexer)=(?P<queue_files>\d+),\s*"
     r"(?:Somme de contrôle|Fichiers à checksumer|Vérification d'intégrité)=(?P<queue_checksums>\d+),\s*"
     r"(?:Gros fichiers|Gros fichiers en attente)=(?P<queue_large>\d+)\s*\|\s*"
+    r"Volume cible=(?P<target_bytes>\d+)\s*octets,\s*"
     r"Volume traité=(?P<processed_bytes>\d+)\s*octets,\s*"
     r"Volume découvert=(?P<discovered_bytes>\d+)\s*octets,\s*"
     r"Progression volume=(?P<progress_percent>\d+(?:\.\d+)?)%",
+    re.IGNORECASE,
+)
+
+PRE_ESTIMATION_RE = re.compile(
+    r"Pré-estimation:\s*(?P<files>\d+)\s*fichiers,\s*"
+    r"(?P<dirs>\d+)\s*dossiers\s*\|\s*"
+    r"Volume cible=(?P<target_bytes>\d+)\s*octets\s*\|\s*"
+    r"Dossiers restants=(?P<remaining_dirs>\d+)",
     re.IGNORECASE,
 )
 
@@ -1063,26 +1072,42 @@ def _extract_runtime_metrics(log_lines: List[str]) -> Dict[str, Any]:
         queue_large = int(match.group("queue_large"))
         discovered_bytes = int(match.group("discovered_bytes"))
         processed_bytes = int(match.group("processed_bytes"))
-        estimating_total = queue_dirs > 0
-        progress_percent = None if estimating_total else float(match.group("progress_percent"))
-        progress_hint = (
-            "Estimation du volume global en cours. La progression deviendra fiable quand la découverte des dossiers sera terminée."
-            if estimating_total
-            else "Le volume total est stabilisé. La progression reflète maintenant le traitement restant."
-        )
+        target_bytes = int(match.group("target_bytes"))
         return {
             "discovered_files": int(match.group("files")),
             "discovered_directories": int(match.group("dirs")),
             "large_files_detected": int(match.group("large_files_seen")),
             "processed_bytes": processed_bytes,
             "discovered_bytes": discovered_bytes,
+            "target_bytes": target_bytes,
             "queue_dirs": queue_dirs,
             "queue_files": queue_files,
             "queue_checksums": queue_checksums,
             "queue_large": queue_large,
-            "estimating_total": estimating_total,
-            "progress_percent": progress_percent,
-            "progress_hint": progress_hint,
+            "estimating_total": False,
+            "progress_percent": float(match.group("progress_percent")),
+            "progress_hint": "Le volume cible est stabilisé. La progression reflète maintenant le traitement restant.",
+        }
+
+    for line in reversed(log_lines):
+        match = PRE_ESTIMATION_RE.search(line)
+        if not match:
+            continue
+        target_bytes = int(match.group("target_bytes"))
+        return {
+            "discovered_files": int(match.group("files")),
+            "discovered_directories": int(match.group("dirs")),
+            "large_files_detected": 0,
+            "processed_bytes": 0,
+            "discovered_bytes": target_bytes,
+            "target_bytes": target_bytes,
+            "queue_dirs": int(match.group("remaining_dirs")),
+            "queue_files": 0,
+            "queue_checksums": 0,
+            "queue_large": 0,
+            "estimating_total": True,
+            "progress_percent": None,
+            "progress_hint": "Pré-estimation du volume global en cours avant démarrage du crawl principal.",
         }
     return {
         "discovered_files": 0,
@@ -1091,6 +1116,7 @@ def _extract_runtime_metrics(log_lines: List[str]) -> Dict[str, Any]:
         "large_files_bytes": 0,
         "processed_bytes": 0,
         "discovered_bytes": 0,
+        "target_bytes": 0,
         "queue_dirs": 0,
         "queue_files": 0,
         "queue_checksums": 0,

@@ -2,38 +2,45 @@
 
 ## Priorités opérateur à traiter en tête
 
-- [ ] **P-00 — Finalisation fiable des runs d'exploration**
+- [x] **P-00 — Finalisation fiable des runs d'exploration**
   - Corriger la chaîne de fin de run pour qu'un crawl terminé ou timeouté écrive toujours un statut final explicite en base.
   - Ajouter un signal et une trace `run terminé` / `run en échec` côté moteur.
   - Empêcher qu'un run reste `running` en base sans activité réelle du moteur.
+  - Livré via les commits `1a2407a` et `f8fe00c`.
 
-- [ ] **P-00b — Réconciliation des runs zombies**
+- [x] **P-00b — Réconciliation des runs zombies**
   - Ajouter une logique défensive pour reclassifier les runs stale laissés `running` par le moteur.
   - Exposer un état opérateur clair quand le moteur n'émet plus mais que la base n'est pas cohérente.
+  - Livré via les commits `1a2407a` et `f8fe00c`.
 
-- [ ] **P-00c — Fuseau horaire homogène et configurable**
+- [x] **P-00c — Fuseau horaire homogène et configurable**
   - Aligner les conteneurs Docker sur un fuseau horaire explicite.
   - Rendre le fuseau d'affichage configurable dans l'interface via l'engrenage.
   - Afficher les dates de build et d'exécution dans le fuseau choisi.
+  - Livré via le commit `1a2407a`.
 
 - [ ] **P-01 — Pré-estimation volumétrique avant exploration**
   - Revoir le protocole moteur pour obtenir une estimation la plus fidèle possible du volume total avant exploration.
   - Priorité cible: montage CIFS temporaire + `du -sb`, selon `docs/operations/CRAWL_PRE_ESTIMATION_PROTOCOL.md`.
   - Prévoir les fallbacks SMB si le montage n'est pas possible.
+  - État actuel: fallback SMB récursif implémenté avant le crawl avec baseline `Volume cible` exposée au runtime.
+  - Reste à faire: remplacer ce fallback par la stratégie prioritaire CIFS + `du -sb` quand les prérequis système seront prêts.
 
 - [ ] **P-02 — Indicateurs de progression lisibles et fiables**
   - Exploiter les retours actuels du moteur pour des indicateurs de progression fiables.
   - Présenter ces indicateurs sur une seule ligne, lisibles d'un coup d'oeil.
   - Réserver les queues au diagnostic secondaire.
 
-- [ ] **P-03 — Traitement asynchrone sans limite artificielle**
+- [x] **P-03 — Traitement asynchrone sans limite artificielle**
   - Supprimer les limites de taille des queues de traitement asynchrone.
   - Vérifier que le backlog de vérification d'intégrité n'est plus artificiellement plafonné.
+  - Livré dans le crawler PostgreSQL; effet complet appliqué aux nouveaux runs après redéploiement du conteneur.
 
-- [ ] **P-04 — Statut moteur et commandes opérateur explicites**
+- [x] **P-04 — Statut moteur et commandes opérateur explicites**
   - Garder une barre de progression pour la quantité de données inventoriées.
   - Ajouter des gommettes de couleur pour l'état moteur: arrêté, estimation, exploration, erreur, terminé.
   - Basculer le bouton principal de `Lancer` vers `Arrêter` quand une exploration est en cours.
+  - Livré via les commits `1a2407a` et `f8fe00c`.
 
 ## Objectif
 

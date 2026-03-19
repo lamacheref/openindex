@@ -77,7 +77,8 @@ class ConfigManager:
                 'delay_between_requests': self.config.getfloat('crawler_config', 'delay_between_requests'),
                 'max_depth': self.config.getint('crawler_config', 'max_depth'),
                 'large_file_threshold': self.config.getint('crawler_config', 'large_file_threshold'),
-                'max_queue_size': self.config.getint('crawler_config', 'max_queue_size')
+                'max_queue_size': self.config.getint('crawler_config', 'max_queue_size'),
+                'pre_estimation_enabled': self.config.getboolean('crawler_config', 'pre_estimation_enabled', fallback=True)
             }
         except (configparser.NoSectionError, configparser.NoOptionError) as e:
             raise ValueError(f"Erreur de configuration crawler: {e}")

@@ -27,8 +27,8 @@ class SMBCrawlerPostgreSQL:
 
     def __init__(self, server, username, password, share_name, domain='',
                  crawl_config_id=None, postgres_config=None, max_workers=4, delay_between_requests=0.1,
-                 max_queue_size=1000, max_depth=None, debug=False, 
-                 large_file_threshold=104857600):
+                 max_queue_size=1000, max_depth=None, debug=False,
+                 large_file_threshold=104857600, pre_estimation_enabled=True):
         """
         Initialise le crawler SMB avec PostgreSQL.
 
@@ -66,6 +66,7 @@ class SMBCrawlerPostgreSQL:
         self.max_depth = max_depth
         self.debug = debug
         self.large_file_threshold = large_file_threshold
+        self.pre_estimation_enabled = pre_estimation_enabled
         
         # Initialiser PostgreSQL
         self.postgres_adapter = PostgreSQLAdapter(self.postgres_config)
@@ -104,12 +105,16 @@ class SMBCrawlerPostgreSQL:
             'large_files': 0,  # Nouveau: compteur de gros fichiers
             'duplicate_files': 0,
             'duplicate_size': 0,
+            'estimated_total_size': 0,
+            'estimated_total_files': 0,
+            'estimated_total_directories': 0,
             'errors': 0,
             'start_time': None,
             'end_time': None,
             'last_activity': None,
             'timed_out': False,
             'final_status': 'running',
+            'phase': 'idle',
         }
         
         # Configuration du logging
@@ -275,6 +280,82 @@ class SMBCrawlerPostgreSQL:
         
         return items
 
+    def _list_directory_entries(self, current_path):
+        try:
+            self.setup_smb_credentials()
+            item_names = smbclient.listdir(current_path)
+            items = []
+            for item_name in item_names:
+                item_path = f"{current_path}\\{item_name}"
+                stat_result = smbclient.stat(item_path)
+                items.append({
+                    'path': item_path,
+                    'name': item_name,
+                    'size': stat_result.st_size,
+                    'is_directory': stat_result.st_mode & 0o040000 == 0o040000,
+                    'crawl_config_id': self.crawl_config_id,
+                    'last_modified': datetime.fromtimestamp(stat_result.st_mtime).isoformat(),
+                    'created_at': datetime.now(),
+                    'updated_at': datetime.now()
+                })
+            return items
+        except Exception as e:
+            self.logger.warning(f"Erreur listing {current_path}: {e}")
+            items = self.list_directory_fallback(current_path)
+            if items is None:
+                self.logger.error(f"Échec complet pour {current_path}")
+                self.stats['errors'] += 1
+                return []
+            return items
+
+    def _run_pre_estimation(self, base_path):
+        self.stats['phase'] = 'pre_estimation'
+        started_at = time.time()
+        pending_directories = [base_path]
+        estimated_directories = 1
+        estimated_files = 0
+        estimated_total_size = 0
+        scanned_directories = 0
+
+        self.logger.info("🔎 Pré-estimation démarrée")
+
+        while pending_directories and not self.stop_event.is_set():
+            current_path = pending_directories.pop(0)
+            self.stats['last_activity'] = time.time()
+            scanned_directories += 1
+
+            items = self._list_directory_entries(current_path)
+            for item_data in items:
+                if item_data['is_directory']:
+                    current_depth = self._get_path_depth(item_data['path'])
+                    if self.max_depth is None or current_depth < self.max_depth:
+                        pending_directories.append(item_data['path'])
+                    estimated_directories += 1
+                    continue
+
+                should_exclude, _reason = self.should_exclude_file(item_data['name'])
+                if should_exclude:
+                    continue
+
+                estimated_files += 1
+                estimated_total_size += item_data['size']
+
+            if scanned_directories == 1 or scanned_directories % 50 == 0:
+                duration = time.time() - started_at
+                self.logger.info(
+                    f"🔎 Pré-estimation: {estimated_files} fichiers, {estimated_directories} dossiers | "
+                    f"Volume cible={estimated_total_size} octets | Dossiers restants={len(pending_directories)} | "
+                    f"Durée: {duration:.1f}s | Erreurs: {self.stats['errors']}"
+                )
+
+        self.stats['estimated_total_files'] = estimated_files
+        self.stats['estimated_total_directories'] = estimated_directories
+        self.stats['estimated_total_size'] = estimated_total_size
+        self.logger.info(
+            f"✅ Pré-estimation terminée: {estimated_files} fichiers, {estimated_directories} dossiers | "
+            f"Volume cible={estimated_total_size} octets"
+        )
+
     def _directory_worker(self):
         """
         Worker thread pour traiter les répertoires.
@@ -302,99 +383,37 @@ class SMBCrawlerPostgreSQL:
                             continue
 
                         # Lister le contenu du répertoire
-                        try:
-                            self.setup_smb_credentials()
-                            items = smbclient.listdir(current_path)
+                        items = self._list_directory_entries(current_path)
 
-                            # Traiter chaque élément
-                            for item_name in items:
-                                if self.stop_event.is_set():
-                                    break
-
-                                item_path = f"{current_path}\\{item_name}"
-
-                                try:
-                                    stat = smbclient.stat(item_path)
-
-                                    # Créer les métadonnées
-                                    file_data = {
-                                        'path': item_path,
-                                        'name': item_name,
-                                        'size': stat.st_size,
-                                        'is_directory': stat.st_mode & 0o040000 == 0o040000,
-                                        'crawl_config_id': self.crawl_config_id,
-                                        'last_modified': datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                                        'created_at': datetime.now(),
-                                        'updated_at': datetime.now()
-                                    }
-
-                                    # Vérifier si le fichier doit être exclu
-                                    if not file_data['is_directory']:
-                                        should_exclude, reason = self.should_exclude_file(item_name)
-                                        if should_exclude:
-                                            self.logger.debug(f"Fichier exclu: {item_name} ({reason})")
-                                            continue
-
-                                    # Ajouter à la queue appropriée
-                                    if file_data['is_directory']:
-                                        current_depth = self._get_path_depth(item_path)
-                                        if self.max_depth is None or current_depth < self.max_depth:
-                                            self.directory_queue.put(item_path)
-                                        self.directory_result_queue.put(file_data)
-                                        self.stats['total_directories'] += 1
-                                    else:
-                                        if file_data['size'] > self.large_file_threshold:
-                                            self.large_file_queue.put(file_data)
-                                            self.stats['large_files'] += 1
-                                            self.logger.info(f"📦 Gros fichier détecté: {item_name} ({file_data['size']:,} bytes)")
-                                        else:
-                                            self.file_queue.put(file_data)
-
-                                        self.stats['total_files'] += 1
-                                        self.stats['total_size'] += file_data['size']
-
-                                except Exception as e:
-                                    self.logger.warning(f"Erreur traitement {item_path}: {e}")
-                                    self.stats['errors'] += 1
-
-                        except Exception as e:
-                            self.logger.warning(f"Erreur listing {current_path}: {e}")
-
-                            # Essayer avec la méthode de secours
+                        # Traiter chaque élément
+                        for file_data in items:
+                            if self.stop_event.is_set():
+                                break
                             try:
-                                items = self.list_directory_fallback(current_path)
-                                if items:
-                                    for item_data in items:
-                                        if self.stop_event.is_set():
-                                            break
+                                if not file_data['is_directory']:
+                                    should_exclude, reason = self.should_exclude_file(file_data['name'])
+                                    if should_exclude:
+                                        self.logger.debug(f"Fichier exclu: {file_data['name']} ({reason})")
+                                        continue
 
-                                        if not item_data['is_directory']:
-                                            should_exclude, reason = self.should_exclude_file(item_data['name'])
-                                            if should_exclude:
-                                                self.logger.debug(f"Fichier exclu: {item_data['name']} ({reason})")
-                                                continue
-
-                                        if item_data['is_directory']:
-                                            current_depth = self._get_path_depth(item_data['path'])
-                                            if self.max_depth is None or current_depth < self.max_depth:
-                                                self.directory_queue.put(item_data['path'])
-                                            self.directory_result_queue.put(item_data)
-                                            self.stats['total_directories'] += 1
-                                        else:
-                                            if item_data['size'] > self.large_file_threshold:
-                                                self.large_file_queue.put(item_data)
-                                                self.stats['large_files'] += 1
-                                                self.logger.info(f"📦 Gros fichier détecté: {item_data['name']} ({item_data['size']:,} bytes)")
-                                            else:
-                                                self.file_queue.put(item_data)
-
-                                            self.stats['total_files'] += 1
-                                            self.stats['total_size'] += item_data['size']
+                                if file_data['is_directory']:
+                                    current_depth = self._get_path_depth(file_data['path'])
+                                    if self.max_depth is None or current_depth < self.max_depth:
+                                        self.directory_queue.put(file_data['path'])
+                                    self.directory_result_queue.put(file_data)
+                                    self.stats['total_directories'] += 1
                                 else:
-                                    self.logger.error(f"Échec complet pour {current_path}")
-                                    self.stats['errors'] += 1
-                            except Exception as fallback_error:
-                                self.logger.error(f"Erreur fallback {current_path}: {fallback_error}")
+                                    if file_data['size'] > self.large_file_threshold:
+                                        self.large_file_queue.put(file_data)
+                                        self.stats['large_files'] += 1
+                                        self.logger.info(f"📦 Gros fichier détecté: {file_data['name']} ({file_data['size']:,} bytes)")
+                                    else:
+                                        self.file_queue.put(file_data)
+
+                                    self.stats['total_files'] += 1
+                                    self.stats['total_size'] += file_data['size']
+                            except Exception as e:
+                                self.logger.warning(f"Erreur traitement {file_data['path']}: {e}")
                                 self.stats['errors'] += 1
                 finally:
                     self.directory_queue.task_done()
@@ -693,9 +712,13 @@ class SMBCrawlerPostgreSQL:
         if base_path is None:
             base_path = rf"\\{self.server}\{self.share_name}"
         
+        if self.pre_estimation_enabled:
+            self._run_pre_estimation(base_path)
+
         # Ajouter le répertoire racine à la queue
         self.directory_queue.put(base_path)
         self.stats['total_directories'] = 1
+        self.stats['phase'] = 'crawl'
         
         # Démarrer les workers
         with ThreadPoolExecutor(max_workers=self.max_workers + 2) as executor:  # +2 pour les workers dédiés (gros fichiers + répertoires résultats)
@@ -866,8 +889,9 @@ class SMBCrawlerPostgreSQL:
         files_in_queue = self.file_queue.qsize()
         large_files_in_queue = self.large_file_queue.qsize()
         known_total_bytes = self.stats['total_size']
-        processed_bytes = min(self.stats['processed_size'], known_total_bytes) if known_total_bytes > 0 else 0
-        progress_percent = round((processed_bytes / known_total_bytes) * 100, 1) if known_total_bytes > 0 else 0.0
+        target_total_bytes = self.stats['estimated_total_size'] or known_total_bytes
+        processed_bytes = min(self.stats['processed_size'], target_total_bytes) if target_total_bytes > 0 else 0
+        progress_percent = round((processed_bytes / target_total_bytes) * 100, 1) if target_total_bytes > 0 else 0.0
 
         progress_line = (
             f"📊 Progression: {self.stats['total_files']} fichiers, "
@@ -877,6 +901,7 @@ class SMBCrawlerPostgreSQL:
             f"Dossiers à indexer={dirs_result_in_queue}, "
             f"Vérification d'intégrité={files_in_queue}, "
             f"Gros fichiers en attente={large_files_in_queue} | "
+            f"Volume cible={target_total_bytes} octets, "
             f"Volume traité={processed_bytes} octets, "
             f"Volume découvert={known_total_bytes} octets, "
             f"Progression volume={progress_percent}% | "
@@ -967,6 +992,7 @@ def run_single_crawl(run_payload):
         max_queue_size=crawler_config["max_queue_size"],
         max_depth=crawler_config["max_depth"],
         large_file_threshold=crawler_config["large_file_threshold"],
+        pre_estimation_enabled=crawler_config.get("pre_estimation_enabled", True),
         debug=debug_mode
     )
     crawler.run_id = run_payload["run_id"]
