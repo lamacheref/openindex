@@ -188,6 +188,22 @@ class DummyDB:
             return True
         return False
 
+    def fail_active_runs(self):
+        updated = 0
+        for run in self.crawl_runs:
+            if run["status"] in {"running", "in_progress", "cancelling"}:
+                run["status"] = "failed"
+                updated += 1
+        return updated
+
+    def cancel_stale_cancelling_runs(self):
+        updated = 0
+        for run in self.crawl_runs:
+            if run["status"] == "cancelling":
+                run["status"] = "cancelled"
+                updated += 1
+        return updated
+
     def get_monitoring_summary(self):
         latest = self.crawl_runs[-1] if self.crawl_runs else None
         return {
@@ -638,3 +654,53 @@ def test_get_crawler_runtime_endpoint(client, monkeypatch, tmp_path):
     assert payload["latest_config_name"] == "Crawl Runtime"
     assert len(payload["queue_indicators"]) == 4
     assert payload["log_lines"] == ["line 2", "line 3"]
+
+
+def test_monitoring_reconciles_stale_cancelling_run_to_cancelled(monkeypatch):
+    db = DummyDB()
+    db.crawl_configs.append(
+        {
+            "id": "cfg-1",
+            "name": "Crawl Cancel",
+            "domain_zone": "FR",
+            "start_path": "\\\\srv\\cancel",
+            "include_paths": [],
+            "exclude_paths": [],
+            "connection_username": "svc_cancel",
+            "connection_domain": "CORP",
+            "created_at": "2026-03-10T12:00:00+00:00",
+        }
+    )
+    db.crawl_runs.append(
+        {
+            "run_id": "run-1",
+            "config_id": "cfg-1",
+            "status": "cancelling",
+            "triggered_at": "2026-03-10T12:05:00+00:00",
+        }
+    )
+
+    monkeypatch.setattr(api_main, "get_db_adapter", lambda: db)
+    monkeypatch.setattr(api_main, "STALE_RUN_TIMEOUT_SECONDS", 1)
+
+    response = run_request("GET", "/api/monitoring")
+    assert response.status_code == 200
+    assert response.json()["latest_run_status"] == "cancelled"
+
+
+def test_connection_manager_removes_closed_websocket():
+    class ClosedWebSocket:
+        async def send_text(self, _message):
+            raise RuntimeError('Cannot call "send" once a close message has been sent.')
+
+    async def _run():
+        local_manager = api_main.ConnectionManager()
+        websocket = ClosedWebSocket()
+        local_manager.active_connections.append(websocket)
+
+        sent = await local_manager.send_personal_message("payload", websocket)
+
+        assert sent is False
+        assert websocket not in local_manager.active_connections
+
+    asyncio.run(_run())

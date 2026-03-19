@@ -15,7 +15,8 @@ Cause racine identifiée:
 Décision opérationnelle mise à jour:
 - conserver ce document comme trace historique du 2026-03-18 ;
 - ne plus l'utiliser comme preuve de couverture complète ;
-- remplacer ses artefacts par un nouveau rapport après correction du crawler et recrawl complet rejoué.
+- les anciens artefacts superficiels du `2026-03-18` ont été retirés du dossier `docs/artifacts/` ;
+- remplacer ses artefacts par un nouveau rapport après recrawl complet rejoué et validé.
 
 ## Résumé
 
@@ -30,7 +31,7 @@ Résultat synthétique:
 ## 1. Initialisation PostgreSQL + recrawl
 
 Artefact:
-- `docs/artifacts/j4_init_recrawl_2026-03-18.json`
+- supprimé du chemin nominal le `2026-03-19`, car trompeur pour la preuve de complétude
 
 Résultat:
 - Statut: `completed`
@@ -43,7 +44,7 @@ Résultat:
 - Durée: environ `3.0` secondes
 
 Conclusion:
-- Le critère "Initialisation PostgreSQL + recrawl complet sans erreur bloquante avec journal" est satisfait sur l'environnement de validation exécuté le 2026-03-18.
+- Le critère "Initialisation PostgreSQL + recrawl complet sans erreur bloquante avec journal" ne peut plus être considéré comme satisfait sur la base du run du `2026-03-18`.
 
 ## 2. Benchmark PostgreSQL
 
@@ -92,7 +93,7 @@ Conclusion:
 
 Critères:
 - Performance stable sur 3 runs: `OK`
-- Initialisation + recrawl journalisés: `OK`
+- Initialisation + recrawl journalisés: `INVALIDÉ au 2026-03-19`
 - Rollback testé: `OK`
 - Rollback validé par le responsable opérationnel: `OK`
 - CI PostgreSQL de référence: `OK`
@@ -104,4 +105,4 @@ Preuve CI:
 - Artefact versionné: `docs/artifacts/j4_ci_pr41_2026-03-18.json`
 
 Décision opérationnelle:
-- Le statut global passe à `Go` pour l'environnement de validation du 2026-03-18.
+- Le statut historique du `2026-03-18` reste `Go` pour trace d'exécution, mais il n'est plus exploitable comme preuve courante tant qu'un nouveau recrawl complet versionné n'a pas remplacé ce run.

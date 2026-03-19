@@ -1,5 +1,14 @@
 # Changelog OpenIndex avec PostgreSQL
 
+## 2026-03-19 — Clôture du lot correctif opérateur et reprise du backlog principal
+
+- Clôture documentaire du lot `P-00` à `P-05` dans `TODO.md` et déplacement en annexe pour remettre le backlog principal J4/J5 en tête.
+- Réconciliation automatique des runs bloqués trop longtemps en `cancelling` vers `cancelled`.
+- Garde-fou UI sur `Runs récents` : ne plus afficher `Aucun run enregistré` lorsqu'un état actif est connu par `monitoring`.
+- Purge robuste des connexions WebSocket fermées pour supprimer le bruit `Cannot call "send" once a close message has been sent.`.
+- Abandon explicite du prototype `estimate-{hash}` comme piste active ou dette à archiver dans le chemin nominal.
+- Mise à jour de `ROADMAP.md` pour acter la fin du lot correctif opérateur et la reprise des priorités principales J4/J5.
+
 ## 2026-03-18 — Pilotage des explorations et synchronisation UI/worker
 
 - Liaison explicite des résultats d'exploration aux espaces via la configuration de crawl.

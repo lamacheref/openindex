@@ -232,6 +232,7 @@ class CrawlerRuntime(BaseModel):
 
 STALE_RUN_TIMEOUT_SECONDS = int(os.getenv("OPENINDEX_CRAWLER_STALE_TIMEOUT_SECONDS", "1200"))
 ACTIVE_RUN_STATUSES = {"queued", "pending", "running", "in_progress", "cancelling"}
+RUNNING_RUN_STATUSES = {"running", "in_progress"}
 
 
 def extract_space_prefix(path: str) -> Optional[str]:
@@ -722,6 +723,20 @@ class PostgreSQLAdapter:
             conn.commit()
         return updated
 
+    def cancel_stale_cancelling_runs(self) -> int:
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE crawl_runs
+                    SET status = 'cancelled'
+                    WHERE LOWER(status) = 'cancelling'
+                    """
+                )
+                updated = cursor.rowcount or 0
+            conn.commit()
+        return updated
+
     def get_monitoring_summary(self) -> Dict[str, Any]:
         total_configs = self.execute_query("SELECT COUNT(*) FROM crawl_configs")[0][0] or 0
         total_runs = self.execute_query("SELECT COUNT(*) FROM crawl_runs")[0][0] or 0
@@ -865,18 +880,24 @@ class ConnectionManager:
         logger.info(f"Client connecté. Total: {len(self.active_connections)}")
 
     def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
         logger.info(f"Client déconnecté. Total: {len(self.active_connections)}")
 
     async def send_personal_message(self, message: str, websocket: WebSocket):
-        await websocket.send_text(message)
+        try:
+            await websocket.send_text(message)
+            return True
+        except Exception:
+            self.disconnect(websocket)
+            return False
 
     async def broadcast(self, message: str):
-        for connection in self.active_connections:
+        for connection in list(self.active_connections):
             try:
                 await connection.send_text(message)
             except Exception:
-                self.active_connections.remove(connection)
+                self.disconnect(connection)
 
 
 manager = ConnectionManager()
@@ -1311,29 +1332,55 @@ def _extract_last_progress_timestamp(log_lines: List[str]) -> Optional[datetime]
     return None
 
 
+def _resolve_reconciliation_reference(
+    raw_log_lines: List[str],
+    latest_run_triggered_at: Optional[str],
+) -> Optional[datetime]:
+    last_activity = _extract_last_progress_timestamp(raw_log_lines)
+    if last_activity is not None:
+        return last_activity
+
+    triggered_at = _parse_db_timestamp(latest_run_triggered_at)
+    if triggered_at is None:
+        return None
+
+    return triggered_at.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 def _reconcile_stale_running_runs(db, raw_log_lines: List[str]) -> Dict[str, Any]:
     monitoring = db.get_monitoring_summary()
-    if monitoring["running_runs"] <= 0:
+    latest_status = (monitoring.get("latest_run_status") or "").strip().lower()
+    if latest_status not in ACTIVE_RUN_STATUSES:
         return monitoring
 
-    last_activity = _extract_last_progress_timestamp(raw_log_lines)
-    if last_activity is None:
+    reference_time = _resolve_reconciliation_reference(
+        raw_log_lines,
+        monitoring.get("latest_run_triggered_at"),
+    )
+    if reference_time is None:
         return monitoring
 
-    stale_seconds = (datetime.utcnow() - last_activity).total_seconds()
+    stale_seconds = (datetime.utcnow() - reference_time).total_seconds()
     if stale_seconds <= STALE_RUN_TIMEOUT_SECONDS:
         return monitoring
 
     updated = 0
-    if hasattr(db, "fail_active_runs"):
+    if latest_status == "cancelling" and hasattr(db, "cancel_stale_cancelling_runs"):
+        updated = db.cancel_stale_cancelling_runs()
+        if updated:
+            logger.warning(
+                "Run(s) marques en cancelled apres %.1f s bloques en cancelling.",
+                stale_seconds,
+            )
+            return db.get_monitoring_summary()
+    elif latest_status in RUNNING_RUN_STATUSES and hasattr(db, "fail_active_runs"):
         updated = db.fail_active_runs()
-
-    if updated:
-        logger.warning(
-            "Run(s) marques en echec apres %.1f s sans signal moteur recent.",
-            stale_seconds,
-        )
-        return db.get_monitoring_summary()
+        if updated:
+            logger.warning(
+                "Run(s) marques en echec apres %.1f s sans signal moteur recent.",
+                stale_seconds,
+            )
+            return db.get_monitoring_summary()
 
     return monitoring
 
@@ -1648,12 +1695,14 @@ async def websocket_endpoint(websocket: WebSocket):
             try:
                 db = get_db_adapter()
                 stats = db.get_statistics()
-                await manager.send_personal_message(
+                sent = await manager.send_personal_message(
                     WebSocketMessage(type="stats_update", data=stats, timestamp=datetime.now()).json(),
                     websocket,
                 )
+                if not sent:
+                    break
                 if hasattr(db, "get_monitoring_summary"):
-                    await manager.send_personal_message(
+                    sent = await manager.send_personal_message(
                         WebSocketMessage(
                             type="monitoring_update",
                             data=db.get_monitoring_summary(),
@@ -1661,9 +1710,13 @@ async def websocket_endpoint(websocket: WebSocket):
                         ).json(),
                         websocket,
                     )
+                    if not sent:
+                        break
             except Exception as e:
                 logger.error(f"Erreur WebSocket stats: {e}")
     except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    finally:
         manager.disconnect(websocket)
 
 
