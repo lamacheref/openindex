@@ -14,6 +14,18 @@ import tempfile
 from pathlib import Path
 
 
+def format_subprocess_failure(exc: subprocess.CalledProcessError) -> str:
+    stdout = (exc.stdout or "").strip()
+    stderr = (exc.stderr or "").strip()
+    details = []
+    if stderr:
+        details.append(f"stderr={stderr}")
+    if stdout:
+        details.append(f"stdout={stdout}")
+    detail_suffix = f" ({', '.join(details)})" if details else ""
+    return f"Commande {exc.cmd!r} en echec avec code {exc.returncode}{detail_suffix}"
+
+
 def parse_unc_start_path(start_path: str):
     normalized = (start_path or "").strip().rstrip("\\")
     parts = [part for part in normalized.split("\\") if part]
@@ -51,38 +63,47 @@ def build_credentials_file(username: str, password: str, domain: str) -> str:
 
 def mount_share(source: str, mount_dir: Path, credentials_path: str) -> None:
     mount_dir.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        [
-            "mount",
-            "-t",
-            "cifs",
-            source,
-            str(mount_dir),
-            "-o",
-            f"ro,credentials={credentials_path},iocharset=utf8",
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        subprocess.run(
+            [
+                "mount",
+                "-t",
+                "cifs",
+                source,
+                str(mount_dir),
+                "-o",
+                f"ro,credentials={credentials_path},iocharset=utf8",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(format_subprocess_failure(exc)) from exc
 
 
 def unmount_share(mount_dir: Path) -> None:
-    subprocess.run(
-        ["umount", str(mount_dir)],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        subprocess.run(
+            ["umount", str(mount_dir)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(format_subprocess_failure(exc)) from exc
 
 
 def run_du(target_path: Path) -> int:
-    du_result = subprocess.run(
-        ["du", "-sb", str(target_path)],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        du_result = subprocess.run(
+            ["du", "-sb", str(target_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(format_subprocess_failure(exc)) from exc
     return int(du_result.stdout.split()[0])
 
 
