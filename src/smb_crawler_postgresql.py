@@ -107,7 +107,9 @@ class SMBCrawlerPostgreSQL:
             'errors': 0,
             'start_time': None,
             'end_time': None,
-            'last_activity': None
+            'last_activity': None,
+            'timed_out': False,
+            'final_status': 'running',
         }
         
         # Configuration du logging
@@ -795,6 +797,9 @@ class SMBCrawlerPostgreSQL:
                     
                     # Timeout de sécurité (20 minutes sans activité)
                     if time.time() - last_activity > 1200:
+                        self.stats['timed_out'] = True
+                        self.stats['final_status'] = 'failed'
+                        self.logger.error("⏰ Timeout de sécurité (20 min) - arrêt en échec du crawl")
                         print("\n⏰ Timeout de sécurité (20 min) - Fin du crawl")
                         break
                     
@@ -803,6 +808,7 @@ class SMBCrawlerPostgreSQL:
                     time.sleep(5)
                 
             except KeyboardInterrupt:
+                self.stats['final_status'] = 'cancelled'
                 print("\n⚠️ Arrêt demandé par l'utilisateur...")
             finally:
                 # Arrêter tous les workers
@@ -820,7 +826,13 @@ class SMBCrawlerPostgreSQL:
         # Finaliser
         self.stats['end_time'] = time.time()
         duration = self.stats['end_time'] - self.stats['start_time']
-        
+        if self.stats['timed_out']:
+            self.stats['final_status'] = 'failed'
+        elif self.stop_event.is_set():
+            self.stats['final_status'] = 'cancelled'
+        else:
+            self.stats['final_status'] = 'completed'
+
         # Sauvegarder les statistiques
         crawl_stats = {
             'total_files': self.stats['total_files'],
@@ -830,11 +842,12 @@ class SMBCrawlerPostgreSQL:
             'duplicate_size': 0,  # TODO: calculer
             'crawl_duration_seconds': int(duration),
             'server_info': f"{self.server}\\{self.share_name}",
-            'status': 'completed'
+            'status': self.stats['final_status']
         }
-        
+
         self.postgres_adapter.save_crawl_statistics(crawl_stats)
-        
+        self.logger.info(f"🏁 Fin de crawl avec statut final={self.stats['final_status']}")
+
         # Afficher les statistiques finales
         self._print_final_stats()
         
@@ -966,7 +979,7 @@ def run_single_crawl(run_payload):
     print("Appuyez sur Ctrl+C pour arrêter")
 
     stats = crawler.start_crawl(base_path=base_path)
-    stats["cancelled"] = crawler.stop_event.is_set()
+    stats["cancelled"] = crawler.stop_event.is_set() and not stats.get("timed_out", False)
     return stats
 
 
@@ -983,7 +996,12 @@ def worker_loop(poll_interval_seconds=5):
         try:
             print(f"▶️ Run réservé: {run_id} pour {run_payload['name']} ({run_payload['start_path']})")
             stats = run_single_crawl(run_payload)
-            final_status = "cancelled" if stats.get("cancelled") else "completed"
+            if stats.get("timed_out"):
+                final_status = "failed"
+            elif stats.get("cancelled"):
+                final_status = "cancelled"
+            else:
+                final_status = "completed"
             adapter.update_crawl_run_status(run_id, final_status)
             print(f"✅ Run terminé: {run_id} ({final_status})")
         except KeyboardInterrupt:
