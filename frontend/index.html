@@ -320,9 +320,15 @@
 
                     <section class="grid grid-cols-1 gap-5 xl:grid-cols-2">
                         <div class="card p-6">
-                            <div class="mb-4 flex items-center justify-between">
-                                <h3 class="text-lg font-semibold">Runs récents</h3>
+                            <div class="mb-4 flex items-center justify-between gap-3">
+                                <button @click="showRecentExplorations = !showRecentExplorations"
+                                        class="flex min-w-0 flex-1 items-center justify-between gap-3 text-left">
+                                    <h3 class="text-lg font-semibold">Explorations récentes</h3>
+                                    <i class="fas fa-chevron-down text-sm text-slate-400 transition-transform"
+                                       :class="showRecentExplorations ? 'rotate-180' : ''"></i>
+                                </button>
                             </div>
+                            <div x-show="showRecentExplorations">
                             <div x-show="loadingOverview" class="py-8 text-center">
                                 <div class="loading"></div>
                             </div>
@@ -374,13 +380,23 @@
                                     </tbody>
                                 </table>
                             </div>
+                            </div>
                         </div>
 
                         <div class="card p-6">
-                            <div class="mb-4 flex items-center justify-between">
-                                <h3 class="text-lg font-semibold">Configuration active</h3>
-                                <button @click="openConfiguration('crawler')" class="text-sm text-teal-700 hover:text-teal-900">Gérer</button>
+                            <div class="mb-4 flex items-center justify-between gap-3">
+                                <button @click="showActiveConfiguration = !showActiveConfiguration"
+                                        class="flex min-w-0 flex-1 items-center justify-between gap-3 text-left">
+                                    <h3 class="text-lg font-semibold">Configuration active</h3>
+                                    <i class="fas fa-chevron-down text-sm text-slate-400 transition-transform"
+                                       :class="showActiveConfiguration ? 'rotate-180' : ''"></i>
+                                </button>
+                                <button @click="openConfiguration('crawler')"
+                                        class="rounded-xl border border-teal-200 bg-teal-50 px-3 py-1.5 text-sm font-semibold text-teal-800 hover:bg-teal-100">
+                                    Gérer
+                                </button>
                             </div>
+                            <div x-show="showActiveConfiguration">
                             <div x-show="selectedConfig" class="space-y-4">
                                 <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                                     <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Nom</p>
@@ -397,6 +413,7 @@
                             </div>
                             <div x-show="!selectedConfig" class="text-sm text-slate-500">
                                 Sélectionne une configuration pour préparer le prochain run.
+                            </div>
                             </div>
                         </div>
                     </section>
@@ -786,6 +803,8 @@
                 clockNow: Date.now(),
                 clockTimerId: null,
                 volumeAnimationFrameId: null,
+                showRecentExplorations: true,
+                showActiveConfiguration: true,
                 operationalLogs: [],
                 editingCrawlId: '',
                 newCrawl: {
