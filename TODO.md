@@ -12,6 +12,7 @@
   - Avancement validé: worker `estimate-{hash}` lancé par l'API via le socket Docker, montage CIFS read-only fonctionnel après ajustement des capacités (`SYS_ADMIN`, `DAC_READ_SEARCH`, AppArmor/seccomp relâchés uniquement pour ce worker), logs JSON relus côté API.
   - Avancement validé en plus: le timeout parasite sur l'attente Docker `/wait` a été allongé; l'API ne coupe plus artificiellement l'estimation après 30 s, et le worker peut rester en exécution réelle au-delà d'une minute.
   - Dette de validation restante: confirmer la durée nominale du `du -sb` sur `\\172.16.252.34\Public\SMIDEN\` puis la transition complète `estimating -> queued/running` une fois l'estimation revenue.
+  - Dette de stratégie potentielle: si `du -sb` dépasse durablement le budget opérateur en pré-lancement, prévoir une alternative plus rapide que l'estimation exhaustive synchrone (cache de baseline précédente, estimation partielle, ou lancement différé du crawl avec recalage progressif).
   - Dette d'exploitation restante: éviter que la suppression d'un run failed depuis l'UI fasse disparaître trop vite la preuve de diagnostic du dernier `estimate-*`; conserver au moins l'erreur d'estimation visible tant que l'opérateur n'a pas confirmé le nettoyage.
   - Reste à faire: finaliser la preuve opératoire complète `estimating -> queued/running`, valider le cleanup robuste des workers `estimate-*` en fin normale et documenter le protocole de diagnostic associé.
 
@@ -19,6 +20,8 @@
   - Exploiter les retours actuels du moteur pour des indicateurs de progression fiables.
   - Présenter ces indicateurs sur une seule ligne, lisibles d'un coup d'oeil.
   - Réserver les queues au diagnostic secondaire.
+  - Dette UI constatée en exploitation: la page agrège aujourd'hui des sources hétérogènes (`/api/stats`, `/api/crawls/overview`, `/api/crawler/runtime`) et peut afficher un état incohérent, par exemple un run actif avec `Runs récents` vide ou des KPI historiques non alignés avec le run courant.
+  - À corriger: définir une hiérarchie de vérité par bloc d'interface, gérer explicitement les erreurs de refresh, et éviter d'afficher `Aucun run enregistré` tant qu'un état actif est connu par une autre source.
 
 - [x] **P-03 — Traitement asynchrone sans limite artificielle**
   - Supprimer les limites de taille des queues de traitement asynchrone.

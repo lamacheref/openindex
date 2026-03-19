@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 
@@ -95,18 +96,54 @@ def unmount_share(mount_dir: Path) -> None:
 
 
 def run_du(target_path: Path) -> int:
-    try:
-        print(f"[estimate] demarrage du -sb sur {target_path}", file=sys.stderr, flush=True)
-        du_result = subprocess.run(
-            ["du", "-sb", str(target_path)],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    except subprocess.CalledProcessError as exc:
-        raise RuntimeError(format_subprocess_failure(exc)) from exc
-    print(f"[estimate] fin du -sb sur {target_path}", file=sys.stderr, flush=True)
-    return int(du_result.stdout.split()[0])
+    print(f"[estimate] demarrage du -sb sur {target_path}", file=sys.stderr, flush=True)
+    process = subprocess.Popen(
+        ["du", "-sb", str(target_path)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    print(f"[estimate] process du pid={process.pid}", file=sys.stderr, flush=True)
+
+    start_time = time.monotonic()
+    last_heartbeat = 0.0
+    while True:
+        return_code = process.poll()
+        elapsed = int(time.monotonic() - start_time)
+        if return_code is not None:
+            stdout, stderr = process.communicate()
+            if return_code != 0:
+                raise RuntimeError(
+                    f"Commande ['du', '-sb', '{target_path}'] en echec avec code {return_code}"
+                    f"{f' (stderr={stderr.strip()})' if (stderr or '').strip() else ''}"
+                    f"{f', stdout={stdout.strip()}' if (stdout or '').strip() else ''}"
+                )
+            print(
+                f"[estimate] fin du -sb sur {target_path} apres {elapsed}s",
+                file=sys.stderr,
+                flush=True,
+            )
+            return int((stdout or "").split()[0])
+
+        if elapsed - last_heartbeat >= 15:
+            last_heartbeat = float(elapsed)
+            try:
+                ps_result = subprocess.run(
+                    ["ps", "-p", str(process.pid), "-o", "pid=,state=,etime=,%cpu=,rss=,comm="],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                ps_snapshot = " ".join((ps_result.stdout or "").split())
+            except subprocess.CalledProcessError as exc:
+                ps_snapshot = f"ps indisponible: {format_subprocess_failure(exc)}"
+            print(
+                f"[estimate] heartbeat du pid={process.pid} elapsed={elapsed}s stats={ps_snapshot}",
+                file=sys.stderr,
+                flush=True,
+            )
+
+        time.sleep(1)
 
 
 def main() -> int:
