@@ -223,6 +223,7 @@ class CrawlerRuntime(BaseModel):
     large_files_detected: int = 0
     large_files_bytes: int = 0
     progress_hint: str = ""
+    summary_line: str = ""
     last_activity_at: Optional[str] = None
     progress_indicators: List[ProgressIndicator]
     queue_indicators: List[QueueIndicator]
@@ -1297,6 +1298,48 @@ def _format_rate(value_per_second: float, suffix: str = "it/s") -> str:
     return f"{value_per_second:.2f} {suffix}"
 
 
+def _build_runtime_summary_line(
+    runtime_metrics: Dict[str, Any],
+    latest_status: str,
+    has_running_run: bool,
+    idle: bool,
+    files_rate: float,
+    directories_rate: float,
+    processed_volume_rate: float,
+    large_file_metrics: Dict[str, int],
+) -> str:
+    normalized_status = (latest_status or "").strip().lower()
+
+    if idle:
+        return "Signal moteur interrompu. Le run doit etre verifie cote worker."
+
+    if has_running_run:
+        large_files_count = large_file_metrics["count"] or runtime_metrics["large_files_detected"]
+        return " | ".join(
+            [
+                f"Fichiers {runtime_metrics['discovered_files']:,}".replace(",", " ")
+                + f" ({_format_rate(files_rate)})",
+                f"Dossiers {runtime_metrics['discovered_directories']:,}".replace(",", " ")
+                + f" ({_format_rate(directories_rate)})",
+                f"Volume traite {_format_volume_compact(runtime_metrics['processed_bytes'])}"
+                + f" ({_format_volume_compact(int(processed_volume_rate))}/s)",
+                f"Verification d'integrite {runtime_metrics['queue_checksums']:,}".replace(",", " "),
+                f"Gros fichiers {large_files_count:,}".replace(",", " "),
+            ]
+        )
+
+    if normalized_status in {"queued", "pending"}:
+        return "Run en file d'attente. Le worker prendra le relais des qu'un slot sera libre."
+    if normalized_status == "cancelling":
+        return "Arret demande. Finalisation du run en attente cote worker."
+    if runtime_metrics["processed_bytes"] > 0:
+        return (
+            f"Dernier volume traite {_format_volume_compact(runtime_metrics['processed_bytes'])}"
+            f" sur {_format_volume_compact(runtime_metrics['discovered_bytes'])} decouverts."
+        )
+    return "Aucune exploration active."
+
+
 def _extract_last_progress_timestamp(log_lines: List[str]) -> Optional[datetime]:
     for line in reversed(log_lines):
         if not PROGRESS_RE.search(line):
@@ -1627,6 +1670,16 @@ async def get_crawler_runtime(log_limit: int = 80):
                 "Aucun signal moteur récent. Le run paraît idle et doit être vérifié."
                 if idle
                 else runtime_metrics["progress_hint"]
+            ),
+            summary_line=_build_runtime_summary_line(
+                runtime_metrics=runtime_metrics,
+                latest_status=monitoring["latest_run_status"],
+                has_running_run=has_running_run,
+                idle=idle,
+                files_rate=files_rate,
+                directories_rate=directories_rate,
+                processed_volume_rate=processed_volume_rate,
+                large_file_metrics=large_file_metrics,
             ),
             last_activity_at=last_activity.isoformat() if last_activity else None,
             progress_indicators=progress_indicators,
