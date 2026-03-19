@@ -78,7 +78,9 @@ class ConfigManager:
                 'max_depth': self.config.getint('crawler_config', 'max_depth'),
                 'large_file_threshold': self.config.getint('crawler_config', 'large_file_threshold'),
                 'max_queue_size': self.config.getint('crawler_config', 'max_queue_size'),
-                'pre_estimation_enabled': self.config.getboolean('crawler_config', 'pre_estimation_enabled', fallback=True)
+                'pre_estimation_enabled': self.config.getboolean('crawler_config', 'pre_estimation_enabled', fallback=True),
+                'pre_estimation_mode': self.config.get('crawler_config', 'pre_estimation_mode', fallback='smb'),
+                'pre_estimation_mount_path': self.config.get('crawler_config', 'pre_estimation_mount_path', fallback='')
             }
         except (configparser.NoSectionError, configparser.NoOptionError) as e:
             raise ValueError(f"Erreur de configuration crawler: {e}")

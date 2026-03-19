@@ -11,6 +11,7 @@ import time
 import argparse
 import threading
 import subprocess
+import shutil
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -28,7 +29,8 @@ class SMBCrawlerPostgreSQL:
     def __init__(self, server, username, password, share_name, domain='',
                  crawl_config_id=None, postgres_config=None, max_workers=4, delay_between_requests=0.1,
                  max_queue_size=1000, max_depth=None, debug=False,
-                 large_file_threshold=104857600, pre_estimation_enabled=True):
+                 large_file_threshold=104857600, pre_estimation_enabled=True,
+                 pre_estimation_mode="smb", pre_estimation_mount_path=""):
         """
         Initialise le crawler SMB avec PostgreSQL.
 
@@ -67,6 +69,8 @@ class SMBCrawlerPostgreSQL:
         self.debug = debug
         self.large_file_threshold = large_file_threshold
         self.pre_estimation_enabled = pre_estimation_enabled
+        self.pre_estimation_mode = (pre_estimation_mode or "smb").strip().lower()
+        self.pre_estimation_mount_path = (pre_estimation_mount_path or "").strip()
         
         # Initialiser PostgreSQL
         self.postgres_adapter = PostgreSQLAdapter(self.postgres_config)
@@ -311,6 +315,13 @@ class SMBCrawlerPostgreSQL:
     def _run_pre_estimation(self, base_path):
         self.stats['phase'] = 'pre_estimation'
         started_at = time.time()
+        self.stats['last_activity'] = time.time()
+
+        if self.pre_estimation_mode == "du":
+            if self._run_du_pre_estimation(base_path):
+                return
+            self.logger.warning("⚠️ Pré-estimation `du -sb` indisponible, fallback SMB activé")
+
         pending_directories = [base_path]
         estimated_directories = 1
         estimated_files = 0
@@ -355,6 +366,77 @@ class SMBCrawlerPostgreSQL:
             f"✅ Pré-estimation terminée: {estimated_files} fichiers, {estimated_directories} dossiers | "
             f"Volume cible={estimated_total_size} octets"
         )
+
+    def _map_unc_to_mount_path(self, base_path):
+        mount_root = Path(self.pre_estimation_mount_path).expanduser()
+        if not self.pre_estimation_mount_path:
+            return None
+        if not mount_root.exists():
+            self.logger.warning(f"Chemin de montage de pré-estimation introuvable: {mount_root}")
+            return None
+
+        normalized = base_path.strip("\\")
+        parts = [part for part in normalized.split("\\") if part]
+        if len(parts) < 2:
+            return None
+        relative_parts = parts[2:]
+        return mount_root.joinpath(*relative_parts)
+
+    def _run_du_pre_estimation(self, base_path):
+        target_path = self._map_unc_to_mount_path(base_path)
+        if target_path is None or not target_path.exists():
+            return False
+
+        if shutil.which("du") is None:
+            self.logger.warning("Commande `du` indisponible pour la pré-estimation")
+            return False
+
+        started_at = time.time()
+        self.logger.info(f"🔎 Pré-estimation `du -sb` sur {target_path}")
+        try:
+            du_result = subprocess.run(
+                ["du", "-sb", str(target_path)],
+                capture_output=True,
+                text=True,
+                timeout=3600,
+                check=True,
+            )
+            total_bytes = int(du_result.stdout.split()[0])
+        except Exception as exc:
+            self.logger.warning(f"Échec `du -sb` pour la pré-estimation: {exc}")
+            return False
+
+        try:
+            files_result = subprocess.run(
+                ["find", str(target_path), "-type", "f"],
+                capture_output=True,
+                text=True,
+                timeout=3600,
+                check=True,
+            )
+            directories_result = subprocess.run(
+                ["find", str(target_path), "-type", "d"],
+                capture_output=True,
+                text=True,
+                timeout=3600,
+                check=True,
+            )
+            estimated_files = sum(1 for line in files_result.stdout.splitlines() if line.strip())
+            estimated_directories = sum(1 for line in directories_result.stdout.splitlines() if line.strip())
+        except Exception as exc:
+            self.logger.warning(f"Échec du comptage `find` pour la pré-estimation: {exc}")
+            return False
+
+        self.stats['estimated_total_files'] = estimated_files
+        self.stats['estimated_total_directories'] = estimated_directories
+        self.stats['estimated_total_size'] = total_bytes
+        self.stats['last_activity'] = time.time()
+        duration = time.time() - started_at
+        self.logger.info(
+            f"✅ Pré-estimation terminée: {estimated_files} fichiers, {estimated_directories} dossiers | "
+            f"Volume cible={total_bytes} octets | Source=du -sb | Durée: {duration:.1f}s"
+        )
+        return True
 
     def _directory_worker(self):
         """
@@ -964,12 +1046,22 @@ def build_postgres_config():
     }
 
 
+def rotate_runtime_log_for_run(run_id):
+    log_path = Path(os.getenv("OPENINDEX_CRAWLER_LOG_PATH", "logs/smb_crawler_postgresql.log"))
+    if not log_path.exists():
+        return
+    archived_path = log_path.with_name(f"{log_path.stem}_{run_id}{log_path.suffix}")
+    archived_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.replace(archived_path)
+
+
 def run_single_crawl(run_payload):
     """Exécute une exploration à partir d'un run réservé en base."""
     config_manager = ConfigManager()
     crawler_config = config_manager.get_crawler_config()
     debug_mode = os.getenv('DEBUG', 'false').lower() == 'true'
     server, share_name, base_path = parse_unc_start_path(run_payload["start_path"])
+    rotate_runtime_log_for_run(run_payload["run_id"])
 
     print("🚀 Démarrage de l'exploration SMB avec PostgreSQL...")
     print(f"🖥️ Serveur: {server}")
@@ -993,6 +1085,8 @@ def run_single_crawl(run_payload):
         max_depth=crawler_config["max_depth"],
         large_file_threshold=crawler_config["large_file_threshold"],
         pre_estimation_enabled=crawler_config.get("pre_estimation_enabled", True),
+        pre_estimation_mode=crawler_config.get("pre_estimation_mode", "smb"),
+        pre_estimation_mount_path=crawler_config.get("pre_estimation_mount_path", ""),
         debug=debug_mode
     )
     crawler.run_id = run_payload["run_id"]

@@ -1147,7 +1147,7 @@ def _format_volume_compact(bytes_value: int) -> str:
 
 def _extract_last_progress_timestamp(log_lines: List[str]) -> Optional[datetime]:
     for line in reversed(log_lines):
-        if not PROGRESS_RE.search(line):
+        if not (PROGRESS_RE.search(line) or PRE_ESTIMATION_RE.search(line)):
             continue
         match = LOG_TIMESTAMP_RE.match(line)
         if not match:
@@ -1205,6 +1205,14 @@ def _extract_large_file_metrics(raw_log_lines: List[str]) -> Dict[str, int]:
         "count": count,
         "bytes": total_bytes,
     }
+
+
+def _slice_current_run_log_lines(raw_log_lines: List[str]) -> List[str]:
+    last_run_start_index = 0
+    for index, line in enumerate(raw_log_lines):
+        if "Démarrage du crawl SMB avec PostgreSQL" in line:
+            last_run_start_index = index
+    return raw_log_lines[last_run_start_index:]
 
 
 @app.get("/api/crawl-configs", response_model=List[CrawlConfigPublic])
@@ -1351,12 +1359,13 @@ async def get_crawler_runtime(log_limit: int = 80):
         ensure_crawl_storage_ready(db)
         log_path = Path(os.getenv("OPENINDEX_CRAWLER_LOG_PATH", "logs/smb_crawler_postgresql.log"))
         raw_log_lines = _read_log_lines(log_path)
-        monitoring = _reconcile_stale_running_runs(db, raw_log_lines)
-        log_lines = [_normalize_runtime_log_line(line) for line in raw_log_lines[-log_limit:]]
+        current_run_log_lines = _slice_current_run_log_lines(raw_log_lines)
+        monitoring = _reconcile_stale_running_runs(db, current_run_log_lines)
+        log_lines = [_normalize_runtime_log_line(line) for line in current_run_log_lines[-log_limit:]]
         runtime_metrics = _extract_runtime_metrics(log_lines)
-        large_file_metrics = _extract_large_file_metrics(raw_log_lines)
+        large_file_metrics = _extract_large_file_metrics(current_run_log_lines)
         queue_snapshot = _extract_queue_snapshot(log_lines)
-        last_activity = _extract_last_progress_timestamp(log_lines)
+        last_activity = _extract_last_progress_timestamp(current_run_log_lines)
         has_running_run = monitoring["running_runs"] > 0
         idle = False
         if has_running_run and last_activity is not None:
