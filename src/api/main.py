@@ -112,6 +112,21 @@ class CrawlConfigCreate(BaseModel):
     connection: CrawlConnectionConfig
 
 
+class CrawlConnectionUpdate(BaseModel):
+    username: str
+    password: Optional[str] = None
+    domain: Optional[str] = None
+
+
+class CrawlConfigUpdate(BaseModel):
+    name: str
+    domain_zone: str
+    start_path: str
+    include_paths: List[str] = Field(default_factory=list)
+    exclude_paths: List[str] = Field(default_factory=list)
+    connection: CrawlConnectionUpdate
+
+
 class CrawlConfigPublic(BaseModel):
     id: str
     name: str
@@ -484,6 +499,85 @@ class PostgreSQLAdapter:
                 )
                 row = cursor.fetchone()
             conn.commit()
+
+        return {
+            "id": row[0],
+            "name": row[1],
+            "domain_zone": row[2],
+            "start_path": row[3],
+            "include_paths": row[4] or [],
+            "exclude_paths": row[5] or [],
+            "connection_username": row[6],
+            "connection_domain": row[7],
+            "created_at": row[8],
+        }
+
+    def update_crawl_config(self, config_id: str, payload: CrawlConfigUpdate) -> Optional[Dict[str, Any]]:
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                if payload.connection.password:
+                    cursor.execute(
+                        """
+                        UPDATE crawl_configs
+                        SET name = %s,
+                            domain_zone = %s,
+                            start_path = %s,
+                            include_paths = %s,
+                            exclude_paths = %s,
+                            connection_username = %s,
+                            connection_password = %s,
+                            connection_domain = %s
+                        WHERE id::text = %s
+                        RETURNING id::text, name, domain_zone, start_path,
+                                  include_paths, exclude_paths,
+                                  connection_username, connection_domain,
+                                  created_at::text
+                        """,
+                        [
+                            payload.name,
+                            payload.domain_zone,
+                            payload.start_path,
+                            payload.include_paths,
+                            payload.exclude_paths,
+                            payload.connection.username,
+                            payload.connection.password,
+                            payload.connection.domain,
+                            config_id,
+                        ],
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        UPDATE crawl_configs
+                        SET name = %s,
+                            domain_zone = %s,
+                            start_path = %s,
+                            include_paths = %s,
+                            exclude_paths = %s,
+                            connection_username = %s,
+                            connection_domain = %s
+                        WHERE id::text = %s
+                        RETURNING id::text, name, domain_zone, start_path,
+                                  include_paths, exclude_paths,
+                                  connection_username, connection_domain,
+                                  created_at::text
+                        """,
+                        [
+                            payload.name,
+                            payload.domain_zone,
+                            payload.start_path,
+                            payload.include_paths,
+                            payload.exclude_paths,
+                            payload.connection.username,
+                            payload.connection.domain,
+                            config_id,
+                        ],
+                    )
+                row = cursor.fetchone()
+            conn.commit()
+
+        if not row:
+            return None
 
         return {
             "id": row[0],
@@ -1237,6 +1331,22 @@ async def create_crawl_config(payload: CrawlConfigCreate):
     except Exception as e:
         logger.error(f"Erreur create_crawl_config: {e}")
         raise HTTPException(status_code=500, detail="Erreur lors de la création de la configuration d'exploration")
+
+
+@app.put("/api/crawl-configs/{config_id}", response_model=CrawlConfigPublic)
+async def update_crawl_config(config_id: str, payload: CrawlConfigUpdate):
+    try:
+        db = get_db_adapter()
+        ensure_crawl_storage_ready(db)
+        config = db.update_crawl_config(config_id, payload)
+        if not config:
+            raise HTTPException(status_code=404, detail="Configuration d'exploration introuvable")
+        return CrawlConfigPublic(**config)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur update_crawl_config: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la mise à jour de la configuration d'exploration")
 
 
 @app.post("/api/crawls/start", response_model=CrawlRun)

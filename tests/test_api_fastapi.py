@@ -139,6 +139,20 @@ class DummyDB:
         self.crawl_configs.append(item)
         return item
 
+    def update_crawl_config(self, config_id, payload):
+        for item in self.crawl_configs:
+            if item["id"] != config_id:
+                continue
+            item["name"] = payload.name
+            item["domain_zone"] = payload.domain_zone
+            item["start_path"] = payload.start_path
+            item["include_paths"] = payload.include_paths
+            item["exclude_paths"] = payload.exclude_paths
+            item["connection_username"] = payload.connection.username
+            item["connection_domain"] = payload.connection.domain
+            return item
+        return None
+
     def start_crawl(self, config_id):
         if any(run["config_id"] == config_id and run["status"] in {"queued", "running", "pending", "in_progress", "cancelling"} for run in self.crawl_runs):
             raise ValueError("Une exploration est deja active pour cette configuration (queued).")
@@ -445,6 +459,48 @@ def test_create_and_list_crawl_configs(client):
     listed = list_response.json()
     assert len(listed) == 1
     assert listed[0]['domain_zone'] == 'EMEA'
+
+
+def test_update_crawl_config(client):
+    created = client(
+        "POST",
+        "/api/crawl-configs",
+        json={
+            "name": "Crawl Finance",
+            "domain_zone": "EMEA",
+            "start_path": "\\\\srv\\finance",
+            "include_paths": [],
+            "exclude_paths": [],
+            "connection": {
+                "username": "svc_finance",
+                "password": "secret",
+                "domain": "CORP",
+            },
+        },
+    ).json()
+
+    response = client(
+        "PUT",
+        f"/api/crawl-configs/{created['id']}",
+        json={
+            "name": "Crawl Finance Prod",
+            "domain_zone": "FR",
+            "start_path": "\\\\srv\\finance-prod",
+            "include_paths": [],
+            "exclude_paths": [],
+            "connection": {
+                "username": "svc_finance_prod",
+                "password": "",
+                "domain": "CORP",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["name"] == "Crawl Finance Prod"
+    assert payload["start_path"] == "\\\\srv\\finance-prod"
+    assert payload["connection_username"] == "svc_finance_prod"
 
 
 def test_start_crawl_requires_existing_config(client):

@@ -16,6 +16,7 @@
   - Réserver les queues au diagnostic secondaire.
   - Dette UI constatée en exploitation: la page agrège aujourd'hui des sources hétérogènes (`/api/stats`, `/api/crawls/overview`, `/api/crawler/runtime`) et peut afficher un état incohérent, par exemple un run actif avec `Runs récents` vide ou des KPI historiques non alignés avec le run courant.
   - À corriger: définir une hiérarchie de vérité par bloc d'interface, gérer explicitement les erreurs de refresh, et éviter d'afficher `Aucun run enregistré` tant qu'un état actif est connu par une autre source.
+  - Avancement utile livré: l'UI permet désormais de modifier une configuration d'espace existante, y compris de remplacer le mot de passe sans recréer l'espace; le secret courant n'est pas réaffiché et reste conservé si le champ mot de passe est laissé vide.
 
 - [x] **P-03 — Traitement asynchrone sans limite artificielle**
   - Supprimer les limites de taille des queues de traitement asynchrone.
