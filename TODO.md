@@ -18,6 +18,7 @@
   - Dette d'exploitation restante: éviter que la suppression d'un run failed depuis l'UI fasse disparaître trop vite la preuve de diagnostic du dernier `estimate-*`; conserver au moins l'erreur d'estimation visible tant que l'opérateur n'a pas confirmé le nettoyage.
   - Nouveau cap à étudier: privilégier un suivi précis des métriques et logs runtime pendant l'exploration, plutôt qu'une barre de progression fondée sur une pré-estimation volumétrique lente ou fragile.
   - Reste à faire: documenter le retrait ou la mise en sommeil de la stratégie `du -sb`, définir l'alternative retenue, et réaligner l'UI sur un pilotage par valeurs observées plutôt que par pourcentage estimé.
+  - Revue de schéma à mener: `crawl_runs.estimated_total_size` et les colonnes `estimate_*` sont désormais du legacy; préparer une migration explicite de suppression ou d'archivage une fois le retrait du flux de pré-estimation totalement stabilisé.
 
 - [ ] **P-02 — Indicateurs de progression lisibles et fiables**
   - Exploiter les retours actuels du moteur pour des indicateurs de progression fiables.

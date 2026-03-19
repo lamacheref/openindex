@@ -1095,7 +1095,7 @@ def run_single_crawl(run_payload):
         max_depth=crawler_config["max_depth"],
         large_file_threshold=crawler_config["large_file_threshold"],
         pre_estimation_enabled=(
-            crawler_config.get("pre_estimation_enabled", True)
+            crawler_config.get("pre_estimation_enabled", False)
             and int(run_payload.get("estimated_total_size") or 0) <= 0
         ),
         pre_estimation_mode=crawler_config.get("pre_estimation_mode", "smb"),
