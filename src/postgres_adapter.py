@@ -189,6 +189,60 @@ class PostgreSQLAdapter:
                 conn.rollback()
                 self.logger.error(f"Erreur lors de la sauvegarde du lot: {e}")
                 raise
+
+    def get_files_by_paths(
+        self,
+        paths: List[str],
+        crawl_config_id: Optional[str] = None,
+    ) -> Dict[str, Dict[str, Any]]:
+        """Retourne les métadonnées existantes indexées par chemin."""
+        if not paths:
+            return {}
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            sql = """
+                SELECT path, size, last_modified, checksum, crawl_config_id::text AS crawl_config_id
+                FROM files
+                WHERE path = ANY(%s)
+                  AND is_directory = FALSE
+            """
+            params: List[Any] = [paths]
+            if crawl_config_id:
+                sql += " AND crawl_config_id::text = %s"
+                params.append(crawl_config_id)
+
+            cursor.execute(sql, params)
+            rows = cursor.fetchall()
+            conn.commit()
+            return {row["path"]: dict(row) for row in rows}
+
+    def get_last_completed_crawl_triggered_at(
+        self,
+        crawl_config_id: str,
+        exclude_run_id: Optional[str] = None,
+    ) -> Optional[datetime]:
+        """Retourne la date du dernier run terminé avec succès pour un espace."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            sql = """
+                SELECT triggered_at
+                FROM crawl_runs
+                WHERE config_id::text = %s
+                  AND LOWER(status) = 'completed'
+            """
+            params: List[Any] = [crawl_config_id]
+            if exclude_run_id:
+                sql += " AND id::text <> %s"
+                params.append(exclude_run_id)
+            sql += " ORDER BY triggered_at DESC LIMIT 1"
+
+            cursor.execute(sql, params)
+            row = cursor.fetchone()
+            conn.commit()
+            if not row:
+                return None
+            return row[0]
     
     def calculate_duplicates(self) -> int:
         """

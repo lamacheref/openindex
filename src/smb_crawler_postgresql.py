@@ -128,6 +128,7 @@ class SMBCrawlerPostgreSQL:
 
         if self.pre_estimated_total_size > 0:
             self.stats['estimated_total_size'] = self.pre_estimated_total_size
+        self.last_completed_crawl_triggered_at = None
 
     def setup_logging(self):
         """Configure le logging avec rotation automatique."""
@@ -443,6 +444,44 @@ class SMBCrawlerPostgreSQL:
         )
         return True
 
+    def _parse_timestamp(self, value):
+        if value is None or value == "":
+            return None
+        if isinstance(value, datetime):
+            return value
+        try:
+            return datetime.fromisoformat(str(value))
+        except ValueError:
+            return None
+
+    def _should_skip_known_file(self, file_data, existing_file):
+        """Ignore les fichiers déjà connus et non modifiés depuis le dernier crawl terminé."""
+        if not existing_file or file_data.get("is_directory"):
+            return False, None
+
+        existing_size = existing_file.get("size")
+        existing_modified = self._parse_timestamp(existing_file.get("last_modified"))
+        current_modified = self._parse_timestamp(file_data.get("last_modified"))
+
+        if existing_size == file_data.get("size") and existing_modified == current_modified:
+            return True, "Fichier identique (même chemin, taille et date de modification)"
+
+        if (
+            self.last_completed_crawl_triggered_at is not None
+            and current_modified is not None
+            and current_modified <= self.last_completed_crawl_triggered_at
+        ):
+            return True, "Fichier déjà crawlé et non modifié depuis le dernier crawl terminé"
+
+        return False, None
+
+    def _get_existing_files_map(self, items):
+        file_paths = [item["path"] for item in items if not item.get("is_directory")]
+        return self.postgres_adapter.get_files_by_paths(
+            file_paths,
+            crawl_config_id=self.crawl_config_id,
+        )
+
     def _directory_worker(self):
         """
         Worker thread pour traiter les répertoires.
@@ -471,6 +510,7 @@ class SMBCrawlerPostgreSQL:
 
                         # Lister le contenu du répertoire
                         items = self._list_directory_entries(current_path)
+                        existing_files = self._get_existing_files_map(items)
 
                         # Traiter chaque élément
                         for file_data in items:
@@ -490,6 +530,14 @@ class SMBCrawlerPostgreSQL:
                                     self.directory_result_queue.put(file_data)
                                     self.stats['total_directories'] += 1
                                 else:
+                                    should_skip, reason = self._should_skip_known_file(
+                                        file_data,
+                                        existing_files.get(file_data["path"]),
+                                    )
+                                    if should_skip:
+                                        self.logger.debug(f"Fichier ignoré: {file_data['name']} ({reason})")
+                                        continue
+
                                     if file_data['size'] > self.large_file_threshold:
                                         self.large_file_queue.put(file_data)
                                         self.stats['large_files'] += 1
@@ -805,6 +853,14 @@ class SMBCrawlerPostgreSQL:
             self.logger.info(
                 "✅ Baseline volumétrique injectée avant crawl: Volume cible=%s octets",
                 self.stats['estimated_total_size'],
+            )
+
+        if self.crawl_config_id:
+            self.last_completed_crawl_triggered_at = self._parse_timestamp(
+                self.postgres_adapter.get_last_completed_crawl_triggered_at(
+                    self.crawl_config_id,
+                    exclude_run_id=self.run_id,
+                )
             )
 
         # Ajouter le répertoire racine à la queue
