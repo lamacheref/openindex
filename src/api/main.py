@@ -1072,6 +1072,23 @@ def _extract_runtime_metrics(log_lines: List[str]) -> Dict[str, Any]:
     }
 
 
+def _format_volume_compact(bytes_value: int) -> str:
+    if bytes_value <= 0:
+        return "0 o"
+    if bytes_value < 1000:
+        return f"{bytes_value} o"
+
+    units = ["ko", "Mo", "Go", "To", "Po"]
+    value = float(bytes_value)
+    unit_index = -1
+
+    while value >= 1000 and unit_index < len(units) - 1:
+        value /= 1000
+        unit_index += 1
+
+    return f"{value:.3f} {units[unit_index]}"
+
+
 @app.get("/api/crawl-configs", response_model=List[CrawlConfigPublic])
 async def list_crawl_configs():
     try:
@@ -1256,20 +1273,20 @@ async def get_crawler_runtime(log_limit: int = 80):
             ProgressIndicator(
                 key="processed_volume",
                 label="Volume traité",
-                value=f"{runtime_metrics['processed_bytes']:,} octets".replace(",", " "),
+                value=_format_volume_compact(runtime_metrics["processed_bytes"]),
                 detail="Volume effectivement vérifié",
             ),
             ProgressIndicator(
                 key="discovered_volume",
                 label="Volume découvert",
-                value=f"{runtime_metrics['discovered_bytes']:,} octets".replace(",", " "),
+                value=_format_volume_compact(runtime_metrics["discovered_bytes"]),
                 detail="Volume actuellement inventorié",
             ),
             ProgressIndicator(
                 key="integrity_backlog",
-                label="Vérification d'intégrité en attente",
+                label="Vérification d'intégrité",
                 value=f"{queue_snapshot['checksums']:,}".replace(",", " "),
-                detail="Fichiers en attente de traitement d'intégrité",
+                detail="Fichiers en attente",
             ),
             ProgressIndicator(
                 key="large_files_detected",
