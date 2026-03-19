@@ -2,27 +2,12 @@
 
 ## Priorités opérateur à traiter en tête
 
-- [ ] **P-01 — Pré-estimation volumétrique avant exploration**
-  - Revoir le protocole moteur pour obtenir une estimation la plus fidèle possible du volume total avant exploration.
-  - Hypothèse rejetée en exploitation: l'approche `worker Docker éphémère + montage CIFS + du -sb` n'est pas viable dans son état actuel pour un budget opérateur raisonnable; elle ne doit plus être considérée comme cible par défaut.
-  - Décision appliquée dans le code: les nouveaux runs partent directement en `queued`; le pilotage opérateur repose sur les métriques runtime et le journal réel.
-  - Décision de schéma: les colonnes `estimated_total_size` et `estimate_*` sont retirées de `crawl_runs` sur la base de test; on repart sur une structure minimale cohérente avec le flux réel.
-  - Dette documentaire: archiver l'historique du prototype `estimate-{hash}` dans une note dédiée si l'on veut conserver la trace d'exploitation, mais ne plus le laisser polluer le chemin nominal.
-  - Nouveau cap retenu: privilégier un suivi précis des métriques et logs runtime pendant l'exploration, plutôt qu'une barre de progression fondée sur une pré-estimation volumétrique lente ou fragile.
-
-- [ ] **P-02 — Indicateurs de progression lisibles et fiables**
-  - Exploiter les retours actuels du moteur pour des indicateurs de progression fiables.
-  - Présenter ces indicateurs sur une seule ligne, lisibles d'un coup d'oeil.
-  - Réserver les queues au diagnostic secondaire.
-  - Dette UI constatée en exploitation: la page agrège aujourd'hui des sources hétérogènes (`/api/stats`, `/api/crawls/overview`, `/api/crawler/runtime`) et peut afficher un état incohérent, par exemple un run actif avec `Runs récents` vide ou des KPI historiques non alignés avec le run courant.
-  - Bug identifié le `2026-03-19`: l'API lisait un fichier fixe `smb_crawler_postgresql.log` alors que le crawler produit des logs par run `smb_crawler_postgresql_<run_id>.log`; conséquence directe: journal explorateur vide et indicateurs runtime à `0` malgré un run `running`.
-  - À corriger: définir une hiérarchie de vérité par bloc d'interface, gérer explicitement les erreurs de refresh, et éviter d'afficher `Aucun run enregistré` tant qu'un état actif est connu par une autre source.
-  - Avancement utile livré: l'UI permet désormais de modifier une configuration d'espace existante, y compris de remplacer le mot de passe sans recréer l'espace; le secret courant n'est pas réaffiché et reste conservé si le champ mot de passe est laissé vide.
-
-- [x] **P-03 — Traitement asynchrone sans limite artificielle**
-  - Supprimer les limites de taille des queues de traitement asynchrone.
-  - Vérifier que le backlog de vérification d'intégrité n'est plus artificiellement plafonné.
-  - Livré dans le crawler PostgreSQL; effet complet appliqué aux nouveaux runs après redéploiement du conteneur.
+- [ ] **P-05 — Dettes de stabilisation opérateur**
+  - Corrigé le `2026-03-19`: la lecture principale de progression s'appuie désormais sur le runtime réel du run actif; la dette résiduelle porte surtout sur les cas de refresh incohérent entre blocs.
+  - Corrigé le `2026-03-19`: le bloc `Runs récents` n'affiche plus `Aucun run enregistré` quand un état actif est connu par `monitoring`; un message de désynchronisation explicite prend le relais.
+  - Dette run state: un run arrêté peut encore rester bloqué en `cancelling` trop longtemps si le worker ne finalise pas proprement; ajouter une réconciliation tardive vers `cancelled`.
+  - Dette WebSocket: le flux API peut encore journaliser `Cannot call "send" once a close message has been sent.` quand un client se déconnecte; fiabiliser la purge des connexions fermées.
+  - Dette documentaire: archiver l'historique du prototype `estimate-{hash}` dans une note dédiée si l'on veut conserver la trace d'exploitation, sans le laisser polluer le chemin nominal.
 
 - [x] **P-04 — Statut moteur et commandes opérateur explicites**
   - Garder une barre de progression pour la quantité de données inventoriées.
@@ -30,24 +15,43 @@
   - Basculer le bouton principal de `Lancer` vers `Arrêter` quand une exploration est en cours.
   - Livré via les commits `1a2407a` et `f8fe00c`.
 
-- [x] **P-00 — Finalisation fiable des runs d'exploration**
-  - Corriger la chaîne de fin de run pour qu'un crawl terminé ou timeouté écrive toujours un statut final explicite en base.
-  - Ajouter un signal et une trace `run terminé` / `run en échec` côté moteur.
-  - Empêcher qu'un run reste `running` en base sans activité réelle du moteur.
-  - Livré via les commits `1a2407a` et `f8fe00c`.
+- [x] **P-03 — Traitement asynchrone sans limite artificielle**
+  - Supprimer les limites de taille des queues de traitement asynchrone.
+  - Vérifier que le backlog de vérification d'intégrité n'est plus artificiellement plafonné.
+  - Livré dans le crawler PostgreSQL; effet complet appliqué aux nouveaux runs après redéploiement du conteneur.
 
-- [x] **P-00b — Réconciliation des runs zombies**
-  - Ajouter une logique défensive pour reclassifier les runs stale laissés `running` par le moteur.
-  - Exposer un état opérateur clair quand le moteur n'émet plus mais que la base n'est pas cohérente.
-  - Livré via les commits `1a2407a` et `f8fe00c`.
-  - Dette mineure restante: un run arrêté peut encore rester bloqué en `cancelling` trop longtemps si le worker ne finalise pas proprement; ajouter une réconciliation tardive vers `cancelled`.
+- [x] **P-02 — Indicateurs de progression lisibles et fiables**
+  - Exploiter les retours actuels du moteur pour des indicateurs de progression fiables.
+  - Présenter ces indicateurs sur une seule ligne, lisibles d'un coup d'oeil.
+  - Réserver les queues au diagnostic secondaire.
+  - Bug identifié le `2026-03-19`: l'API lisait un fichier fixe `smb_crawler_postgresql.log` alors que le crawler produit des logs par run `smb_crawler_postgresql_<run_id>.log`; conséquence directe: journal explorateur vide et indicateurs runtime à `0` malgré un run `running`.
+  - Clôturé le `2026-03-19`: le journal runtime réel et les indicateurs principaux de progression sont rétablis pour l'exploitation; les dettes résiduelles sont regroupées en `P-05`.
+  - Avancement utile livré: l'UI permet désormais de modifier une configuration d'espace existante, y compris de remplacer le mot de passe sans recréer l'espace; le secret courant n'est pas réaffiché et reste conservé si le champ mot de passe est laissé vide.
+
+- [x] **P-01 — Pré-estimation volumétrique avant exploration**
+  - Revoir le protocole moteur pour obtenir une estimation la plus fidèle possible du volume total avant exploration.
+  - Hypothèse rejetée en exploitation: l'approche `worker Docker éphémère + montage CIFS + du -sb` n'est pas viable dans son état actuel pour un budget opérateur raisonnable; elle ne doit plus être considérée comme cible par défaut.
+  - Décision appliquée dans le code: les nouveaux runs partent directement en `queued`; le pilotage opérateur repose sur les métriques runtime et le journal réel.
+  - Décision de schéma: les colonnes `estimated_total_size` et `estimate_*` sont retirées de `crawl_runs` sur la base de test; on repart sur une structure minimale cohérente avec le flux réel.
+  - Dette documentaire: archiver l'historique du prototype `estimate-{hash}` dans une note dédiée si l'on veut conserver la trace d'exploitation, mais ne plus le laisser polluer le chemin nominal.
+  - Clôturé le `2026-03-19`: le pilotage runtime en production répond désormais au besoin opérateur; il n'y a plus de raison de poursuivre la pré-estimation volumétrique avant exploration.
 
 - [x] **P-00c — Fuseau horaire homogène et configurable**
   - Aligner les conteneurs Docker sur un fuseau horaire explicite.
   - Rendre le fuseau d'affichage configurable dans l'interface via l'engrenage.
   - Afficher les dates de build et d'exécution dans le fuseau choisi.
   - Livré via le commit `1a2407a`.
-  - Dette mineure restante: le flux WebSocket API peut encore journaliser `Cannot call "send" once a close message has been sent.` quand un client se déconnecte; fiabiliser la purge des connexions fermées.
+
+- [x] **P-00b — Réconciliation des runs zombies**
+  - Ajouter une logique défensive pour reclassifier les runs stale laissés `running` par le moteur.
+  - Exposer un état opérateur clair quand le moteur n'émet plus mais que la base n'est pas cohérente.
+  - Livré via les commits `1a2407a` et `f8fe00c`.
+
+- [x] **P-00 — Finalisation fiable des runs d'exploration**
+  - Corriger la chaîne de fin de run pour qu'un crawl terminé ou timeouté écrive toujours un statut final explicite en base.
+  - Ajouter un signal et une trace `run terminé` / `run en échec` côté moteur.
+  - Empêcher qu'un run reste `running` en base sans activité réelle du moteur.
+  - Livré via les commits `1a2407a` et `f8fe00c`.
 
 ## Objectif
 

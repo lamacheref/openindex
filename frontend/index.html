@@ -326,10 +326,13 @@
                             <div x-show="loadingOverview" class="py-8 text-center">
                                 <div class="loading"></div>
                             </div>
-                            <div x-show="!loadingOverview && crawlOverview.recent_runs.length === 0" class="text-sm text-slate-500">
+                            <div x-show="showRecentRunsSyncHint" class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-800">
+                                Un run actif est connu par le monitoring, mais la liste des runs récents n'est pas encore synchronisée.
+                            </div>
+                            <div x-show="showNoRecentRunsMessage" class="text-sm text-slate-500">
                                 Aucun run enregistré.
                             </div>
-                            <div x-show="!loadingOverview && crawlOverview.recent_runs.length > 0" class="overflow-x-auto">
+                            <div x-show="showRecentRunsTable" class="overflow-x-auto">
                                 <table class="table-modern">
                                     <thead>
                                         <tr>
@@ -1377,6 +1380,29 @@
 
                 get activeRunId() {
                     return this.activeRun?.run_id || '';
+                },
+
+                get hasRecentRunsData() {
+                    return (this.crawlOverview.recent_runs?.length || 0) > 0;
+                },
+
+                get hasActiveRunSignal() {
+                    return this.isActiveRunStatus(this.crawlOverview.monitoring.latest_run_status)
+                        || this.engineHasRunningRun
+                        || this.crawlIsActive
+                        || this.engineIsIdle;
+                },
+
+                get showRecentRunsSyncHint() {
+                    return !this.loadingOverview && !this.hasRecentRunsData && this.hasActiveRunSignal;
+                },
+
+                get showNoRecentRunsMessage() {
+                    return !this.loadingOverview && !this.hasRecentRunsData && !this.hasActiveRunSignal;
+                },
+
+                get showRecentRunsTable() {
+                    return !this.loadingOverview && this.hasRecentRunsData;
                 },
 
                 get engineStatusLabel() {
