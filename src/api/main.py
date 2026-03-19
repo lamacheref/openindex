@@ -243,7 +243,7 @@ class DockerSocketClient:
     ) -> Any:
         expected_statuses = expected_statuses or [200, 201, 204]
         payload = b""
-        headers = ["Host: docker"]
+        headers = ["Host: docker", "Connection: close"]
         if body is not None:
             payload = json.dumps(body).encode("utf-8")
             headers.extend(
@@ -257,6 +257,7 @@ class DockerSocketClient:
         ).encode("utf-8") + payload
 
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.settimeout(30)
         try:
             sock.connect(self.socket_path)
             sock.sendall(request_bytes)
