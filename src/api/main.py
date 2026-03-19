@@ -417,6 +417,37 @@ class PostgreSQLAdapter:
             """,
             "CREATE INDEX IF NOT EXISTS idx_crawl_runs_triggered_at ON crawl_runs(triggered_at)",
             """
+            CREATE TABLE IF NOT EXISTS crawl_run_checkpoints (
+                run_id UUID PRIMARY KEY REFERENCES crawl_runs(id) ON DELETE CASCADE,
+                base_path TEXT NOT NULL,
+                total_files INTEGER NOT NULL DEFAULT 0,
+                total_directories INTEGER NOT NULL DEFAULT 0,
+                total_size BIGINT NOT NULL DEFAULT 0,
+                processed_size BIGINT NOT NULL DEFAULT 0,
+                large_files INTEGER NOT NULL DEFAULT 0,
+                estimated_total_size BIGINT NOT NULL DEFAULT 0,
+                phase TEXT NOT NULL DEFAULT 'crawl',
+                last_activity_at TIMESTAMP WITH TIME ZONE,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS crawl_run_queue_items (
+                id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                run_id UUID NOT NULL REFERENCES crawl_runs(id) ON DELETE CASCADE,
+                queue_name TEXT NOT NULL,
+                path TEXT NOT NULL,
+                name TEXT,
+                size BIGINT,
+                last_modified TIMESTAMP WITH TIME ZONE,
+                is_directory BOOLEAN NOT NULL DEFAULT FALSE,
+                crawl_config_id UUID REFERENCES crawl_configs(id) ON DELETE SET NULL,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+            """,
+            "CREATE INDEX IF NOT EXISTS idx_crawl_run_queue_items_run_id ON crawl_run_queue_items(run_id)",
+            "CREATE INDEX IF NOT EXISTS idx_crawl_run_queue_items_run_queue ON crawl_run_queue_items(run_id, queue_name)",
+            """
             ALTER TABLE files
             ADD COLUMN IF NOT EXISTS crawl_config_id UUID REFERENCES crawl_configs(id) ON DELETE SET NULL
             """,
@@ -682,6 +713,26 @@ class PostgreSQLAdapter:
                         ELSE status
                     END
                     WHERE id::text = %s
+                    RETURNING id::text, status
+                    """,
+                    [run_id],
+                )
+                row = cursor.fetchone()
+            conn.commit()
+
+        if not row:
+            return None
+        return {"run_id": row[0], "status": row[1]}
+
+    def mark_run_pending(self, run_id: str) -> Optional[Dict[str, Any]]:
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE crawl_runs
+                    SET status = 'pending'
+                    WHERE id::text = %s
+                      AND LOWER(status) IN ('queued', 'running', 'in_progress', 'cancelling')
                     RETURNING id::text, status
                     """,
                     [run_id],
@@ -1318,6 +1369,18 @@ def _format_rate(value_per_second: float, suffix: str = "it/s") -> str:
     return f"{value_per_second:.2f} {suffix}"
 
 
+def _compute_integrity_processed_items(
+    runtime_metrics: Dict[str, int],
+    queue_snapshot: Dict[str, int],
+    large_file_metrics: Dict[str, int],
+) -> int:
+    normal_files_discovered = max(
+        runtime_metrics["discovered_files"] - max(large_file_metrics["count"], runtime_metrics["large_files_detected"]),
+        0,
+    )
+    return max(normal_files_discovered - queue_snapshot["checksums"], 0)
+
+
 def _extract_last_progress_timestamp(log_lines: List[str]) -> Optional[datetime]:
     for line in reversed(log_lines):
         if not PROGRESS_RE.search(line):
@@ -1487,6 +1550,22 @@ async def stop_crawl_run(run_id: str):
         raise HTTPException(status_code=500, detail="Erreur lors de l'arrêt de l'exploration")
 
 
+@app.post("/api/crawls/{run_id}/pending", response_model=CrawlRunActionResult)
+async def mark_crawl_run_pending(run_id: str):
+    try:
+        db = get_db_adapter()
+        ensure_crawl_storage_ready(db)
+        result = db.mark_run_pending(run_id)
+        if not result:
+            raise HTTPException(status_code=409, detail="Mise en attente impossible pour ce run")
+        return CrawlRunActionResult(**result)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur mark_crawl_run_pending: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la mise en attente du run")
+
+
 @app.delete("/api/crawls/{run_id}", response_model=CrawlRunActionResult)
 async def delete_crawl_run(run_id: str):
     try:
@@ -1592,6 +1671,12 @@ async def get_crawler_runtime(log_limit: int = 80):
         files_rate = _compute_rate(runtime_metrics["discovered_files"], started_at) if has_running_run else 0.0
         directories_rate = _compute_rate(runtime_metrics["discovered_directories"], started_at) if has_running_run else 0.0
         processed_volume_rate = _compute_rate(runtime_metrics["processed_bytes"], started_at) if has_running_run else 0.0
+        integrity_processed_items = _compute_integrity_processed_items(
+            runtime_metrics,
+            queue_snapshot,
+            large_file_metrics,
+        )
+        integrity_rate = _compute_rate(integrity_processed_items, started_at) if has_running_run else 0.0
 
         queue_indicators = [
             QueueIndicator(
@@ -1610,7 +1695,7 @@ async def get_crawler_runtime(log_limit: int = 80):
                 key="checksums",
                 label="Vérification d'intégrité",
                 value=queue_snapshot["checksums"],
-                detail="Fichiers normaux en attente de vérification d'intégrité",
+                detail=f"Fichiers normaux en attente ({_format_rate(integrity_rate)})",
             ),
             QueueIndicator(
                 key="large_files",
@@ -1643,7 +1728,7 @@ async def get_crawler_runtime(log_limit: int = 80):
                 key="integrity_backlog",
                 label="Vérification d'intégrité",
                 value=f"{queue_snapshot['checksums']:,}".replace(",", " "),
-                detail="Fichiers en attente",
+                detail=f"Débit actuel ({_format_rate(integrity_rate)})",
             ),
             ProgressIndicator(
                 key="large_files_detected",

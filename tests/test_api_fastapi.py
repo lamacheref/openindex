@@ -178,6 +178,16 @@ class DummyDB:
             return {"run_id": run_id, "status": run["status"]}
         return None
 
+    def mark_run_pending(self, run_id):
+        for run in self.crawl_runs:
+            if run["run_id"] != run_id:
+                continue
+            if run["status"] in {"queued", "running", "in_progress", "cancelling"}:
+                run["status"] = "pending"
+                return {"run_id": run_id, "status": run["status"]}
+            return None
+        return None
+
     def delete_run(self, run_id):
         for index, run in enumerate(self.crawl_runs):
             if run["run_id"] != run_id:
@@ -579,6 +589,30 @@ def test_stop_and_delete_run_endpoints(client):
     assert deleted.json()["status"] == "deleted"
 
 
+def test_mark_run_pending_endpoint(client):
+    created = client(
+        "POST",
+        "/api/crawl-configs",
+        json={
+            "name": "Crawl Pending",
+            "domain_zone": "FR",
+            "start_path": "\\\\srv\\pending",
+            "include_paths": [],
+            "exclude_paths": [],
+            "connection": {
+                "username": "svc_pending",
+                "password": "secret",
+                "domain": "CORP",
+            },
+        },
+    ).json()
+
+    started = client("POST", "/api/crawls/start", json={"config_id": created["id"]}).json()
+    pending = client("POST", f"/api/crawls/{started['run_id']}/pending")
+    assert pending.status_code == 200
+    assert pending.json()["status"] == "pending"
+
+
 def test_get_crawl_overview_returns_real_operational_data(client):
     created = client(
         "POST",
@@ -654,6 +688,10 @@ def test_get_crawler_runtime_endpoint(client, monkeypatch, tmp_path):
     assert payload["latest_config_name"] == "Crawl Runtime"
     assert len(payload["queue_indicators"]) == 4
     assert payload["log_lines"] == ["line 2", "line 3"]
+    integrity_queue = next(item for item in payload["queue_indicators"] if item["key"] == "checksums")
+    integrity_progress = next(item for item in payload["progress_indicators"] if item["key"] == "integrity_backlog")
+    assert "it/s" in integrity_queue["detail"]
+    assert "it/s" in integrity_progress["detail"]
 
 
 def test_monitoring_reconciles_stale_cancelling_run_to_cancelled(monkeypatch):

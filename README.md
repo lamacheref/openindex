@@ -2,9 +2,9 @@
 
 Solution d’indexation de partages SMB avec **crawler Python**, **API FastAPI**, **frontend statique** et **PostgreSQL**.
 
-## État actuel (J4 validé — mars 2026)
+## État actuel (J4 en revalidation — mars 2026)
 
-Le projet a validé sa **phase J4 PostgreSQL** sur environnement de validation avec preuves versionnées.
+Le projet tourne sur une base **PostgreSQL** stabilisée, mais la preuve J4 doit encore être régénérée sur un recrawl complet de référence avant de rétablir une décision formelle exploitable.
 
 La base active à date est :
 
@@ -15,7 +15,7 @@ La base active à date est :
 - Build/push d’images automatisé via GitHub Actions (`.github/workflows/docker-stack.yml`).
 
 > La migration SQLite n'est plus nécessaire : la zone de test ayant été massivement modifiée, un recrawl complet est la stratégie de référence.
-> La décision formelle J4 est `Go` : voir `docs/2026-03-18_j4_go-no-go.md` et `docs/2026-03-18_j4_execution_report.md`.
+> La décision formelle J4 actuellement exploitable est `No-Go` tant que la nouvelle preuve de recrawl complet n'est pas publiée : voir `docs/2026-03-18_j4_go-no-go.md` et `docs/2026-03-18_j4_execution_report.md`.
 
 ## Fonctionnalités disponibles
 
@@ -30,6 +30,7 @@ La base active à date est :
 - Progression d'exploration basée sur le volume découvert/traité et non sur un simple compteur d'objets.
 - Affichage des vraies files du worker (`Dossiers`, `Fichiers`, `Somme de contrôle`, `Gros fichiers`).
 - Consultation des logs réels du worker d'exploration dans l'interface.
+- Le crawler PostgreSQL évite désormais de retraiter les fichiers déjà connus au même chemin quand ils sont inchangés, selon `size`, `last_modified` et la date du dernier crawl `completed` de l'espace.
 
 ## Installation
 

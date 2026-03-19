@@ -129,6 +129,8 @@ class SMBCrawlerPostgreSQL:
         if self.pre_estimated_total_size > 0:
             self.stats['estimated_total_size'] = self.pre_estimated_total_size
         self.last_completed_crawl_triggered_at = None
+        self.pause_requested = False
+        self.base_path = None
 
     def setup_logging(self):
         """Configure le logging avec rotation automatique."""
@@ -159,6 +161,16 @@ class SMBCrawlerPostgreSQL:
             self.logger.warning(f"Impossible de verifier le statut du run {self.run_id}: {exc}")
             return False
         return (status or "").lower() == "cancelling"
+
+    def should_pause_requested_run(self):
+        if not self.run_id:
+            return False
+        try:
+            status = self.postgres_adapter.get_crawl_run_status(self.run_id)
+        except Exception as exc:
+            self.logger.warning(f"Impossible de verifier le statut du run {self.run_id}: {exc}")
+            return False
+        return (status or "").lower() == "pending"
 
     def setup_smb_credentials(self):
         """Configure smbclient avec les informations d'identification fournies."""
@@ -482,6 +494,76 @@ class SMBCrawlerPostgreSQL:
             crawl_config_id=self.crawl_config_id,
         )
 
+    def _drain_queue_items(self, queue_obj):
+        drained = []
+        while True:
+            try:
+                drained.append(queue_obj.get_nowait())
+            except Empty:
+                break
+        return drained
+
+    def _persist_pending_checkpoint(self):
+        if not self.run_id or not self.base_path:
+            return
+
+        checkpoint_stats = {
+            "total_files": self.stats.get("total_files", 0),
+            "total_directories": self.stats.get("total_directories", 0),
+            "total_size": self.stats.get("total_size", 0),
+            "processed_size": self.stats.get("processed_size", 0),
+            "large_files": self.stats.get("large_files", 0),
+            "estimated_total_size": self.stats.get("estimated_total_size", 0),
+            "phase": "pending",
+            "last_activity_at": datetime.utcfromtimestamp(self.stats["last_activity"]) if self.stats.get("last_activity") else None,
+        }
+        queues = {
+            "directory_queue": self._drain_queue_items(self.directory_queue),
+            "directory_result_queue": self._drain_queue_items(self.directory_result_queue),
+            "file_queue": self._drain_queue_items(self.file_queue),
+            "large_file_queue": self._drain_queue_items(self.large_file_queue),
+        }
+        self.postgres_adapter.save_crawl_run_checkpoint(
+            self.run_id,
+            self.base_path,
+            checkpoint_stats,
+            queues,
+        )
+        self.logger.info(
+            "⏸️ Checkpoint de reprise sauvegarde pour %s: %s dossiers, %s fichiers, %s gros fichiers",
+            self.run_id,
+            len(queues["directory_queue"]),
+            len(queues["file_queue"]),
+            len(queues["large_file_queue"]),
+        )
+
+    def _restore_pending_checkpoint(self) -> bool:
+        if not self.run_id:
+            return False
+        checkpoint = self.postgres_adapter.load_crawl_run_checkpoint(self.run_id)
+        if not checkpoint:
+            return False
+
+        self.base_path = checkpoint["base_path"] or self.base_path
+        for key, value in checkpoint["stats"].items():
+            if value is None:
+                continue
+            self.stats[key] = value
+        self.stats["phase"] = "crawl"
+
+        restored_queues = checkpoint["queues"]
+        for path in restored_queues["directory_queue"]:
+            self.directory_queue.put(path)
+        for item in restored_queues["directory_result_queue"]:
+            self.directory_result_queue.put(item)
+        for item in restored_queues["file_queue"]:
+            self.file_queue.put(item)
+        for item in restored_queues["large_file_queue"]:
+            self.large_file_queue.put(item)
+
+        self.logger.info("♻️ Reprise du run %s depuis checkpoint persistant", self.run_id)
+        return True
+
     def _directory_worker(self):
         """
         Worker thread pour traiter les répertoires.
@@ -550,6 +632,8 @@ class SMBCrawlerPostgreSQL:
                             except Exception as e:
                                 self.logger.warning(f"Erreur traitement {file_data['path']}: {e}")
                                 self.stats['errors'] += 1
+                        if self.pause_requested and current_path:
+                            self.directory_queue.put(current_path)
                 finally:
                     self.directory_queue.task_done()
                 
@@ -846,10 +930,13 @@ class SMBCrawlerPostgreSQL:
         # Utiliser le chemin de base par défaut si non spécifié
         if base_path is None:
             base_path = rf"\\{self.server}\{self.share_name}"
+        self.base_path = base_path
+
+        restored_from_checkpoint = self._restore_pending_checkpoint()
         
-        if self.pre_estimation_enabled and self.stats['estimated_total_size'] <= 0:
+        if not restored_from_checkpoint and self.pre_estimation_enabled and self.stats['estimated_total_size'] <= 0:
             self._run_pre_estimation(base_path)
-        elif self.stats['estimated_total_size'] > 0:
+        elif not restored_from_checkpoint and self.stats['estimated_total_size'] > 0:
             self.logger.info(
                 "✅ Baseline volumétrique injectée avant crawl: Volume cible=%s octets",
                 self.stats['estimated_total_size'],
@@ -863,11 +950,11 @@ class SMBCrawlerPostgreSQL:
                 )
             )
 
-        # Ajouter le répertoire racine à la queue
-        self.directory_queue.put(base_path)
-        self.stats['total_directories'] = 1
-        self.stats['phase'] = 'crawl'
-        
+        if not restored_from_checkpoint:
+            self.directory_queue.put(base_path)
+            self.stats['total_directories'] = 1
+            self.stats['phase'] = 'crawl'
+
         # Démarrer les workers
         with ThreadPoolExecutor(max_workers=self.max_workers + 2) as executor:  # +2 pour les workers dédiés (gros fichiers + répertoires résultats)
             # Calculer le nombre de workers pour chaque type
@@ -945,6 +1032,10 @@ class SMBCrawlerPostgreSQL:
             try:
                 # Attendre que toutes les queues soient vides
                 while True:
+                    self._progress_callback()
+                    if self.stop_event.is_set() and not self._has_active_work():
+                        break
+
                     last_activity = self.stats['last_activity'] or self.stats['start_time']
 
                     if (self.directory_queue.empty() and 
@@ -973,9 +1064,7 @@ class SMBCrawlerPostgreSQL:
                         self.logger.error("⏰ Timeout de sécurité (20 min) - arrêt en échec du crawl")
                         print("\n⏰ Timeout de sécurité (20 min) - Fin du crawl")
                         break
-                    
-                    # Callback de progression
-                    self._progress_callback()
+
                     time.sleep(5)
                 
             except KeyboardInterrupt:
@@ -984,10 +1073,13 @@ class SMBCrawlerPostgreSQL:
             finally:
                 # Arrêter tous les workers
                 self.stop_event.set()
-                
-                # Attendre que tous les workers se terminent
-                for worker in directory_workers + file_workers + large_file_workers + directory_result_workers + [saver_worker]:
-                    worker.cancel()
+        
+        if self.pause_requested:
+            self._persist_pending_checkpoint()
+            self.stats['end_time'] = time.time()
+            self.stats['final_status'] = 'pending'
+            self.logger.info(f"🏁 Run mis en attente avec checkpoint={self.run_id}")
+            return self.stats
         
         # Calculer les doublons
         self.logger.info("🔄 Calcul des doublons...")
@@ -1003,6 +1095,9 @@ class SMBCrawlerPostgreSQL:
             self.stats['final_status'] = 'cancelled'
         else:
             self.stats['final_status'] = 'completed'
+
+        if self.run_id:
+            self.postgres_adapter.clear_crawl_run_checkpoint(self.run_id)
 
         # Sauvegarder les statistiques
         crawl_stats = {
@@ -1029,6 +1124,11 @@ class SMBCrawlerPostgreSQL:
         if self.should_stop_requested_run():
             self.logger.info(f"⏹️ Arrêt demandé pour le run {self.run_id}")
             self.stop()
+            return
+        if self.should_pause_requested_run():
+            self.logger.info(f"⏸️ Mise en attente demandée pour le run {self.run_id}")
+            self.pause_requested = True
+            self.stop_event.set()
             return
 
         duration = time.time() - self.stats['start_time']
@@ -1170,6 +1270,7 @@ def run_single_crawl(run_payload):
 
     stats = crawler.start_crawl(base_path=base_path)
     stats["cancelled"] = crawler.stop_event.is_set() and not stats.get("timed_out", False)
+    stats["pending"] = crawler.pause_requested
     return stats
 
 
@@ -1188,6 +1289,8 @@ def worker_loop(poll_interval_seconds=5):
             stats = run_single_crawl(run_payload)
             if stats.get("timed_out"):
                 final_status = "failed"
+            elif stats.get("pending"):
+                final_status = "pending"
             elif stats.get("cancelled"):
                 final_status = "cancelled"
             else:

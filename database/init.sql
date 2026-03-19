@@ -83,6 +83,36 @@ CREATE INDEX IF NOT EXISTS idx_crawl_runs_config_id ON crawl_runs(config_id);
 CREATE INDEX IF NOT EXISTS idx_crawl_runs_status ON crawl_runs(status);
 CREATE INDEX IF NOT EXISTS idx_crawl_runs_triggered_at ON crawl_runs(triggered_at);
 
+CREATE TABLE IF NOT EXISTS crawl_run_checkpoints (
+    run_id UUID PRIMARY KEY REFERENCES crawl_runs(id) ON DELETE CASCADE,
+    base_path TEXT NOT NULL,
+    total_files INTEGER NOT NULL DEFAULT 0,
+    total_directories INTEGER NOT NULL DEFAULT 0,
+    total_size BIGINT NOT NULL DEFAULT 0,
+    processed_size BIGINT NOT NULL DEFAULT 0,
+    large_files INTEGER NOT NULL DEFAULT 0,
+    estimated_total_size BIGINT NOT NULL DEFAULT 0,
+    phase TEXT NOT NULL DEFAULT 'crawl',
+    last_activity_at TIMESTAMP WITH TIME ZONE,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS crawl_run_queue_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    run_id UUID NOT NULL REFERENCES crawl_runs(id) ON DELETE CASCADE,
+    queue_name TEXT NOT NULL,
+    path TEXT NOT NULL,
+    name TEXT,
+    size BIGINT,
+    last_modified TIMESTAMP WITH TIME ZONE,
+    is_directory BOOLEAN NOT NULL DEFAULT FALSE,
+    crawl_config_id UUID REFERENCES crawl_configs(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_crawl_run_queue_items_run_id ON crawl_run_queue_items(run_id);
+CREATE INDEX IF NOT EXISTS idx_crawl_run_queue_items_run_queue ON crawl_run_queue_items(run_id, queue_name);
+
 -- Table pour les logs de crawl (optionnel)
 CREATE TABLE IF NOT EXISTS crawl_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
