@@ -264,6 +264,12 @@
                                         class="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
                                     Voir les logs
                                 </button>
+                                <button @click="pauseActiveRun()"
+                                        x-show="engineHasRunningRun"
+                                        :disabled="!canPendingRun(activeRun?.status)"
+                                        class="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
+                                    <i class="fas fa-pause mr-2"></i>En attente
+                                </button>
                                 <button @click="engineHasRunningRun ? stopActiveRun() : (activeSpaceConfigId ? startCrawl(activeSpaceConfigId) : null)"
                                         :disabled="engineHasRunningRun ? !activeRunId : !activeSpaceConfigId"
                                         class="rounded-2xl px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-300"
@@ -363,6 +369,11 @@
                                                 <td class="text-sm text-slate-600" x-text="formatDate(run.triggered_at)"></td>
                                                 <td class="text-right">
                                                     <div class="flex justify-end gap-2">
+                                                        <button @click="pendingRun(run.run_id)"
+                                                                :disabled="!canPendingRun(run.status)"
+                                                                class="rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
+                                                            En attente
+                                                        </button>
                                                         <button @click="stopRun(run.run_id)"
                                                                 :disabled="!canStopRun(run.status)"
                                                                 class="rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
@@ -1100,6 +1111,19 @@
                     }
                 },
 
+                async pendingRun(runId) {
+                    try {
+                        const response = await fetch(`/api/crawls/${runId}/pending`, { method: 'POST' });
+                        if (!response.ok) {
+                            const details = await response.json();
+                            throw new Error(details.detail || 'Mise en attente impossible');
+                        }
+                        await this.refreshOperations();
+                    } catch (error) {
+                        this.addLogEntry(`Erreur mise en attente exploration: ${error.message}`);
+                    }
+                },
+
                 async deleteRun(runId) {
                     try {
                         const response = await fetch(`/api/crawls/${runId}`, { method: 'DELETE' });
@@ -1119,6 +1143,15 @@
                         return;
                     }
                     await this.stopRun(this.activeRunId);
+                    this.showCrawlPilot = false;
+                },
+
+                async pauseActiveRun() {
+                    if (!this.activeRunId) {
+                        this.addLogEntry("Aucun run actif à mettre en attente.");
+                        return;
+                    }
+                    await this.pendingRun(this.activeRunId);
                     this.showCrawlPilot = false;
                 },
 
@@ -1268,6 +1301,10 @@
 
                 canStopRun(status) {
                     return ['queued', 'pending', 'running', 'in_progress'].includes((status || '').toLowerCase());
+                },
+
+                canPendingRun(status) {
+                    return ['queued', 'running', 'in_progress', 'cancelling'].includes((status || '').toLowerCase());
                 },
 
                 canDeleteRun(status) {

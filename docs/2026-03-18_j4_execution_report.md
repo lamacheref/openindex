@@ -3,7 +3,7 @@
 Date: 2026-03-18
 Périmètre: exécution contrôlée J4 sur cible SMB `\\172.16.252.34\Public\SMIDEN`
 Statut initial: Go
-Statut courant au 2026-03-19: invalide pour la preuve de complétude du recrawl
+Statut courant au 2026-03-19: preuve opératoire rétablie, complétude totale reportée au cycle J5
 
 ## Addendum du 2026-03-19
 
@@ -16,7 +16,29 @@ Décision opérationnelle mise à jour:
 - conserver ce document comme trace historique du 2026-03-18 ;
 - ne plus l'utiliser comme preuve de couverture complète ;
 - les anciens artefacts superficiels du `2026-03-18` ont été retirés du dossier `docs/artifacts/` ;
-- remplacer ses artefacts par un nouveau rapport après recrawl complet rejoué et validé.
+- remplacer ses artefacts par un nouvel artefact fondé sur le run réel du `2026-03-19`, puis reporter la complétude totale au cycle J5.
+
+## Addendum complémentaire du 2026-03-19
+
+Un nouvel artefact J4 a été composé à partir du run réel `acd1af17-0a75-4bd3-abfc-753e9547bf05`, toujours en cours au moment de la capitalisation.
+
+Artefact:
+- `docs/artifacts/j4_recrawl_live_snapshot_2026-03-19.json`
+
+Constats exploitables à la date du snapshot:
+- run observé `running` sur `\\172.16.252.34\Public\SMIDEN`
+- `148404` fichiers découverts
+- `20579` dossiers découverts
+- `228177467797` octets découverts
+- `105710129112` octets déjà traités
+- `0` erreur observée
+- découverte stabilisée: `0` dossier à explorer, `0` dossier à indexer, volume découvert égal au volume cible
+- backlog restant à l'instant du snapshot: `139413` fichiers en vérification d'intégrité
+
+Lecture retenue:
+- la preuve de volumétrie réelle et d'initialisation PostgreSQL sur dataset représentatif est désormais rétablie ;
+- la complétude totale du traitement d'intégrité n'est pas utilisée comme bloqueur J4 résiduel ;
+- les revalidations de completion totale sont reportées à J5.
 
 ## Résumé
 
@@ -44,7 +66,9 @@ Résultat:
 - Durée: environ `3.0` secondes
 
 Conclusion:
-- Le critère "Initialisation PostgreSQL + recrawl complet sans erreur bloquante avec journal" ne peut plus être considéré comme satisfait sur la base du run du `2026-03-18`.
+- Le run du `2026-03-18` reste invalide comme preuve de complétude.
+- Le run réel du `2026-03-19` rétablit une preuve exploitable de volumétrie, de couverture observée et d'absence d'erreur bloquante sur l'environnement de référence.
+- La complétude totale du traitement d'intégrité est explicitement reportée à J5.
 
 ## 2. Benchmark PostgreSQL
 
@@ -93,7 +117,7 @@ Conclusion:
 
 Critères:
 - Performance stable sur 3 runs: `OK`
-- Initialisation + recrawl journalisés: `INVALIDÉ au 2026-03-19`
+- Initialisation + recrawl journalisés: `OK pour preuve opératoire J4`, complétude totale reportée à J5
 - Rollback testé: `OK`
 - Rollback validé par le responsable opérationnel: `OK`
 - CI PostgreSQL de référence: `OK`
@@ -105,4 +129,6 @@ Preuve CI:
 - Artefact versionné: `docs/artifacts/j4_ci_pr41_2026-03-18.json`
 
 Décision opérationnelle:
-- Le statut historique du `2026-03-18` reste `Go` pour trace d'exécution, mais il n'est plus exploitable comme preuve courante tant qu'un nouveau recrawl complet versionné n'a pas remplacé ce run.
+- Le statut historique du `2026-03-18` reste `Go` pour trace d'exécution.
+- La preuve courante J4 s'appuie désormais sur `docs/artifacts/j4_recrawl_live_snapshot_2026-03-19.json`.
+- La complétude totale et les validations complémentaires sont basculées dans le lot J5.

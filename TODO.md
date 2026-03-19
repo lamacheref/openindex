@@ -34,12 +34,12 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
 
 ## 2) Exécution J4 (priorités restantes)
 
-- [ ] **T-04 — Rétablir une preuve J4 exploitable sur PostgreSQL**
+- [x] **T-04 — Rétablir une preuve J4 exploitable sur PostgreSQL**
   - Le `Go` J4 du `2026-03-18` reste inutilisable tant qu'un recrawl complet fiable n'a pas produit de nouvelle preuve versionnée.
   - Capitaliser le crawl complet en cours sur `\\172.16.252.34\Public\SMIDEN` et vérifier sa finalisation sans erreur bloquante.
   - Corrigé le `2026-03-19` côté code: les nouveaux runs PostgreSQL peuvent désormais ignorer les fichiers déjà crawlés au même chemin quand `size` et `last_modified` sont inchangés, ou quand `last_modified` n'est pas postérieur au dernier crawl `completed` de l'espace; commit `ae508db`, effet complet après redéploiement du crawler.
-  - Produire un artefact final cohérent avec la volumétrie réelle du référentiel et confirmer l'initialisation PostgreSQL sur ce dataset représentatif.
-  - Mettre à jour le rapport d'exécution J4 et la décision Go/No-Go pour rétablir une preuve exploitable.
+  - Livré le `2026-03-19` via `docs/artifacts/j4_recrawl_live_snapshot_2026-03-19.json`: volumétrie réelle observée, découverte stabilisée, `0` erreur bloquante et rapport J4/Go-No-Go révisés.
+  - La completion totale du traitement d'intégrité n'est plus portée comme bloqueur J4; elle est transférée au cycle J5 avec nouveaux tests dédiés.
 
 - [ ] **T-05 — Validation de performance PostgreSQL sur base recrawlée**
   - Rejouer le benchmark PostgreSQL sur endpoints critiques après le recrawl complet de référence.
