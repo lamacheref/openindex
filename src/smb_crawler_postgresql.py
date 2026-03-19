@@ -11,6 +11,7 @@ import time
 import argparse
 import threading
 import subprocess
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from queue import Queue, Empty
@@ -77,14 +78,22 @@ class SMBCrawlerPostgreSQL:
         self.denied_directories = set()
         
         # Queues pour le traitement parallèle
-        self.directory_queue = Queue(maxsize=max_queue_size)  # Queue pour les répertoires à traiter
-        self.directory_result_queue = Queue(maxsize=max_queue_size)  # Queue pour les répertoires traités
-        self.file_queue = Queue(maxsize=max_queue_size)
-        self.large_file_queue = Queue(maxsize=max_queue_size)  # Queue séparée pour les gros fichiers
-        self.result_queue = Queue(maxsize=max_queue_size)
+        self.directory_queue = Queue()  # Queue pour les répertoires à traiter
+        self.directory_result_queue = Queue()  # Queue pour les répertoires traités
+        self.file_queue = Queue()
+        self.large_file_queue = Queue()  # Queue séparée pour les gros fichiers
+        self.result_queue = Queue()
         
         # Événement pour arrêter le crawler
         self.stop_event = threading.Event()
+        self.activity_lock = threading.Lock()
+        self.active_tasks = {
+            'directories': 0,
+            'directory_results': 0,
+            'files': 0,
+            'large_files': 0,
+            'results': 0,
+        }
         
         # Statistiques
         self.stats = {
@@ -108,6 +117,21 @@ class SMBCrawlerPostgreSQL:
         """Configure le logging avec rotation automatique."""
         self.logger_manager = get_logger_manager()
         self.logger = self.logger_manager.get_logger("smb_crawler_postgresql")
+
+    @contextmanager
+    def _track_active_task(self, task_type):
+        """Suit le travail en cours pour éviter les fins de crawl prématurées."""
+        with self.activity_lock:
+            self.active_tasks[task_type] += 1
+        try:
+            yield
+        finally:
+            with self.activity_lock:
+                self.active_tasks[task_type] -= 1
+
+    def _has_active_work(self):
+        with self.activity_lock:
+            return any(count > 0 for count in self.active_tasks.values())
 
     def should_stop_requested_run(self):
         if not self.run_id:
@@ -263,115 +287,115 @@ class SMBCrawlerPostgreSQL:
                 # Récupérer un répertoire à traiter
                 current_path = self.directory_queue.get(timeout=1)
                 self.stats['last_activity'] = time.time()
-                
-                # Temporisation entre les requêtes
-                if self.delay_between_requests > 0:
-                    time.sleep(self.delay_between_requests)
-                
-                # Vérifier si le répertoire a déjà été refusé
-                if current_path in self.denied_directories:
-                    self.logger.debug(f"Répertoire déjà refusé: {current_path}")
-                    continue
-                
-                # Lister le contenu du répertoire
+
                 try:
-                    self.setup_smb_credentials()
-                    items = smbclient.listdir(current_path)
-                    
-                    # Traiter chaque élément
-                    for item_name in items:
-                        if self.stop_event.is_set():
-                            break
-                        
-                        item_path = f"{current_path}\\{item_name}"
-                        
+                    with self._track_active_task('directories'):
+                        # Temporisation entre les requêtes
+                        if self.delay_between_requests > 0:
+                            time.sleep(self.delay_between_requests)
+
+                        # Vérifier si le répertoire a déjà été refusé
+                        if current_path in self.denied_directories:
+                            self.logger.debug(f"Répertoire déjà refusé: {current_path}")
+                            continue
+
+                        # Lister le contenu du répertoire
                         try:
-                            stat = smbclient.stat(item_path)
-                            
-                            # Créer les métadonnées
-                            file_data = {
-                                'path': item_path,
-                                'name': item_name,
-                                'size': stat.st_size,
-                                'is_directory': stat.st_mode & 0o040000 == 0o040000,
-                                'crawl_config_id': self.crawl_config_id,
-                                'last_modified': datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                                'created_at': datetime.now(),
-                                'updated_at': datetime.now()
-                            }
-                            
-                            # Vérifier si le fichier doit être exclu
-                            if not file_data['is_directory']:
-                                should_exclude, reason = self.should_exclude_file(item_name)
-                                if should_exclude:
-                                    self.logger.debug(f"Fichier exclu: {item_name} ({reason})")
-                                    continue
-                            
-                            # Ajouter à la queue appropriée
-                            if file_data['is_directory']:
-                                current_depth = self._get_path_depth(item_path)
-                                if self.max_depth is None or current_depth < self.max_depth:
-                                    self.directory_queue.put(item_path)
-                                self.directory_result_queue.put(file_data)  # Mettre dans la queue des répertoires traités
-                                self.stats['total_directories'] += 1
-                            else:
-                                # Séparer les gros fichiers des fichiers normaux
-                                if file_data['size'] > self.large_file_threshold:
-                                    self.large_file_queue.put(file_data)
-                                    self.stats['large_files'] += 1
-                                    self.logger.info(f"📦 Gros fichier détecté: {item_name} ({file_data['size']:,} bytes)")
-                                else:
-                                    self.file_queue.put(file_data)
-                                
-                                self.stats['total_files'] += 1
-                                self.stats['total_size'] += file_data['size']
-                            
-                        except Exception as e:
-                            self.logger.warning(f"Erreur traitement {item_path}: {e}")
-                            self.stats['errors'] += 1
-                    
-                except Exception as e:
-                    self.logger.warning(f"Erreur listing {current_path}: {e}")
-                    
-                    # Essayer avec la méthode de secours
-                    try:
-                        items = self.list_directory_fallback(current_path)
-                        if items:
-                            for item_data in items:
+                            self.setup_smb_credentials()
+                            items = smbclient.listdir(current_path)
+
+                            # Traiter chaque élément
+                            for item_name in items:
                                 if self.stop_event.is_set():
                                     break
-                                
-                                # Vérifier si le fichier doit être exclu
-                                if not item_data['is_directory']:
-                                    should_exclude, reason = self.should_exclude_file(item_data['name'])
-                                    if should_exclude:
-                                        self.logger.debug(f"Fichier exclu: {item_data['name']} ({reason})")
-                                        continue
-                                
-                                # Ajouter à la queue appropriée
-                                if item_data['is_directory']:
-                                    current_depth = self._get_path_depth(item_data['path'])
-                                    if self.max_depth is None or current_depth < self.max_depth:
-                                        self.directory_queue.put(item_data['path'])
-                                    self.directory_result_queue.put(item_data)  # Mettre dans la queue des répertoires traités
-                                    self.stats['total_directories'] += 1
-                                else:
-                                    # Séparer les gros fichiers des fichiers normaux
-                                    if item_data['size'] > self.large_file_threshold:
-                                        self.large_file_queue.put(item_data)
-                                        self.stats['large_files'] += 1
-                                        self.logger.info(f"📦 Gros fichier détecté: {item_data['name']} ({item_data['size']:,} bytes)")
+
+                                item_path = f"{current_path}\\{item_name}"
+
+                                try:
+                                    stat = smbclient.stat(item_path)
+
+                                    # Créer les métadonnées
+                                    file_data = {
+                                        'path': item_path,
+                                        'name': item_name,
+                                        'size': stat.st_size,
+                                        'is_directory': stat.st_mode & 0o040000 == 0o040000,
+                                        'crawl_config_id': self.crawl_config_id,
+                                        'last_modified': datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                                        'created_at': datetime.now(),
+                                        'updated_at': datetime.now()
+                                    }
+
+                                    # Vérifier si le fichier doit être exclu
+                                    if not file_data['is_directory']:
+                                        should_exclude, reason = self.should_exclude_file(item_name)
+                                        if should_exclude:
+                                            self.logger.debug(f"Fichier exclu: {item_name} ({reason})")
+                                            continue
+
+                                    # Ajouter à la queue appropriée
+                                    if file_data['is_directory']:
+                                        current_depth = self._get_path_depth(item_path)
+                                        if self.max_depth is None or current_depth < self.max_depth:
+                                            self.directory_queue.put(item_path)
+                                        self.directory_result_queue.put(file_data)
+                                        self.stats['total_directories'] += 1
                                     else:
-                                        self.file_queue.put(item_data)
-                                    
-                                    self.stats['total_files'] += 1
-                                    self.stats['total_size'] += item_data['size']
-                        else:
-                            self.logger.error(f"Échec complet pour {current_path}")
-                            self.stats['errors'] += 1
-                    except Exception as fallback_error:
-                        self.logger.error(f"Erreur fallback {current_path}: {fallback_error}")
-                        self.stats['errors'] += 1
+                                        if file_data['size'] > self.large_file_threshold:
+                                            self.large_file_queue.put(file_data)
+                                            self.stats['large_files'] += 1
+                                            self.logger.info(f"📦 Gros fichier détecté: {item_name} ({file_data['size']:,} bytes)")
+                                        else:
+                                            self.file_queue.put(file_data)
+
+                                        self.stats['total_files'] += 1
+                                        self.stats['total_size'] += file_data['size']
+
+                                except Exception as e:
+                                    self.logger.warning(f"Erreur traitement {item_path}: {e}")
+                                    self.stats['errors'] += 1
+
+                        except Exception as e:
+                            self.logger.warning(f"Erreur listing {current_path}: {e}")
+
+                            # Essayer avec la méthode de secours
+                            try:
+                                items = self.list_directory_fallback(current_path)
+                                if items:
+                                    for item_data in items:
+                                        if self.stop_event.is_set():
+                                            break
+
+                                        if not item_data['is_directory']:
+                                            should_exclude, reason = self.should_exclude_file(item_data['name'])
+                                            if should_exclude:
+                                                self.logger.debug(f"Fichier exclu: {item_data['name']} ({reason})")
+                                                continue
+
+                                        if item_data['is_directory']:
+                                            current_depth = self._get_path_depth(item_data['path'])
+                                            if self.max_depth is None or current_depth < self.max_depth:
+                                                self.directory_queue.put(item_data['path'])
+                                            self.directory_result_queue.put(item_data)
+                                            self.stats['total_directories'] += 1
+                                        else:
+                                            if item_data['size'] > self.large_file_threshold:
+                                                self.large_file_queue.put(item_data)
+                                                self.stats['large_files'] += 1
+                                                self.logger.info(f"📦 Gros fichier détecté: {item_data['name']} ({item_data['size']:,} bytes)")
+                                            else:
+                                                self.file_queue.put(item_data)
+
+                                            self.stats['total_files'] += 1
+                                            self.stats['total_size'] += item_data['size']
+                                else:
+                                    self.logger.error(f"Échec complet pour {current_path}")
+                                    self.stats['errors'] += 1
+                            except Exception as fallback_error:
+                                self.logger.error(f"Erreur fallback {current_path}: {fallback_error}")
+                                self.stats['errors'] += 1
+                finally:
+                    self.directory_queue.task_done()
                 
             except Empty:
                 continue
@@ -403,14 +427,14 @@ class SMBCrawlerPostgreSQL:
                 # Récupérer un répertoire traité à sauvegarder
                 directory_data = self.directory_result_queue.get(timeout=2)
                 self.stats['last_activity'] = time.time()
-                
-                # Ajouter au lot
-                batch_directories.append(directory_data)
-                
-                # Sauvegarder le lot si nécessaire
-                if len(batch_directories) >= batch_size:
-                    self._save_batch_to_postgres(batch_directories)
-                    batch_directories = []
+                try:
+                    with self._track_active_task('directory_results'):
+                        batch_directories.append(directory_data)
+                        if len(batch_directories) >= batch_size:
+                            self._save_batch_to_postgres(batch_directories)
+                            batch_directories = []
+                finally:
+                    self.directory_result_queue.task_done()
                 
             except Empty:
                 continue
@@ -448,41 +472,38 @@ class SMBCrawlerPostgreSQL:
                 # Récupérer un gros fichier à traiter
                 file_data = self.large_file_queue.get(timeout=5)
                 self.stats['last_activity'] = time.time()
-                
-                self.logger.info(f"🔧 Traitement gros fichier: {file_data['name']} ({file_data['size']:,} bytes)")
-                
-                # Calculer le checksum avec timeout plus long
                 try:
-                    self.setup_smb_credentials()
-                    
-                    # Construire le chemin UNC
-                    if file_data['path'].startswith('\\\\'):
-                        file_unc_path = file_data['path']
-                    else:
-                        file_unc_path = rf"\\{self.server}\{self.share_name}"
-                    
-                    # Timeout plus long pour les gros fichiers
-                    file_data["checksum"] = self._calculate_partial_checksum_with_timeout(
-                        file_unc_path, timeout=300  # 5 minutes max par fichier
-                    )
-                    
-                    if file_data["checksum"]:
-                        self.logger.info(f"✅ Checksum calculé: {file_data['name']} -> {file_data['checksum'][:16]}...")
-                    else:
-                        self.logger.warning(f"❌ Échec checksum: {file_data['name']}")
-                    
-                except Exception as e:
-                    self.logger.error(f"Erreur calcul checksum gros fichier {file_data['name']}: {e}")
-                    file_data["checksum"] = None
-                
-                # Ajouter au lot
-                batch_files.append(file_data)
-                self.stats['processed_size'] += file_data.get('size', 0) or 0
-                
-                # Sauvegarder le lot si nécessaire
-                if len(batch_files) >= batch_size:
-                    self._save_batch_to_postgres(batch_files)
-                    batch_files = []
+                    with self._track_active_task('large_files'):
+                        self.logger.info(f"🔧 Traitement gros fichier: {file_data['name']} ({file_data['size']:,} bytes)")
+
+                        try:
+                            self.setup_smb_credentials()
+                            if file_data['path'].startswith('\\\\'):
+                                file_unc_path = file_data['path']
+                            else:
+                                file_unc_path = rf"\\{self.server}\{self.share_name}"
+
+                            file_data["checksum"] = self._calculate_partial_checksum_with_timeout(
+                                file_unc_path, timeout=300
+                            )
+
+                            if file_data["checksum"]:
+                                self.logger.info(f"✅ Checksum calculé: {file_data['name']} -> {file_data['checksum'][:16]}...")
+                            else:
+                                self.logger.warning(f"❌ Échec checksum: {file_data['name']}")
+
+                        except Exception as e:
+                            self.logger.error(f"Erreur calcul checksum gros fichier {file_data['name']}: {e}")
+                            file_data["checksum"] = None
+
+                        batch_files.append(file_data)
+                        self.stats['processed_size'] += file_data.get('size', 0) or 0
+
+                        if len(batch_files) >= batch_size:
+                            self._save_batch_to_postgres(batch_files)
+                            batch_files = []
+                finally:
+                    self.large_file_queue.task_done()
                 
             except Empty:
                 continue
@@ -569,36 +590,32 @@ class SMBCrawlerPostgreSQL:
                 # Récupérer un fichier à traiter
                 file_data = self.file_queue.get(timeout=1)
                 self.stats['last_activity'] = time.time()
-                
-                # Temporisation entre les requêtes
-                if self.delay_between_requests > 0:
-                    time.sleep(self.delay_between_requests)
-                
-                # Calculer le checksum
                 try:
-                    self.setup_smb_credentials()
-                    
-                    # Construire le chemin UNC
-                    if file_data['path'].startswith('\\\\'):
-                        file_unc_path = file_data['path']
-                    else:
-                        file_unc_path = rf"\\{self.server}\{self.share_name}"
-                    
-                    # Fichiers normaux : checksum complet
-                    file_data["checksum"] = self._calculate_full_checksum(file_unc_path)
-                    
-                except Exception as e:
-                    self.logger.warning(f"Erreur calcul checksum {file_data['name']}: {e}")
-                    file_data["checksum"] = None
-                
-                # Ajouter au lot
-                batch_files.append(file_data)
-                self.stats['processed_size'] += file_data.get('size', 0) or 0
-                
-                # Sauvegarder le lot si nécessaire
-                if len(batch_files) >= batch_size:
-                    self._save_batch_to_postgres(batch_files)
-                    batch_files = []
+                    with self._track_active_task('files'):
+                        if self.delay_between_requests > 0:
+                            time.sleep(self.delay_between_requests)
+
+                        try:
+                            self.setup_smb_credentials()
+                            if file_data['path'].startswith('\\\\'):
+                                file_unc_path = file_data['path']
+                            else:
+                                file_unc_path = rf"\\{self.server}\{self.share_name}"
+
+                            file_data["checksum"] = self._calculate_full_checksum(file_unc_path)
+
+                        except Exception as e:
+                            self.logger.warning(f"Erreur calcul checksum {file_data['name']}: {e}")
+                            file_data["checksum"] = None
+
+                        batch_files.append(file_data)
+                        self.stats['processed_size'] += file_data.get('size', 0) or 0
+
+                        if len(batch_files) >= batch_size:
+                            self._save_batch_to_postgres(batch_files)
+                            batch_files = []
+                finally:
+                    self.file_queue.task_done()
                 
             except Empty:
                 continue
@@ -731,12 +748,14 @@ class SMBCrawlerPostgreSQL:
                     try:
                         # Récupérer un résultat
                         file_data = self.result_queue.get(timeout=1)
-                        batch.append(file_data)
-                        
-                        # Sauvegarder par lots
-                        if len(batch) >= 100:
-                            self._save_batch_to_postgres(batch)
-                            batch = []
+                        try:
+                            with self._track_active_task('results'):
+                                batch.append(file_data)
+                                if len(batch) >= 100:
+                                    self._save_batch_to_postgres(batch)
+                                    batch = []
+                        finally:
+                            self.result_queue.task_done()
                             
                     except Empty:
                         # Sauvegarder le lot restant
@@ -753,11 +772,14 @@ class SMBCrawlerPostgreSQL:
             try:
                 # Attendre que toutes les queues soient vides
                 while True:
+                    last_activity = self.stats['last_activity'] or self.stats['start_time']
+
                     if (self.directory_queue.empty() and 
                         self.file_queue.empty() and 
                         self.large_file_queue.empty() and 
                         self.directory_result_queue.empty() and
-                        self.result_queue.empty()):
+                        self.result_queue.empty() and
+                        not self._has_active_work()):
                         
                         # Attendre un peu pour s'assurer que tout est traité
                         time.sleep(2)
@@ -766,12 +788,13 @@ class SMBCrawlerPostgreSQL:
                             self.file_queue.empty() and 
                             self.large_file_queue.empty() and 
                             self.directory_result_queue.empty() and
-                            self.result_queue.empty()):
+                            self.result_queue.empty() and
+                            not self._has_active_work()):
                             print("\n🏁 Toutes les queues sont vides - Fin du crawl")
                             break
                     
                     # Timeout de sécurité (20 minutes sans activité)
-                    if time.time() - self.stats['last_activity'] > 1200:
+                    if time.time() - last_activity > 1200:
                         print("\n⏰ Timeout de sécurité (20 min) - Fin du crawl")
                         break
                     
@@ -835,12 +858,12 @@ class SMBCrawlerPostgreSQL:
 
         progress_line = (
             f"📊 Progression: {self.stats['total_files']} fichiers, "
-            f"{self.stats['total_directories']} répertoires, "
+            f"{self.stats['total_directories']} dossiers, "
             f"{self.stats['large_files']} gros fichiers | "
-            f"Queues: Dossiers={dirs_in_queue}, "
-            f"Fichiers={dirs_result_in_queue}, "
-            f"Somme de contrôle={files_in_queue}, "
-            f"Gros fichiers={large_files_in_queue} | "
+            f"Queues: Dossiers à explorer={dirs_in_queue}, "
+            f"Dossiers à indexer={dirs_result_in_queue}, "
+            f"Vérification d'intégrité={files_in_queue}, "
+            f"Gros fichiers en attente={large_files_in_queue} | "
             f"Volume traité={processed_bytes} octets, "
             f"Volume découvert={known_total_bytes} octets, "
             f"Progression volume={progress_percent}% | "

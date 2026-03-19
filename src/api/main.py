@@ -188,13 +188,26 @@ class QueueIndicator(BaseModel):
     detail: str
 
 
+class ProgressIndicator(BaseModel):
+    key: str
+    label: str
+    value: str
+    detail: str
+
+
 class CrawlerRuntime(BaseModel):
     active: bool
     latest_status: str
     latest_config_name: str
-    progress_percent: float
+    progress_percent: Optional[float] = None
     processed_bytes: int = 0
     discovered_bytes: int = 0
+    discovered_files: int = 0
+    discovered_directories: int = 0
+    large_files_detected: int = 0
+    estimating_total: bool = False
+    progress_hint: str = ""
+    progress_indicators: List[ProgressIndicator]
     queue_indicators: List[QueueIndicator]
     log_lines: List[str]
     log_source: str
@@ -936,18 +949,31 @@ def _tail_log_lines(log_path: Path, limit: int = 80) -> List[str]:
     try:
         with log_path.open("r", encoding="utf-8", errors="replace") as handle:
             lines = handle.readlines()
-        return [line.rstrip("\n") for line in lines[-limit:]]
+        return [_normalize_runtime_log_line(line.rstrip("\n")) for line in lines[-limit:]]
     except OSError:
         return []
 
 
+def _normalize_runtime_log_line(line: str) -> str:
+    if "Queues:" not in line:
+        return line
+    return (
+        line.replace(" répertoires, ", " dossiers, ")
+        .replace("Queues: Dossiers=", "Queues: Dossiers à explorer=")
+        .replace(", Fichiers=", ", Dossiers à indexer=")
+        .replace(", Somme de contrôle=", ", Vérification d'intégrité=")
+        .replace(", Gros fichiers=", ", Gros fichiers en attente=")
+    )
+
+
 PROGRESS_RE = re.compile(
     r"Progression:\s*(?P<files>\d+)\s*fichiers,\s*"
-    r"(?P<dirs>\d+)\s*répertoires.*?"
-    r"Queues:\s*Dossiers=(?P<queue_dirs>\d+),\s*"
-    r"Fichiers=(?P<queue_files>\d+),\s*"
-    r"Somme de contrôle=(?P<queue_checksums>\d+),\s*"
-    r"Gros fichiers=(?P<queue_large>\d+)\s*\|\s*"
+    r"(?P<dirs>\d+)\s*(?:répertoires|dossiers),\s*"
+    r"(?P<large_files_seen>\d+)\s*gros fichiers\s*\|\s*"
+    r"Queues:\s*(?:Dossiers|Dossiers à explorer)=(?P<queue_dirs>\d+),\s*"
+    r"(?:Fichiers|Dossiers à indexer)=(?P<queue_files>\d+),\s*"
+    r"(?:Somme de contrôle|Fichiers à checksumer|Vérification d'intégrité)=(?P<queue_checksums>\d+),\s*"
+    r"(?:Gros fichiers|Gros fichiers en attente)=(?P<queue_large>\d+)\s*\|\s*"
     r"Volume traité=(?P<processed_bytes>\d+)\s*octets,\s*"
     r"Volume découvert=(?P<discovered_bytes>\d+)\s*octets,\s*"
     r"Progression volume=(?P<progress_percent>\d+(?:\.\d+)?)%",
@@ -995,6 +1021,54 @@ def _extract_volume_snapshot(log_lines: List[str]) -> Dict[str, int]:
     return {
         "processed_bytes": 0,
         "discovered_bytes": 0,
+    }
+
+
+def _extract_runtime_metrics(log_lines: List[str]) -> Dict[str, Any]:
+    for line in reversed(log_lines):
+        match = PROGRESS_RE.search(line)
+        if not match:
+            continue
+        queue_dirs = int(match.group("queue_dirs"))
+        queue_files = int(match.group("queue_files"))
+        queue_checksums = int(match.group("queue_checksums"))
+        queue_large = int(match.group("queue_large"))
+        discovered_bytes = int(match.group("discovered_bytes"))
+        processed_bytes = int(match.group("processed_bytes"))
+        estimating_total = queue_dirs > 0
+        progress_percent = None if estimating_total else float(match.group("progress_percent"))
+        progress_hint = (
+            "Estimation du volume global en cours. La progression deviendra fiable quand la découverte des dossiers sera terminée."
+            if estimating_total
+            else "Le volume total est stabilisé. La progression reflète maintenant le traitement restant."
+        )
+        return {
+            "discovered_files": int(match.group("files")),
+            "discovered_directories": int(match.group("dirs")),
+            "large_files_detected": int(match.group("large_files_seen")),
+            "processed_bytes": processed_bytes,
+            "discovered_bytes": discovered_bytes,
+            "queue_dirs": queue_dirs,
+            "queue_files": queue_files,
+            "queue_checksums": queue_checksums,
+            "queue_large": queue_large,
+            "estimating_total": estimating_total,
+            "progress_percent": progress_percent,
+            "progress_hint": progress_hint,
+        }
+    return {
+        "discovered_files": 0,
+        "discovered_directories": 0,
+        "large_files_detected": 0,
+        "processed_bytes": 0,
+        "discovered_bytes": 0,
+        "queue_dirs": 0,
+        "queue_files": 0,
+        "queue_checksums": 0,
+        "queue_large": 0,
+        "estimating_total": False,
+        "progress_percent": None,
+        "progress_hint": "Aucune exploration active.",
     }
 
 
@@ -1136,34 +1210,72 @@ async def get_crawler_runtime(log_limit: int = 80):
         monitoring = db.get_monitoring_summary()
         log_path = Path(os.getenv("OPENINDEX_CRAWLER_LOG_PATH", "logs/smb_crawler_postgresql.log"))
         log_lines = _tail_log_lines(log_path, limit=log_limit)
-        runtime_progress = _extract_progress_percent(log_lines)
+        runtime_metrics = _extract_runtime_metrics(log_lines)
         queue_snapshot = _extract_queue_snapshot(log_lines)
-        volume_snapshot = _extract_volume_snapshot(log_lines)
 
         queue_indicators = [
             QueueIndicator(
                 key="directories",
-                label="Dossiers",
+                label="Dossiers à explorer",
                 value=queue_snapshot["directories"],
-                detail="Répertoires à explorer",
+                detail="Dossiers à explorer",
             ),
             QueueIndicator(
                 key="files",
-                label="Fichiers",
+                label="Dossiers à indexer",
                 value=queue_snapshot["files"],
-                detail="Éléments en attente d'écriture",
+                detail="Dossiers déjà découverts, en attente d'écriture",
             ),
             QueueIndicator(
                 key="checksums",
-                label="Somme de contrôle",
+                label="Vérification d'intégrité",
                 value=queue_snapshot["checksums"],
-                detail="Fichiers en attente de calcul",
+                detail="Fichiers normaux en attente de vérification d'intégrité",
             ),
             QueueIndicator(
                 key="large_files",
-                label="Gros fichiers",
+                label="Gros fichiers en attente",
                 value=queue_snapshot["large_files"],
                 detail="Fichiers lourds en attente de calcul",
+            ),
+        ]
+
+        progress_indicators = [
+            ProgressIndicator(
+                key="discovered_files",
+                label="Fichiers découverts",
+                value=f"{runtime_metrics['discovered_files']:,}".replace(",", " "),
+                detail="Nombre de fichiers identifiés à ce stade",
+            ),
+            ProgressIndicator(
+                key="discovered_directories",
+                label="Dossiers découverts",
+                value=f"{runtime_metrics['discovered_directories']:,}".replace(",", " "),
+                detail="Nombre de dossiers parcourus ou en cours de découverte",
+            ),
+            ProgressIndicator(
+                key="processed_volume",
+                label="Volume traité",
+                value=f"{runtime_metrics['processed_bytes']:,} octets".replace(",", " "),
+                detail="Volume effectivement vérifié",
+            ),
+            ProgressIndicator(
+                key="discovered_volume",
+                label="Volume découvert",
+                value=f"{runtime_metrics['discovered_bytes']:,} octets".replace(",", " "),
+                detail="Volume actuellement inventorié",
+            ),
+            ProgressIndicator(
+                key="integrity_backlog",
+                label="Vérification d'intégrité en attente",
+                value=f"{queue_snapshot['checksums']:,}".replace(",", " "),
+                detail="Fichiers en attente de traitement d'intégrité",
+            ),
+            ProgressIndicator(
+                key="large_files_detected",
+                label="Gros fichiers détectés",
+                value=f"{runtime_metrics['large_files_detected']:,}".replace(",", " "),
+                detail="Compteur cumulé des gros fichiers déjà identifiés",
             ),
         ]
 
@@ -1171,9 +1283,15 @@ async def get_crawler_runtime(log_limit: int = 80):
             active=monitoring["running_runs"] > 0,
             latest_status=monitoring["latest_run_status"],
             latest_config_name=monitoring["latest_run_config_name"],
-            progress_percent=runtime_progress if monitoring["running_runs"] > 0 else monitoring["progress_percent"],
-            processed_bytes=volume_snapshot["processed_bytes"],
-            discovered_bytes=volume_snapshot["discovered_bytes"],
+            progress_percent=runtime_metrics["progress_percent"] if monitoring["running_runs"] > 0 else monitoring["progress_percent"],
+            processed_bytes=runtime_metrics["processed_bytes"],
+            discovered_bytes=runtime_metrics["discovered_bytes"],
+            discovered_files=runtime_metrics["discovered_files"],
+            discovered_directories=runtime_metrics["discovered_directories"],
+            large_files_detected=runtime_metrics["large_files_detected"],
+            estimating_total=runtime_metrics["estimating_total"],
+            progress_hint=runtime_metrics["progress_hint"],
+            progress_indicators=progress_indicators,
             queue_indicators=queue_indicators,
             log_lines=log_lines,
             log_source=str(log_path),

@@ -1,5 +1,26 @@
 # TODO OpenIndex — suite post-commando (J4 -> J5)
 
+## Priorités opérateur à traiter en tête
+
+- [ ] **P-01 — Pré-estimation volumétrique avant exploration**
+  - Revoir le protocole moteur pour obtenir une estimation la plus fidèle possible du volume total avant exploration.
+  - Priorité cible: montage CIFS temporaire + `du -sb`, selon `docs/operations/CRAWL_PRE_ESTIMATION_PROTOCOL.md`.
+  - Prévoir les fallbacks SMB si le montage n'est pas possible.
+
+- [ ] **P-02 — Indicateurs de progression lisibles et fiables**
+  - Exploiter les retours actuels du moteur pour des indicateurs de progression fiables.
+  - Présenter ces indicateurs sur une seule ligne, lisibles d'un coup d'oeil.
+  - Réserver les queues au diagnostic secondaire.
+
+- [ ] **P-03 — Traitement asynchrone sans limite artificielle**
+  - Supprimer les limites de taille des queues de traitement asynchrone.
+  - Vérifier que le backlog de vérification d'intégrité n'est plus artificiellement plafonné.
+
+- [ ] **P-04 — Statut moteur et commandes opérateur explicites**
+  - Garder une barre de progression pour la quantité de données inventoriées.
+  - Ajouter des gommettes de couleur pour l'état moteur: arrêté, estimation, exploration, erreur, terminé.
+  - Basculer le bouton principal de `Lancer` vers `Arrêter` quand une exploration est en cours.
+
 ## Objectif
 
 Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par preuves**, puis enclencher J5 (qualité & observabilité) avec critères de sortie mesurables.
@@ -82,6 +103,7 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
 - [ ] **T-14 — Revoir l'UI pour le pilotage des tests et crawls**
   - Repenser l'interface actuelle, jugée insuffisante pour le suivi opérationnel.
   - Transformer le tableau de bord en poste opérateur actif: espace courant, dernier lancement, état du crawl, KPI temps réel, progression et journal.
+  - Implémenter un protocole de pré-estimation volumétrique avant exploration pour fiabiliser la progression, selon `docs/operations/CRAWL_PRE_ESTIMATION_PROTOCOL.md`.
   - Corriger les finitions demandées dans `docs/definition_ui.md`: nom distinctif d'espace, "non défini" si dernier lancement absent, zone version réduite, suppression du sous-titre inutile, unités en octets, bouton logs déplacé sous la progression et désactivé si le crawler est inactif.
   - Déjà livré le `2026-03-18`: vocabulaire exploration/explorateur, logs réels du worker, progression par volume, queues réelles, actions arrêter/supprimer sur les runs récents et garde-fou un seul run actif par espace.
   - Déporter les explications de conception ou limites techniques hors de l'interface vers `TODO.md` ou la documentation.

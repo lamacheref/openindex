@@ -2,7 +2,20 @@
 
 Date: 2026-03-18
 Périmètre: exécution contrôlée J4 sur cible SMB `\\172.16.252.34\Public\SMIDEN`
-Statut final: Go
+Statut initial: Go
+Statut courant au 2026-03-19: invalide pour la preuve de complétude du recrawl
+
+## Addendum du 2026-03-19
+
+Le recrawl consigné dans ce rapport ne peut plus être considéré comme un recrawl complet fiable.
+
+Cause racine identifiée:
+- le crawler PostgreSQL pouvait conclure la fin du crawl alors qu'un sous-répertoire était encore traité par un worker, ce qui tronquait silencieusement l'exploration profonde.
+
+Décision opérationnelle mise à jour:
+- conserver ce document comme trace historique du 2026-03-18 ;
+- ne plus l'utiliser comme preuve de couverture complète ;
+- remplacer ses artefacts par un nouveau rapport après correction du crawler et recrawl complet rejoué.
 
 ## Résumé
 
