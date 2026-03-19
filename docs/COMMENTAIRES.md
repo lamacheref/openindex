@@ -8,6 +8,7 @@
 ### Décisions UI / moteur en cours
 
 - Les commentaires explicatifs ne doivent plus apparaître dans l'interface opérateur.
+- Toute remarque métier, arbitrage de lecture, dette UI ou explication temporaire doit être consignée dans `docs/COMMENTAIRES.md`, pas injectée dans l'interface.
 - Les arbitrages de lecture, de progression et de protocole doivent être consignés ici ou dans la documentation d'exploitation.
 - La progression actuelle doit évoluer vers une phase explicite de pré-estimation volumétrique avant exploration.
 - Les indicateurs de progression doivent devenir la lecture principale ; les queues restent un outil de diagnostic.

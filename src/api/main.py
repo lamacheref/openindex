@@ -231,6 +231,7 @@ class CrawlerRuntime(BaseModel):
 
 
 STALE_RUN_TIMEOUT_SECONDS = int(os.getenv("OPENINDEX_CRAWLER_STALE_TIMEOUT_SECONDS", "1200"))
+ACTIVE_RUN_STATUSES = {"queued", "pending", "running", "in_progress", "cancelling"}
 
 
 def extract_space_prefix(path: str) -> Optional[str]:
@@ -1100,6 +1101,36 @@ def _read_log_lines(log_path: Path) -> List[str]:
         return []
 
 
+def _build_run_log_path(base_log_path: Path, run_id: str) -> Path:
+    return base_log_path.with_name(f"{base_log_path.stem}_{run_id}{base_log_path.suffix}")
+
+
+def _resolve_runtime_log_path(db: Any) -> Path:
+    base_log_path = Path(os.getenv("OPENINDEX_CRAWLER_LOG_PATH", "logs/smb_crawler_postgresql.log"))
+    recent_runs = []
+    if hasattr(db, "list_recent_crawl_runs"):
+        recent_runs = db.list_recent_crawl_runs(limit=20)
+
+    for run in recent_runs:
+        run_id = run.get("run_id")
+        status = (run.get("status") or "").lower()
+        if not run_id or status not in ACTIVE_RUN_STATUSES:
+            continue
+        candidate_path = _build_run_log_path(base_log_path, run_id)
+        if candidate_path.exists() and candidate_path.is_file():
+            return candidate_path
+
+    for run in recent_runs:
+        run_id = run.get("run_id")
+        if not run_id:
+            continue
+        candidate_path = _build_run_log_path(base_log_path, run_id)
+        if candidate_path.exists() and candidate_path.is_file():
+            return candidate_path
+
+    return base_log_path
+
+
 def _tail_log_lines(log_path: Path, limit: int = 80) -> List[str]:
     lines = _read_log_lines(log_path)
     return [_normalize_runtime_log_line(line) for line in lines[-limit:]]
@@ -1403,7 +1434,7 @@ async def get_monitoring_summary():
     try:
         db = get_db_adapter()
         ensure_crawl_storage_ready(db)
-        raw_log_lines = _read_log_lines(Path(os.getenv("OPENINDEX_CRAWLER_LOG_PATH", "logs/smb_crawler_postgresql.log")))
+        raw_log_lines = _read_log_lines(_resolve_runtime_log_path(db))
         summary = _reconcile_stale_running_runs(db, raw_log_lines)
         return MonitoringSummary(**summary)
     except Exception as e:
@@ -1418,7 +1449,7 @@ async def get_crawl_overview(limit: int = 10):
         ensure_crawl_storage_ready(db)
         _reconcile_stale_running_runs(
             db,
-            _read_log_lines(Path(os.getenv("OPENINDEX_CRAWLER_LOG_PATH", "logs/smb_crawler_postgresql.log"))),
+            _read_log_lines(_resolve_runtime_log_path(db)),
         )
         overview = db.get_crawl_overview(limit=limit)
         return CrawlOverview(
@@ -1468,7 +1499,7 @@ async def get_crawler_runtime(log_limit: int = 80):
     try:
         db = get_db_adapter()
         ensure_crawl_storage_ready(db)
-        log_path = Path(os.getenv("OPENINDEX_CRAWLER_LOG_PATH", "logs/smb_crawler_postgresql.log"))
+        log_path = _resolve_runtime_log_path(db)
         raw_log_lines = _read_log_lines(log_path)
         current_run_log_lines = _slice_current_run_log_lines(raw_log_lines)
         monitoring = _reconcile_stale_running_runs(db, current_run_log_lines)

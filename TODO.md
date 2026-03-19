@@ -15,6 +15,7 @@
   - Présenter ces indicateurs sur une seule ligne, lisibles d'un coup d'oeil.
   - Réserver les queues au diagnostic secondaire.
   - Dette UI constatée en exploitation: la page agrège aujourd'hui des sources hétérogènes (`/api/stats`, `/api/crawls/overview`, `/api/crawler/runtime`) et peut afficher un état incohérent, par exemple un run actif avec `Runs récents` vide ou des KPI historiques non alignés avec le run courant.
+  - Bug identifié le `2026-03-19`: l'API lisait un fichier fixe `smb_crawler_postgresql.log` alors que le crawler produit des logs par run `smb_crawler_postgresql_<run_id>.log`; conséquence directe: journal explorateur vide et indicateurs runtime à `0` malgré un run `running`.
   - À corriger: définir une hiérarchie de vérité par bloc d'interface, gérer explicitement les erreurs de refresh, et éviter d'afficher `Aucun run enregistré` tant qu'un état actif est connu par une autre source.
   - Avancement utile livré: l'UI permet désormais de modifier une configuration d'espace existante, y compris de remplacer le mot de passe sans recréer l'espace; le secret courant n'est pas réaffiché et reste conservé si le champ mot de passe est laissé vide.
 
