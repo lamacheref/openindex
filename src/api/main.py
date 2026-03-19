@@ -280,6 +280,7 @@ class DockerSocketClient:
             error_body = body_bytes.decode("utf-8", errors="replace").strip()
             raise DockerSocketError(f"Docker API {status_code}: {error_body or status_parts[-1]}")
 
+        transfer_encoding = ""
         if not body_bytes:
             return None
 
@@ -288,11 +289,35 @@ class DockerSocketClient:
         for line in header_lines[1:]:
             if line.lower().startswith("content-type:"):
                 content_type = line.split(":", 1)[1].strip().lower()
-                break
+            if line.lower().startswith("transfer-encoding:"):
+                transfer_encoding = line.split(":", 1)[1].strip().lower()
+
+        if transfer_encoding == "chunked":
+            body_bytes = self._decode_chunked_body(body_bytes)
+            decoded = body_bytes.decode("utf-8", errors="replace")
 
         if "application/json" in content_type:
             return json.loads(decoded)
         return decoded
+
+    def _decode_chunked_body(self, body_bytes: bytes) -> bytes:
+        decoded = bytearray()
+        cursor = 0
+        total_length = len(body_bytes)
+
+        while cursor < total_length:
+            line_end = body_bytes.find(b"\r\n", cursor)
+            if line_end == -1:
+                break
+            chunk_size_hex = body_bytes[cursor:line_end].decode("utf-8", errors="replace").strip()
+            chunk_size = int(chunk_size_hex or "0", 16)
+            cursor = line_end + 2
+            if chunk_size == 0:
+                break
+            decoded.extend(body_bytes[cursor:cursor + chunk_size])
+            cursor += chunk_size + 2
+
+        return bytes(decoded)
 
     def ensure_image_available(self, image_name: str) -> None:
         self._request("GET", f"/images/{image_name}/json", expected_statuses=[200])
