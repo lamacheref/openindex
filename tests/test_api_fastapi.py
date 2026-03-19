@@ -140,14 +140,14 @@ class DummyDB:
         return item
 
     def start_crawl(self, config_id):
-        if any(run["config_id"] == config_id and run["status"] in {"queued", "running", "pending", "in_progress", "cancelling"} for run in self.crawl_runs):
+        if any(run["config_id"] == config_id and run["status"] in {"estimating", "queued", "running", "pending", "in_progress", "cancelling"} for run in self.crawl_runs):
             raise ValueError("Une exploration est deja active pour cette configuration (queued).")
         if not any(cfg["id"] == config_id for cfg in self.crawl_configs):
             return None
         run = {
             "run_id": f"run-{len(self.crawl_runs) + 1}",
             "config_id": config_id,
-            "status": "queued",
+            "status": "estimating",
             "triggered_at": "2026-03-10T12:05:00+00:00",
         }
         self.crawl_runs.append(run)
@@ -157,7 +157,7 @@ class DummyDB:
         for run in self.crawl_runs:
             if run["run_id"] != run_id:
                 continue
-            if run["status"] in {"queued", "pending"}:
+            if run["status"] in {"estimating", "queued", "pending"}:
                 run["status"] = "cancelled"
             elif run["status"] in {"running", "in_progress"}:
                 run["status"] = "cancelling"
@@ -168,7 +168,7 @@ class DummyDB:
         for index, run in enumerate(self.crawl_runs):
             if run["run_id"] != run_id:
                 continue
-            if run["status"] in {"queued", "pending", "running", "in_progress", "cancelling"}:
+            if run["status"] in {"estimating", "queued", "pending", "running", "in_progress", "cancelling"}:
                 return False
             del self.crawl_runs[index]
             return True
@@ -180,7 +180,7 @@ class DummyDB:
             "total_configs": len(self.crawl_configs),
             "total_runs": len(self.crawl_runs),
             "queued_runs": sum(1 for run in self.crawl_runs if run["status"] == "queued"),
-            "running_runs": 0,
+            "running_runs": sum(1 for run in self.crawl_runs if run["status"] in {"estimating", "running", "in_progress"}),
             "completed_runs": sum(1 for run in self.crawl_runs if run["status"] == "completed"),
             "failed_runs": sum(1 for run in self.crawl_runs if run["status"] == "failed"),
             "latest_run_status": latest["status"] if latest else "Aucun run",
@@ -230,6 +230,7 @@ def run_request(method, path, *, params=None, json=None):
 def client(monkeypatch):
     db = DummyDB()
     monkeypatch.setattr(api_main, "get_db_adapter", lambda: db)
+    monkeypatch.setattr(api_main, "run_estimation_before_crawl", lambda run_id: None)
     return run_request
 
 
@@ -472,7 +473,7 @@ def test_start_crawl_requires_existing_config(client):
     started = client("POST", "/api/crawls/start", json={"config_id": created["id"]})
     assert started.status_code == 200
     payload = started.json()
-    assert payload['status'] == 'queued'
+    assert payload['status'] == 'estimating'
     assert payload['config_id'] == created['id']
 
     duplicated = client("POST", "/api/crawls/start", json={"config_id": created["id"]})

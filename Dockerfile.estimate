@@ -1,0 +1,29 @@
+FROM python:3.11-slim
+
+ARG OPENINDEX_APP_VERSION=0.3.0
+ARG OPENINDEX_BUILD_COMMIT=dev
+ARG OPENINDEX_BUILD_DATE=unknown
+
+LABEL maintainer="OpenIndex Team"
+LABEL description="OpenIndex estimate worker"
+LABEL version="${OPENINDEX_APP_VERSION}"
+LABEL org.opencontainers.image.version="${OPENINDEX_APP_VERSION}"
+LABEL org.opencontainers.image.revision="${OPENINDEX_BUILD_COMMIT}"
+LABEL org.opencontainers.image.created="${OPENINDEX_BUILD_DATE}"
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    cifs-utils \
+    util-linux \
+    coreutils \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY src/ ./src/
+
+ENV PYTHONUNBUFFERED=1
+ENV OPENINDEX_APP_VERSION=${OPENINDEX_APP_VERSION}
+ENV OPENINDEX_BUILD_COMMIT=${OPENINDEX_BUILD_COMMIT}
+ENV OPENINDEX_BUILD_DATE=${OPENINDEX_BUILD_DATE}
+
+ENTRYPOINT ["python", "src/estimate_worker.py"]

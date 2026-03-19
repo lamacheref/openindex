@@ -56,6 +56,7 @@ services:
       - "${OPENINDEX_API_PORT:-8000}:8000"
     volumes:
       - ./logs:/app/logs
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - openindex-network
 
@@ -113,6 +114,22 @@ services:
     depends_on:
       api:
         condition: service_started
+    networks:
+      - openindex-network
+
+  estimate-worker:
+    profiles: ["manual"]
+    build:
+      context: .
+      dockerfile: Dockerfile.estimate
+      args:
+        OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.3.2}
+        OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-dev}
+        OPENINDEX_BUILD_DATE: ${OPENINDEX_BUILD_DATE:-unknown}
+    image: openindex-estimate-worker:local
+    container_name: openindex-estimate-worker-template
+    restart: "no"
+    command: ["--help"]
     networks:
       - openindex-network
 

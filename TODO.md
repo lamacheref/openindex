@@ -2,29 +2,14 @@
 
 ## Priorités opérateur à traiter en tête
 
-- [x] **P-00 — Finalisation fiable des runs d'exploration**
-  - Corriger la chaîne de fin de run pour qu'un crawl terminé ou timeouté écrive toujours un statut final explicite en base.
-  - Ajouter un signal et une trace `run terminé` / `run en échec` côté moteur.
-  - Empêcher qu'un run reste `running` en base sans activité réelle du moteur.
-  - Livré via les commits `1a2407a` et `f8fe00c`.
-
-- [x] **P-00b — Réconciliation des runs zombies**
-  - Ajouter une logique défensive pour reclassifier les runs stale laissés `running` par le moteur.
-  - Exposer un état opérateur clair quand le moteur n'émet plus mais que la base n'est pas cohérente.
-  - Livré via les commits `1a2407a` et `f8fe00c`.
-
-- [x] **P-00c — Fuseau horaire homogène et configurable**
-  - Aligner les conteneurs Docker sur un fuseau horaire explicite.
-  - Rendre le fuseau d'affichage configurable dans l'interface via l'engrenage.
-  - Afficher les dates de build et d'exécution dans le fuseau choisi.
-  - Livré via le commit `1a2407a`.
-
 - [ ] **P-01 — Pré-estimation volumétrique avant exploration**
   - Revoir le protocole moteur pour obtenir une estimation la plus fidèle possible du volume total avant exploration.
-  - Priorité cible: montage CIFS temporaire + `du -sb`, selon `docs/operations/CRAWL_PRE_ESTIMATION_PROTOCOL.md`.
+  - Priorité cible: worker Docker éphémère `estimate-{hash_du_run}` lancé par l'API, montage CIFS temporaire read-only dans le conteneur, puis `du -sb`, selon `docs/operations/CRAWL_PRE_ESTIMATION_PROTOCOL.md`.
+  - Le worker d'estimation doit être isolé du crawler principal, avec les droits minimaux de montage, et s'arrêter dès que l'estimation est renvoyée.
+  - L'API doit piloter la séquence `estimation -> validation du retour -> lancement explorateur`, avec contrôle explicite du cleanup du conteneur temporaire.
   - Prévoir les fallbacks SMB si le montage n'est pas possible.
   - État actuel: fallback SMB récursif implémenté avant le crawl avec baseline `Volume cible` exposée au runtime.
-  - Reste à faire: remplacer ce fallback par la stratégie prioritaire CIFS + `du -sb` quand les prérequis système seront prêts.
+  - Reste à faire: finaliser l'orchestration Docker côté API, le cleanup robuste des workers `estimate-*` et la preuve opératoire en environnement réel.
 
 - [ ] **P-02 — Indicateurs de progression lisibles et fiables**
   - Exploiter les retours actuels du moteur pour des indicateurs de progression fiables.
@@ -41,6 +26,24 @@
   - Ajouter des gommettes de couleur pour l'état moteur: arrêté, estimation, exploration, erreur, terminé.
   - Basculer le bouton principal de `Lancer` vers `Arrêter` quand une exploration est en cours.
   - Livré via les commits `1a2407a` et `f8fe00c`.
+
+- [x] **P-00 — Finalisation fiable des runs d'exploration**
+  - Corriger la chaîne de fin de run pour qu'un crawl terminé ou timeouté écrive toujours un statut final explicite en base.
+  - Ajouter un signal et une trace `run terminé` / `run en échec` côté moteur.
+  - Empêcher qu'un run reste `running` en base sans activité réelle du moteur.
+  - Livré via les commits `1a2407a` et `f8fe00c`.
+
+- [x] **P-00b — Réconciliation des runs zombies**
+  - Ajouter une logique défensive pour reclassifier les runs stale laissés `running` par le moteur.
+  - Exposer un état opérateur clair quand le moteur n'émet plus mais que la base n'est pas cohérente.
+  - Livré via les commits `1a2407a` et `f8fe00c`.
+  - Dette mineure restante: un run arrêté peut encore rester bloqué en `cancelling` trop longtemps si le worker ne finalise pas proprement; ajouter une réconciliation tardive vers `cancelled`.
+
+- [x] **P-00c — Fuseau horaire homogène et configurable**
+  - Aligner les conteneurs Docker sur un fuseau horaire explicite.
+  - Rendre le fuseau d'affichage configurable dans l'interface via l'engrenage.
+  - Afficher les dates de build et d'exécution dans le fuseau choisi.
+  - Livré via le commit `1a2407a`.
 
 ## Objectif
 

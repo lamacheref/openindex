@@ -143,7 +143,7 @@
 
                 <section class="card p-5">
                     <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">Dernier lancement</p>
-                    <p class="mt-3 text-sm font-semibold" x-text="latestRunLabel"></p>
+                    <p class="mt-3 text-sm font-semibold" x-text="latestRunDisplayLabel"></p>
                     <p class="mt-1 text-xs text-slate-500" x-text="latestRunDateLabel"></p>
                 </section>
 
@@ -287,8 +287,14 @@
                                      :class="crawlerRuntime.estimating_total ? 'bg-gradient-to-r from-amber-500 via-orange-400 to-amber-500 animate-pulse' : 'bg-gradient-to-r from-teal-700 to-emerald-500'"
                                      :style="crawlerRuntime.estimating_total ? 'width: 100%' : `width: ${effectiveProgressPercent}%`"></div>
                             </div>
-                            <p class="mt-3 text-sm text-slate-600" x-text="`Dernier run: ${crawlOverview.monitoring.latest_run_status || 'Aucun run'} • ${crawlOverview.monitoring.latest_run_config_name || '-'}`"></p>
                             <p class="mt-1 text-sm text-slate-600" x-text="volumeProgressLabel"></p>
+                            <div class="mt-3">
+                                <button @click="showCrawlerLogs = !showCrawlerLogs"
+                                        :disabled="!engineHasRunningRun"
+                                        class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
+                                    Voir les logs
+                                </button>
+                            </div>
                         </div>
 
                         <div x-show="engineHasRunningRun" class="mt-6">
@@ -316,14 +322,14 @@
                                     </template>
                                 </div>
                             </details>
-                            <details class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                                <summary class="cursor-pointer text-sm font-semibold text-slate-700">Voir le journal de l'explorateur</summary>
+                            <div x-show="showCrawlerLogs" class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                                <p class="text-sm font-semibold text-slate-700">Journal de l'explorateur</p>
                                 <div class="mt-4">
                                     <textarea class="h-[40vh] w-full rounded-2xl border border-slate-200 bg-slate-950 p-4 font-mono text-sm text-emerald-200"
                                               readonly
                                               x-text="operationalLogText"></textarea>
                                 </div>
-                            </details>
+                            </div>
                         </div>
                         <div x-show="!engineHasRunningRun" class="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm text-slate-500">
                             Aucune exploration active. Lance une exploration pour suivre les indicateurs de progression en temps réel.
@@ -780,6 +786,11 @@
                     log_lines: [],
                     log_source: 'logs/smb_crawler_postgresql.log'
                 },
+                animatedProcessedBytes: 0,
+                animatedDiscoveredBytes: 0,
+                clockNow: Date.now(),
+                clockTimerId: null,
+                volumeAnimationFrameId: null,
                 operationalLogs: [],
                 newCrawl: {
                     name: '',
@@ -794,6 +805,7 @@
 
                 async init() {
                     this.displayTimezone = localStorage.getItem('openindex.displayTimezone') || 'Europe/Paris';
+                    this.startRealtimeClock();
                     await this.loadSpaces();
                     await this.loadStats();
                     await this.loadCrawlConfigs();
@@ -931,7 +943,12 @@
                         if (!response.ok) {
                             throw new Error('Erreur API explorateur runtime');
                         }
-                        this.crawlerRuntime = await response.json();
+                        const runtime = await response.json();
+                        this.crawlerRuntime = runtime;
+                        this.animateVolumeCounters(
+                            runtime.processed_bytes ?? 0,
+                            runtime.discovered_bytes ?? 0
+                        );
                     } catch (error) {
                         console.error('Erreur runtime explorateur:', error);
                         this.addLogEntry(`Erreur runtime explorateur: ${error.message}`);
@@ -1089,6 +1106,60 @@
                     };
                 },
 
+                startRealtimeClock() {
+                    if (this.clockTimerId) {
+                        clearInterval(this.clockTimerId);
+                    }
+                    this.clockNow = Date.now();
+                    this.clockTimerId = setInterval(() => {
+                        this.clockNow = Date.now();
+                    }, 1000);
+                },
+
+                animateVolumeCounters(nextProcessedBytes, nextDiscoveredBytes) {
+                    if (this.volumeAnimationFrameId) {
+                        cancelAnimationFrame(this.volumeAnimationFrameId);
+                    }
+
+                    const startProcessedBytes = this.animatedProcessedBytes ?? 0;
+                    const startDiscoveredBytes = this.animatedDiscoveredBytes ?? 0;
+                    const targetProcessedBytes = Math.max(0, nextProcessedBytes || 0);
+                    const targetDiscoveredBytes = Math.max(0, nextDiscoveredBytes || 0);
+
+                    if (
+                        startProcessedBytes === targetProcessedBytes &&
+                        startDiscoveredBytes === targetDiscoveredBytes
+                    ) {
+                        return;
+                    }
+
+                    const startedAt = performance.now();
+                    const duration = 700;
+
+                    const step = (now) => {
+                        const progress = Math.min((now - startedAt) / duration, 1);
+                        const eased = 1 - Math.pow(1 - progress, 3);
+
+                        this.animatedProcessedBytes = Math.round(
+                            startProcessedBytes + ((targetProcessedBytes - startProcessedBytes) * eased)
+                        );
+                        this.animatedDiscoveredBytes = Math.round(
+                            startDiscoveredBytes + ((targetDiscoveredBytes - startDiscoveredBytes) * eased)
+                        );
+
+                        if (progress < 1) {
+                            this.volumeAnimationFrameId = requestAnimationFrame(step);
+                            return;
+                        }
+
+                        this.animatedProcessedBytes = targetProcessedBytes;
+                        this.animatedDiscoveredBytes = targetDiscoveredBytes;
+                        this.volumeAnimationFrameId = null;
+                    };
+
+                    this.volumeAnimationFrameId = requestAnimationFrame(step);
+                },
+
                 async refreshOperations() {
                     await Promise.all([
                         this.loadStats(),
@@ -1121,6 +1192,7 @@
                 statusBadgeClass(status) {
                     const normalized = (status || '').toLowerCase();
                     if (['completed', 'done', 'success'].includes(normalized)) return 'bg-emerald-100 text-emerald-800';
+                    if (normalized === 'estimating') return 'bg-amber-100 text-amber-800';
                     if (['running', 'in_progress'].includes(normalized)) return 'bg-blue-100 text-blue-800';
                     if (['queued', 'pending'].includes(normalized)) return 'bg-amber-100 text-amber-800';
                     if (['failed', 'error'].includes(normalized)) return 'bg-red-100 text-red-800';
@@ -1128,11 +1200,11 @@
                 },
 
                 canStopRun(status) {
-                    return ['queued', 'pending', 'running', 'in_progress'].includes((status || '').toLowerCase());
+                    return ['estimating', 'queued', 'pending', 'running', 'in_progress'].includes((status || '').toLowerCase());
                 },
 
                 canDeleteRun(status) {
-                    return !['queued', 'pending', 'running', 'in_progress', 'cancelling'].includes((status || '').toLowerCase());
+                    return !['estimating', 'queued', 'pending', 'running', 'in_progress', 'cancelling'].includes((status || '').toLowerCase());
                 },
 
                 formatBytes(bytes) {
@@ -1153,6 +1225,21 @@
                 formatDate(dateString) {
                     if (!dateString || dateString === '-') return 'non défini';
                     return new Date(dateString).toLocaleString('fr-FR', { timeZone: this.displayTimezone });
+                },
+
+                formatElapsedDuration(dateString) {
+                    if (!dateString || dateString === '-') return '00h00m00s';
+                    const launchedAt = new Date(dateString).getTime();
+                    if (Number.isNaN(launchedAt)) return '00h00m00s';
+                    const elapsedSeconds = Math.max(0, Math.floor((this.clockNow - launchedAt) / 1000));
+                    const hours = Math.floor(elapsedSeconds / 3600).toString().padStart(2, '0');
+                    const minutes = Math.floor((elapsedSeconds % 3600) / 60).toString().padStart(2, '0');
+                    const seconds = Math.floor(elapsedSeconds % 60).toString().padStart(2, '0');
+                    return `${hours}h${minutes}m${seconds}s`;
+                },
+
+                isActiveRunStatus(status) {
+                    return ['estimating', 'queued', 'pending', 'running', 'in_progress', 'cancelling'].includes((status || '').toLowerCase());
                 },
 
                 get crawlIsActive() {
@@ -1198,7 +1285,7 @@
 
                 get operationalLogText() {
                     if (this.crawlerRuntime.log_lines && this.crawlerRuntime.log_lines.length > 0) {
-                        return this.crawlerRuntime.log_lines.join('\n');
+                        return [...this.crawlerRuntime.log_lines].reverse().join('\n');
                     }
                     return '[aucun log explorateur]';
                 },
@@ -1228,6 +1315,17 @@
                     return this.crawlOverview.monitoring.latest_run_config_name || 'non défini';
                 },
 
+                get latestRunDisplayLabel() {
+                    const label = this.latestRunLabel;
+                    if (label === 'non défini') {
+                        return label;
+                    }
+                    if (!this.isActiveRunStatus(this.crawlOverview.monitoring.latest_run_status)) {
+                        return label;
+                    }
+                    return `${label} - ${this.formatElapsedDuration(this.crawlOverview.monitoring.latest_run_triggered_at)}`;
+                },
+
                 get activeRun() {
                     return this.crawlOverview.recent_runs.find((run) => this.canStopRun(run.status)) || null;
                 },
@@ -1240,6 +1338,9 @@
                     const normalized = (this.crawlOverview.monitoring.latest_run_status || '').toLowerCase();
                     if (this.engineIsIdle) {
                         return 'Idle';
+                    }
+                    if (normalized === 'estimating') {
+                        return 'Pré-estimation';
                     }
                     if (this.crawlIsActive) {
                         return this.crawlerRuntime.estimating_total ? 'Estimation' : 'Exploration active';
@@ -1264,6 +1365,9 @@
                     if (this.engineIsIdle) {
                         return 'bg-slate-100 text-slate-700';
                     }
+                    if (normalized === 'estimating') {
+                        return 'bg-amber-100 text-amber-800';
+                    }
                     if (this.crawlIsActive) {
                         return this.crawlerRuntime.estimating_total ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800';
                     }
@@ -1280,6 +1384,9 @@
                     const normalized = (this.crawlOverview.monitoring.latest_run_status || '').toLowerCase();
                     if (this.engineIsIdle) {
                         return 'bg-slate-400';
+                    }
+                    if (normalized === 'estimating') {
+                        return 'bg-amber-500';
                     }
                     if (this.crawlIsActive) {
                         return this.crawlerRuntime.estimating_total ? 'bg-blue-500' : 'bg-emerald-500';
@@ -1301,8 +1408,11 @@
                 },
 
                 get volumeProgressLabel() {
-                    const processed = this.crawlerRuntime.processed_bytes ?? 0;
-                    const discovered = this.crawlerRuntime.discovered_bytes ?? 0;
+                    const processed = this.animatedProcessedBytes ?? 0;
+                    const discovered = this.animatedDiscoveredBytes ?? 0;
+                    if ((this.crawlOverview.monitoring.latest_run_status || '').toLowerCase() === 'estimating' && !this.crawlIsActive) {
+                        return 'Pré-estimation volumétrique en cours avant lancement de l\'explorateur';
+                    }
                     if (this.engineIsIdle && this.crawlerRuntime.last_activity_at) {
                         return `Dernier signal moteur: ${this.formatDate(this.crawlerRuntime.last_activity_at)}`;
                     }

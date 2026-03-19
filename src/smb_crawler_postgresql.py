@@ -30,7 +30,8 @@ class SMBCrawlerPostgreSQL:
                  crawl_config_id=None, postgres_config=None, max_workers=4, delay_between_requests=0.1,
                  max_queue_size=1000, max_depth=None, debug=False,
                  large_file_threshold=104857600, pre_estimation_enabled=True,
-                 pre_estimation_mode="smb", pre_estimation_mount_path=""):
+                 pre_estimation_mode="smb", pre_estimation_mount_path="",
+                 pre_estimated_total_size=0):
         """
         Initialise le crawler SMB avec PostgreSQL.
 
@@ -71,6 +72,7 @@ class SMBCrawlerPostgreSQL:
         self.pre_estimation_enabled = pre_estimation_enabled
         self.pre_estimation_mode = (pre_estimation_mode or "smb").strip().lower()
         self.pre_estimation_mount_path = (pre_estimation_mount_path or "").strip()
+        self.pre_estimated_total_size = int(pre_estimated_total_size or 0)
         
         # Initialiser PostgreSQL
         self.postgres_adapter = PostgreSQLAdapter(self.postgres_config)
@@ -123,6 +125,9 @@ class SMBCrawlerPostgreSQL:
         
         # Configuration du logging
         self.setup_logging()
+
+        if self.pre_estimated_total_size > 0:
+            self.stats['estimated_total_size'] = self.pre_estimated_total_size
 
     def setup_logging(self):
         """Configure le logging avec rotation automatique."""
@@ -794,8 +799,13 @@ class SMBCrawlerPostgreSQL:
         if base_path is None:
             base_path = rf"\\{self.server}\{self.share_name}"
         
-        if self.pre_estimation_enabled:
+        if self.pre_estimation_enabled and self.stats['estimated_total_size'] <= 0:
             self._run_pre_estimation(base_path)
+        elif self.stats['estimated_total_size'] > 0:
+            self.logger.info(
+                "✅ Baseline volumétrique injectée avant crawl: Volume cible=%s octets",
+                self.stats['estimated_total_size'],
+            )
 
         # Ajouter le répertoire racine à la queue
         self.directory_queue.put(base_path)
@@ -1084,9 +1094,13 @@ def run_single_crawl(run_payload):
         max_queue_size=crawler_config["max_queue_size"],
         max_depth=crawler_config["max_depth"],
         large_file_threshold=crawler_config["large_file_threshold"],
-        pre_estimation_enabled=crawler_config.get("pre_estimation_enabled", True),
+        pre_estimation_enabled=(
+            crawler_config.get("pre_estimation_enabled", True)
+            and int(run_payload.get("estimated_total_size") or 0) <= 0
+        ),
         pre_estimation_mode=crawler_config.get("pre_estimation_mode", "smb"),
         pre_estimation_mount_path=crawler_config.get("pre_estimation_mount_path", ""),
+        pre_estimated_total_size=run_payload.get("estimated_total_size") or 0,
         debug=debug_mode
     )
     crawler.run_id = run_payload["run_id"]
