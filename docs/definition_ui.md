@@ -1,21 +1,5 @@
 # Correction de l'UI/XI d'OPENINDEX
 
-## État de mise en oeuvre au 2026-03-18
-
-### Implémenté
-- le vocabulaire visible a été aligné sur `exploration` / `explorateur` dans l'interface opérateur ;
-- les KPI et les vues sont désormais rattachés à l'espace configuré, plus à un simple préfixe de chemin ;
-- le bloc d'avancement affiche une progression basée sur le volume traité et le volume découvert ;
-- les files affichées sont celles du worker réel : `Dossiers`, `Fichiers`, `Somme de contrôle`, `Gros fichiers` ;
-- `Voir les logs` affiche les logs réels du conteneur `crawler` ;
-- `Piloter l'exploration` et `Runs récents` permettent d'arrêter un run actif et de supprimer un run terminé ;
-- un seul run actif est autorisé par espace.
-
-### Reste à traiter
-- overlay de configuration via l'engrenage ;
-- notifications opérateur via la cloche ;
-- pages métier `Explorateur de fichiers` et `Traitements des artefacts` au niveau de finition attendu.
-
 ## Base de l'interface:
 
 ### Entête
@@ -34,9 +18,9 @@
 - le tableau de bord doit se trouver dans un zone scrollable (uniquement cette partie)
 - il faut un minimum de place (cohérente avec le reste des espacements de la page) entre la titre "tableau de bord" et l'entête,
 - Les KPI doivent être actif et mis à jour au fur et à mesure du remplissage de la base de données si le crawler est en activité, 
-- La barre d'avancement de l'exploration doit être dynamique et se baser sur la volumétrie effectivement découverte/traitée.
-- Dans le bloc de la barre d'avancement, il doit y avoir des informations sur chaque queue en cours (si l'exploration est active) : `Dossiers`, `Fichiers`, `Somme de contrôle`, `Gros fichiers`.
-- Ajoute un bouton pour faire apparaitre le suivi de log du crawler dans la barre d'avancement. Il doit afficher les logs réels du worker explorateur, pas un monitoring synthétique.
+- La barre d'avancement du crawl doit être dynamique (un calcul de la masse d'information doit avoir lieu préalablement au crawl pour pouvoir avoir une barre de défilement fiable.
+- Dans le bloc de la barre d'avancement, il doit y avoir des informations sur chaque queue en cours (si le crawl est actif)
+- Ajoute un bouton pour faire apparaitre le suivi de log du crawler dans la barre d'avancement. Il se déplira sous la forme d'un textarea de la largueur du bloc et de la hauteur du reste de la page lors du clic
 - Retire la partie "Evolution du crawl"
 
 ## Autres pages dans le menu
@@ -68,7 +52,7 @@
 ## AJOUTS INDISPENSABLES
 - rendre actif "engrenage" pour faire apparaitre la configuration par un glissement de droite à gauche une zone overlay pour configurer : 1. les configurations des espaces crawler, 2. gestion de la base de données, 3. inscription des utilisateurs (quand l'utilisateur connecter est admin, 4. le profil de l'utilisateur (si utilisateur admin ou utilisateur).
 - Rendre actif "Cloche" pour indiquer les notifications nécessaire à l'utilisateur.
-- Rendre actif "Piloter l'exploration" pour permettre de lancer, arrêter et supprimer un run (lightbox ou panneau dédié).
+- Rendre actif "Piloter le crawl" pour permettre de lancer / forcer un crawl ou l'arreter (lightbox).
 
 
 Fabrice 18/03/2026
