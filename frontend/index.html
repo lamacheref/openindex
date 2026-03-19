@@ -228,26 +228,26 @@
                         <div class="card p-5">
                             <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Total fichiers</p>
                             <p class="mt-3 font-semibold"
-                               :class="crawlIsActive ? 'text-sm uppercase tracking-[0.18em] text-amber-700' : 'text-3xl'"
-                               x-text="crawlIsActive ? 'Exploration en cours' : (stats.total_files?.toLocaleString() || '0')"></p>
+                               :class="engineHasRunningRun ? 'text-sm uppercase tracking-[0.18em] text-amber-700' : 'text-3xl'"
+                               x-text="engineHasRunningRun ? (engineIsIdle ? 'Moteur idle' : 'Exploration en cours') : (stats.total_files?.toLocaleString() || '0')"></p>
                         </div>
                         <div class="card p-5">
                             <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Total dossiers</p>
                             <p class="mt-3 font-semibold"
-                               :class="crawlIsActive ? 'text-sm uppercase tracking-[0.18em] text-amber-700' : 'text-3xl'"
-                               x-text="crawlIsActive ? 'Exploration en cours' : (stats.total_directories?.toLocaleString() || '0')"></p>
+                               :class="engineHasRunningRun ? 'text-sm uppercase tracking-[0.18em] text-amber-700' : 'text-3xl'"
+                               x-text="engineHasRunningRun ? (engineIsIdle ? 'Moteur idle' : 'Exploration en cours') : (stats.total_directories?.toLocaleString() || '0')"></p>
                         </div>
                         <div class="card p-5">
                             <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Doublons</p>
                             <p class="mt-3 font-semibold"
-                               :class="crawlIsActive ? 'text-sm uppercase tracking-[0.18em] text-amber-700' : 'text-3xl'"
-                               x-text="crawlIsActive ? 'Exploration en cours' : (stats.duplicate_files?.toLocaleString() || '0')"></p>
+                               :class="engineHasRunningRun ? 'text-sm uppercase tracking-[0.18em] text-amber-700' : 'text-3xl'"
+                               x-text="engineHasRunningRun ? (engineIsIdle ? 'Moteur idle' : 'Exploration en cours') : (stats.duplicate_files?.toLocaleString() || '0')"></p>
                         </div>
                         <div class="card p-5">
                             <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Volume indexé</p>
                             <p class="mt-3 font-semibold"
-                               :class="crawlIsActive ? 'text-sm uppercase tracking-[0.18em] text-amber-700' : 'text-3xl'"
-                               x-text="crawlIsActive ? 'Exploration en cours' : formatBytes(stats.total_size || 0)"></p>
+                               :class="engineHasRunningRun ? 'text-sm uppercase tracking-[0.18em] text-amber-700' : 'text-3xl'"
+                               x-text="engineHasRunningRun ? (engineIsIdle ? 'Moteur idle' : 'Exploration en cours') : formatBytes(stats.total_size || 0)"></p>
                         </div>
                     </section>
 
@@ -265,12 +265,12 @@
                                 </div>
                             </div>
                             <div class="flex flex-wrap gap-3">
-                                <button @click="crawlIsActive ? stopActiveRun() : (activeSpaceConfigId ? startCrawl(activeSpaceConfigId) : null)"
-                                        :disabled="crawlIsActive ? !activeRunId : !activeSpaceConfigId"
+                                <button @click="engineHasRunningRun ? stopActiveRun() : (activeSpaceConfigId ? startCrawl(activeSpaceConfigId) : null)"
+                                        :disabled="engineHasRunningRun ? !activeRunId : !activeSpaceConfigId"
                                         class="rounded-2xl px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-300"
-                                        :class="crawlIsActive ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'">
-                                    <i :class="crawlIsActive ? 'fas fa-stop mr-2' : 'fas fa-play mr-2'"></i>
-                                    <span x-text="crawlIsActive ? 'Arrêter' : 'Lancer'"></span>
+                                        :class="engineHasRunningRun ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'">
+                                    <i :class="engineHasRunningRun ? 'fas fa-stop mr-2' : 'fas fa-play mr-2'"></i>
+                                    <span x-text="engineHasRunningRun ? 'Arrêter' : 'Lancer'"></span>
                                 </button>
                             </div>
                         </div>
@@ -289,26 +289,18 @@
                             </div>
                             <p class="mt-3 text-sm text-slate-600" x-text="`Dernier run: ${crawlOverview.monitoring.latest_run_status || 'Aucun run'} • ${crawlOverview.monitoring.latest_run_config_name || '-'}`"></p>
                             <p class="mt-1 text-sm text-slate-600" x-text="volumeProgressLabel"></p>
-                            <div class="mt-4">
-                                <button @click="showCrawlerLogs = !showCrawlerLogs"
-                                        :disabled="!crawlIsActive"
-                                        class="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-white">
-                                    <i class="fas fa-align-left mr-2"></i>
-                                    <span x-text="showCrawlerLogs ? 'Masquer les logs' : 'Voir les logs'"></span>
-                                </button>
-                            </div>
                         </div>
 
-                        <div x-show="crawlIsActive" class="mt-6">
+                        <div x-show="engineHasRunningRun" class="mt-6">
                             <div class="mb-3">
                                 <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Indicateurs de progression</p>
                             </div>
-                            <div class="flex flex-wrap gap-3">
+                            <div class="flex flex-nowrap gap-3 overflow-x-auto pb-1">
                             <template x-for="indicator in progressIndicators" :key="indicator.label">
-                                <div class="min-w-[15rem] flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                <div class="min-w-[12rem] flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                                     <p class="text-xs uppercase tracking-[0.2em] text-slate-400" x-text="indicator.label"></p>
-                                    <p class="mt-1 text-lg font-semibold text-slate-900" x-text="indicator.value"></p>
-                                    <p class="mt-1 text-xs text-slate-500" x-text="indicator.detail"></p>
+                                    <p class="mt-1 text-base font-semibold text-slate-900" x-text="indicator.value"></p>
+                                    <p class="mt-1 text-[11px] text-slate-500" x-text="indicator.detail"></p>
                                 </div>
                             </template>
                             </div>
@@ -324,16 +316,17 @@
                                     </template>
                                 </div>
                             </details>
+                            <details class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                                <summary class="cursor-pointer text-sm font-semibold text-slate-700">Voir le journal de l'explorateur</summary>
+                                <div class="mt-4">
+                                    <textarea class="h-[40vh] w-full rounded-2xl border border-slate-200 bg-slate-950 p-4 font-mono text-sm text-emerald-200"
+                                              readonly
+                                              x-text="operationalLogText"></textarea>
+                                </div>
+                            </details>
                         </div>
-                        <div x-show="!crawlIsActive" class="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                        <div x-show="!engineHasRunningRun" class="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm text-slate-500">
                             Aucune exploration active. Lance une exploration pour suivre les indicateurs de progression en temps réel.
-                        </div>
-
-                        <div x-show="showCrawlerLogs" class="mt-6 fade-in">
-                            <label class="mb-2 block text-sm font-medium text-slate-700">Journal de l'explorateur</label>
-                            <textarea class="h-[40vh] w-full rounded-2xl border border-slate-200 bg-slate-950 p-4 font-mono text-sm text-emerald-200"
-                                      readonly
-                                      x-text="operationalLogText"></textarea>
                         </div>
                     </section>
 
@@ -653,7 +646,7 @@
             <div class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <p class="text-xs uppercase tracking-[0.22em] text-slate-400">État courant</p>
-                    <p class="mt-2 text-base font-semibold" x-text="crawlIsActive ? 'Explorateur actif' : 'Explorateur inactif'"></p>
+                    <p class="mt-2 text-base font-semibold" x-text="engineHasRunningRun ? engineStatusLabel : 'Explorateur inactif'"></p>
                     <p class="mt-2 text-sm text-slate-600" x-text="latestRunLabel"></p>
                 </div>
                 <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -668,15 +661,15 @@
             </div>
 
             <div class="mt-6 flex flex-wrap gap-3">
-                <button @click="crawlIsActive ? stopActiveRun() : (selectedConfigId ? startCrawl(selectedConfigId) : null)"
-                        :disabled="crawlIsActive ? !activeRunId : !selectedConfigId"
+                <button @click="engineHasRunningRun ? stopActiveRun() : (selectedConfigId ? startCrawl(selectedConfigId) : null)"
+                        :disabled="engineHasRunningRun ? !activeRunId : !selectedConfigId"
                         class="rounded-2xl px-4 py-2.5 text-sm font-semibold text-white disabled:bg-slate-300"
-                        :class="crawlIsActive ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'">
-                    <i :class="crawlIsActive ? 'fas fa-stop mr-2' : 'fas fa-play mr-2'"></i>
-                    <span x-text="crawlIsActive ? 'Arrêter' : 'Lancer'"></span>
+                        :class="engineHasRunningRun ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'">
+                    <i :class="engineHasRunningRun ? 'fas fa-stop mr-2' : 'fas fa-play mr-2'"></i>
+                    <span x-text="engineHasRunningRun ? 'Arrêter' : 'Lancer'"></span>
                 </button>
                 <button @click="selectedConfigId ? startCrawl(selectedConfigId) : null"
-                        :disabled="!selectedConfigId || crawlIsActive"
+                        :disabled="!selectedConfigId || engineHasRunningRun"
                         class="rounded-2xl border border-teal-300 bg-teal-50 px-4 py-2.5 text-sm font-semibold text-teal-800 hover:bg-teal-100 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
                     <i class="fas fa-bolt mr-2"></i>Forcer une exploration
                 </button>
@@ -757,6 +750,7 @@
                 },
                 crawlerRuntime: {
                     active: false,
+                    idle: false,
                     latest_status: 'Aucun run',
                     latest_config_name: '-',
                     progress_percent: null,
@@ -765,8 +759,10 @@
                     discovered_files: 0,
                     discovered_directories: 0,
                     large_files_detected: 0,
+                    large_files_bytes: 0,
                     estimating_total: false,
                     progress_hint: '',
+                    last_activity_at: null,
                     progress_indicators: [],
                     queue_indicators: [],
                     log_lines: [],
@@ -1140,7 +1136,15 @@
                 },
 
                 get crawlIsActive() {
-                    return this.crawlerRuntime.active || (this.crawlOverview.monitoring.running_runs || 0) > 0;
+                    return this.crawlerRuntime.active;
+                },
+
+                get engineHasRunningRun() {
+                    return (this.crawlOverview.monitoring.running_runs || 0) > 0;
+                },
+
+                get engineIsIdle() {
+                    return !!this.crawlerRuntime.idle;
                 },
 
                 get selectedConfig() {
@@ -1214,6 +1218,9 @@
 
                 get engineStatusLabel() {
                     const normalized = (this.crawlOverview.monitoring.latest_run_status || '').toLowerCase();
+                    if (this.engineIsIdle) {
+                        return 'Idle';
+                    }
                     if (this.crawlIsActive) {
                         return this.crawlerRuntime.estimating_total ? 'Estimation en cours' : 'Exploration active';
                     }
@@ -1231,6 +1238,9 @@
 
                 get engineStatusBadgeClass() {
                     const normalized = (this.crawlOverview.monitoring.latest_run_status || '').toLowerCase();
+                    if (this.engineIsIdle) {
+                        return 'bg-amber-100 text-amber-800';
+                    }
                     if (this.crawlIsActive) {
                         return this.crawlerRuntime.estimating_total ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800';
                     }
@@ -1242,6 +1252,9 @@
 
                 get engineStatusDotClass() {
                     const normalized = (this.crawlOverview.monitoring.latest_run_status || '').toLowerCase();
+                    if (this.engineIsIdle) {
+                        return 'bg-amber-500';
+                    }
                     if (this.crawlIsActive) {
                         return this.crawlerRuntime.estimating_total ? 'bg-amber-500' : 'bg-emerald-500';
                     }
@@ -1261,6 +1274,9 @@
                 get volumeProgressLabel() {
                     const processed = this.crawlerRuntime.processed_bytes ?? 0;
                     const discovered = this.crawlerRuntime.discovered_bytes ?? 0;
+                    if (this.engineIsIdle && this.crawlerRuntime.last_activity_at) {
+                        return `Dernier signal moteur: ${this.formatDate(this.crawlerRuntime.last_activity_at)}`;
+                    }
                     if (this.crawlIsActive && this.crawlerRuntime.estimating_total && discovered > 0) {
                         return `${this.formatBytes(discovered)} déjà inventoriés, ${this.formatBytes(processed)} déjà traités`;
                     }

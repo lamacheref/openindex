@@ -197,6 +197,7 @@ class ProgressIndicator(BaseModel):
 
 class CrawlerRuntime(BaseModel):
     active: bool
+    idle: bool = False
     latest_status: str
     latest_config_name: str
     progress_percent: Optional[float] = None
@@ -205,8 +206,10 @@ class CrawlerRuntime(BaseModel):
     discovered_files: int = 0
     discovered_directories: int = 0
     large_files_detected: int = 0
+    large_files_bytes: int = 0
     estimating_total: bool = False
     progress_hint: str = ""
+    last_activity_at: Optional[str] = None
     progress_indicators: List[ProgressIndicator]
     queue_indicators: List[QueueIndicator]
     log_lines: List[str]
@@ -942,16 +945,20 @@ def ensure_crawl_storage_ready(db: Any) -> None:
         db.ensure_crawl_tables()
 
 
-def _tail_log_lines(log_path: Path, limit: int = 80) -> List[str]:
+def _read_log_lines(log_path: Path) -> List[str]:
     if not log_path.exists() or not log_path.is_file():
         return []
 
     try:
         with log_path.open("r", encoding="utf-8", errors="replace") as handle:
-            lines = handle.readlines()
-        return [_normalize_runtime_log_line(line.rstrip("\n")) for line in lines[-limit:]]
+            return [line.rstrip("\n") for line in handle.readlines()]
     except OSError:
         return []
+
+
+def _tail_log_lines(log_path: Path, limit: int = 80) -> List[str]:
+    lines = _read_log_lines(log_path)
+    return [_normalize_runtime_log_line(line) for line in lines[-limit:]]
 
 
 def _normalize_runtime_log_line(line: str) -> str:
@@ -979,6 +986,9 @@ PROGRESS_RE = re.compile(
     r"Progression volume=(?P<progress_percent>\d+(?:\.\d+)?)%",
     re.IGNORECASE,
 )
+
+LOG_TIMESTAMP_RE = re.compile(r"^(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})")
+LARGE_FILE_RE = re.compile(r"Gros fichier détecté: .*?\((?P<size>[\d,]+) bytes\)")
 
 
 def _extract_progress_percent(log_lines: List[str]) -> float:
@@ -1060,6 +1070,7 @@ def _extract_runtime_metrics(log_lines: List[str]) -> Dict[str, Any]:
         "discovered_files": 0,
         "discovered_directories": 0,
         "large_files_detected": 0,
+        "large_files_bytes": 0,
         "processed_bytes": 0,
         "discovered_bytes": 0,
         "queue_dirs": 0,
@@ -1069,6 +1080,7 @@ def _extract_runtime_metrics(log_lines: List[str]) -> Dict[str, Any]:
         "estimating_total": False,
         "progress_percent": None,
         "progress_hint": "Aucune exploration active.",
+        "last_activity_at": None,
     }
 
 
@@ -1087,6 +1099,41 @@ def _format_volume_compact(bytes_value: int) -> str:
         unit_index += 1
 
     return f"{value:.3f} {units[unit_index]}"
+
+
+def _extract_last_progress_timestamp(log_lines: List[str]) -> Optional[datetime]:
+    for line in reversed(log_lines):
+        if not PROGRESS_RE.search(line):
+            continue
+        match = LOG_TIMESTAMP_RE.match(line)
+        if not match:
+            continue
+        try:
+            return datetime.strptime(match.group("ts"), "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            return None
+    return None
+
+
+def _extract_large_file_metrics(raw_log_lines: List[str]) -> Dict[str, int]:
+    last_run_start_index = 0
+    for index, line in enumerate(raw_log_lines):
+        if "Démarrage du crawl SMB avec PostgreSQL" in line:
+            last_run_start_index = index
+
+    count = 0
+    total_bytes = 0
+    for line in raw_log_lines[last_run_start_index:]:
+        match = LARGE_FILE_RE.search(line)
+        if not match:
+            continue
+        count += 1
+        total_bytes += int(match.group("size").replace(",", ""))
+
+    return {
+        "count": count,
+        "bytes": total_bytes,
+    }
 
 
 @app.get("/api/crawl-configs", response_model=List[CrawlConfigPublic])
@@ -1226,9 +1273,18 @@ async def get_crawler_runtime(log_limit: int = 80):
         ensure_crawl_storage_ready(db)
         monitoring = db.get_monitoring_summary()
         log_path = Path(os.getenv("OPENINDEX_CRAWLER_LOG_PATH", "logs/smb_crawler_postgresql.log"))
-        log_lines = _tail_log_lines(log_path, limit=log_limit)
+        raw_log_lines = _read_log_lines(log_path)
+        log_lines = [_normalize_runtime_log_line(line) for line in raw_log_lines[-log_limit:]]
         runtime_metrics = _extract_runtime_metrics(log_lines)
+        large_file_metrics = _extract_large_file_metrics(raw_log_lines)
         queue_snapshot = _extract_queue_snapshot(log_lines)
+        last_activity = _extract_last_progress_timestamp(log_lines)
+        has_running_run = monitoring["running_runs"] > 0
+        idle = False
+        if has_running_run and last_activity is not None:
+            idle = (datetime.utcnow() - last_activity).total_seconds() > 300
+        elif has_running_run and not log_lines:
+            idle = True
 
         queue_indicators = [
             QueueIndicator(
@@ -1260,27 +1316,21 @@ async def get_crawler_runtime(log_limit: int = 80):
         progress_indicators = [
             ProgressIndicator(
                 key="discovered_files",
-                label="Fichiers découverts",
+                label="Fichiers",
                 value=f"{runtime_metrics['discovered_files']:,}".replace(",", " "),
-                detail="Nombre de fichiers identifiés à ce stade",
+                detail="Fichiers traités",
             ),
             ProgressIndicator(
                 key="discovered_directories",
-                label="Dossiers découverts",
+                label="Dossiers",
                 value=f"{runtime_metrics['discovered_directories']:,}".replace(",", " "),
-                detail="Nombre de dossiers parcourus ou en cours de découverte",
+                detail="Dossiers parcourus",
             ),
             ProgressIndicator(
                 key="processed_volume",
                 label="Volume traité",
                 value=_format_volume_compact(runtime_metrics["processed_bytes"]),
-                detail="Volume effectivement vérifié",
-            ),
-            ProgressIndicator(
-                key="discovered_volume",
-                label="Volume découvert",
-                value=_format_volume_compact(runtime_metrics["discovered_bytes"]),
-                detail="Volume actuellement inventorié",
+                detail="Volume vérifié",
             ),
             ProgressIndicator(
                 key="integrity_backlog",
@@ -1290,14 +1340,20 @@ async def get_crawler_runtime(log_limit: int = 80):
             ),
             ProgressIndicator(
                 key="large_files_detected",
-                label="Gros fichiers détectés",
-                value=f"{runtime_metrics['large_files_detected']:,}".replace(",", " "),
-                detail="Compteur cumulé des gros fichiers déjà identifiés",
+                label="Gros fichiers",
+                value=f"{(large_file_metrics['count'] or runtime_metrics['large_files_detected']):,}".replace(",", " "),
+                detail=(
+                    f"fichiers ({_format_volume_compact(large_file_metrics['bytes'])} soit "
+                    f"{((large_file_metrics['bytes'] / runtime_metrics['discovered_bytes']) * 100):.2f} % du total)"
+                    if runtime_metrics["discovered_bytes"] > 0
+                    else "fichiers (0 o soit 0.00 % du total)"
+                ),
             ),
         ]
 
         return CrawlerRuntime(
-            active=monitoring["running_runs"] > 0,
+            active=has_running_run and not idle,
+            idle=idle,
             latest_status=monitoring["latest_run_status"],
             latest_config_name=monitoring["latest_run_config_name"],
             progress_percent=runtime_metrics["progress_percent"] if monitoring["running_runs"] > 0 else monitoring["progress_percent"],
@@ -1305,9 +1361,15 @@ async def get_crawler_runtime(log_limit: int = 80):
             discovered_bytes=runtime_metrics["discovered_bytes"],
             discovered_files=runtime_metrics["discovered_files"],
             discovered_directories=runtime_metrics["discovered_directories"],
-            large_files_detected=runtime_metrics["large_files_detected"],
+            large_files_detected=large_file_metrics["count"] or runtime_metrics["large_files_detected"],
+            large_files_bytes=large_file_metrics["bytes"],
             estimating_total=runtime_metrics["estimating_total"],
-            progress_hint=runtime_metrics["progress_hint"],
+            progress_hint=(
+                "Aucun signal moteur récent. Le run paraît idle et doit être vérifié."
+                if idle
+                else runtime_metrics["progress_hint"]
+            ),
+            last_activity_at=last_activity.isoformat() if last_activity else None,
             progress_indicators=progress_indicators,
             queue_indicators=queue_indicators,
             log_lines=log_lines,
