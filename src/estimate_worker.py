@@ -95,7 +95,7 @@ def unmount_share(mount_dir: Path) -> None:
         raise RuntimeError(format_subprocess_failure(exc)) from exc
 
 
-def run_du(target_path: Path) -> int:
+def run_du(target_path: Path, process_holder=None) -> int:
     print(f"[estimate] demarrage du -sb sur {target_path}", file=sys.stderr, flush=True)
     process = subprocess.Popen(
         ["du", "-sb", str(target_path)],
@@ -103,6 +103,8 @@ def run_du(target_path: Path) -> int:
         stderr=subprocess.PIPE,
         text=True,
     )
+    if process_holder is not None:
+        process_holder["process"] = process
     print(f"[estimate] process du pid={process.pid}", file=sys.stderr, flush=True)
 
     start_time = time.monotonic()
@@ -135,6 +137,8 @@ def run_du(target_path: Path) -> int:
                     text=True,
                 )
                 ps_snapshot = " ".join((ps_result.stdout or "").split())
+            except FileNotFoundError:
+                ps_snapshot = "ps indisponible: commande absente"
             except subprocess.CalledProcessError as exc:
                 ps_snapshot = f"ps indisponible: {format_subprocess_failure(exc)}"
             print(
@@ -156,6 +160,7 @@ def main() -> int:
 
     mount_dir = None
     credentials_path = None
+    du_process = None
     try:
         server, share_name, relative_parts = parse_unc_start_path(start_path)
         mount_dir = build_mount_dir(mount_base_dir, share_name)
@@ -169,7 +174,9 @@ def main() -> int:
         if not target_path.exists():
             raise FileNotFoundError(f"Chemin cible introuvable apres montage: {target_path}")
 
-        estimated_total_size = run_du(target_path)
+        process_holder = {}
+        estimated_total_size = run_du(target_path, process_holder=process_holder)
+        du_process = process_holder.get("process")
         print(
             json.dumps(
                 {
@@ -196,6 +203,12 @@ def main() -> int:
         )
         return 1
     finally:
+        if du_process is not None and du_process.poll() is None:
+            du_process.kill()
+            try:
+                du_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
         if mount_dir is not None and mount_dir.exists():
             try:
                 if os.path.ismount(mount_dir):
