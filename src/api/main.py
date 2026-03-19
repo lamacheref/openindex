@@ -13,7 +13,7 @@ import logging
 import os
 import re
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 try:
@@ -1271,6 +1271,32 @@ def _format_volume_compact(bytes_value: int) -> str:
     return f"{value:.3f} {units[unit_index]}"
 
 
+def _parse_db_timestamp(value: Optional[str]) -> Optional[datetime]:
+    if not value or value == "-":
+        return None
+    normalized = value.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _compute_rate(value: int, started_at: Optional[datetime]) -> float:
+    if value <= 0 or started_at is None:
+        return 0.0
+    elapsed_seconds = max((datetime.now(timezone.utc) - started_at).total_seconds(), 1.0)
+    return value / elapsed_seconds
+
+
+def _format_rate(value_per_second: float, suffix: str = "it/s") -> str:
+    if value_per_second <= 0:
+        return f"0 {suffix}"
+    return f"{value_per_second:.2f} {suffix}"
+
+
 def _extract_last_progress_timestamp(log_lines: List[str]) -> Optional[datetime]:
     for line in reversed(log_lines):
         if not PROGRESS_RE.search(line):
@@ -1509,11 +1535,16 @@ async def get_crawler_runtime(log_limit: int = 80):
         queue_snapshot = _extract_queue_snapshot(log_lines)
         last_activity = _extract_last_progress_timestamp(current_run_log_lines)
         has_running_run = monitoring["running_runs"] > 0
+        started_at = _parse_db_timestamp(monitoring.get("latest_run_triggered_at"))
         idle = False
         if has_running_run and last_activity is not None:
             idle = (datetime.utcnow() - last_activity).total_seconds() > 300
         elif has_running_run and not log_lines:
             idle = True
+
+        files_rate = _compute_rate(runtime_metrics["discovered_files"], started_at) if has_running_run else 0.0
+        directories_rate = _compute_rate(runtime_metrics["discovered_directories"], started_at) if has_running_run else 0.0
+        processed_volume_rate = _compute_rate(runtime_metrics["processed_bytes"], started_at) if has_running_run else 0.0
 
         queue_indicators = [
             QueueIndicator(
@@ -1547,19 +1578,19 @@ async def get_crawler_runtime(log_limit: int = 80):
                 key="discovered_files",
                 label="Fichiers",
                 value=f"{runtime_metrics['discovered_files']:,}".replace(",", " "),
-                detail="Fichiers traités",
+                detail=f"Fichiers traités ({_format_rate(files_rate)})",
             ),
             ProgressIndicator(
                 key="discovered_directories",
                 label="Dossiers",
                 value=f"{runtime_metrics['discovered_directories']:,}".replace(",", " "),
-                detail="Dossiers parcourus",
+                detail=f"Dossiers parcourus ({_format_rate(directories_rate)})",
             ),
             ProgressIndicator(
                 key="processed_volume",
                 label="Volume traité",
                 value=_format_volume_compact(runtime_metrics["processed_bytes"]),
-                detail="Volume vérifié",
+                detail=f"Volume vérifié ({_format_volume_compact(int(processed_volume_rate))}/s)",
             ),
             ProgressIndicator(
                 key="integrity_backlog",
