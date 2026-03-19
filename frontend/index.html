@@ -775,7 +775,6 @@
                     discovered_directories: 0,
                     large_files_detected: 0,
                     large_files_bytes: 0,
-                    estimating_total: false,
                     progress_hint: '',
                     last_activity_at: null,
                     progress_indicators: [],
@@ -1189,7 +1188,6 @@
                 statusBadgeClass(status) {
                     const normalized = (status || '').toLowerCase();
                     if (['completed', 'done', 'success'].includes(normalized)) return 'bg-emerald-100 text-emerald-800';
-                    if (normalized === 'estimating') return 'bg-amber-100 text-amber-800';
                     if (['running', 'in_progress'].includes(normalized)) return 'bg-blue-100 text-blue-800';
                     if (['queued', 'pending'].includes(normalized)) return 'bg-amber-100 text-amber-800';
                     if (['failed', 'error'].includes(normalized)) return 'bg-red-100 text-red-800';
@@ -1197,11 +1195,11 @@
                 },
 
                 canStopRun(status) {
-                    return ['estimating', 'queued', 'pending', 'running', 'in_progress'].includes((status || '').toLowerCase());
+                    return ['queued', 'pending', 'running', 'in_progress'].includes((status || '').toLowerCase());
                 },
 
                 canDeleteRun(status) {
-                    return !['estimating', 'queued', 'pending', 'running', 'in_progress', 'cancelling'].includes((status || '').toLowerCase());
+                    return !['queued', 'pending', 'running', 'in_progress', 'cancelling'].includes((status || '').toLowerCase());
                 },
 
                 formatBytes(bytes) {
@@ -1236,7 +1234,7 @@
                 },
 
                 isActiveRunStatus(status) {
-                    return ['estimating', 'queued', 'pending', 'running', 'in_progress', 'cancelling'].includes((status || '').toLowerCase());
+                    return ['queued', 'pending', 'running', 'in_progress', 'cancelling'].includes((status || '').toLowerCase());
                 },
 
                 get crawlIsActive() {
@@ -1336,11 +1334,8 @@
                     if (this.engineIsIdle) {
                         return 'Idle';
                     }
-                    if (normalized === 'estimating') {
-                        return 'Pré-estimation';
-                    }
                     if (this.crawlIsActive) {
-                        return this.crawlerRuntime.estimating_total ? 'Estimation' : 'Exploration active';
+                        return 'Exploration active';
                     }
                     if (normalized === 'failed') {
                         return 'Erreur';
@@ -1362,11 +1357,8 @@
                     if (this.engineIsIdle) {
                         return 'bg-slate-100 text-slate-700';
                     }
-                    if (normalized === 'estimating') {
-                        return 'bg-amber-100 text-amber-800';
-                    }
                     if (this.crawlIsActive) {
-                        return this.crawlerRuntime.estimating_total ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800';
+                        return 'bg-emerald-100 text-emerald-800';
                     }
                     if (normalized === 'failed') {
                         return 'bg-red-100 text-red-800';
@@ -1382,11 +1374,8 @@
                     if (this.engineIsIdle) {
                         return 'bg-slate-400';
                     }
-                    if (normalized === 'estimating') {
-                        return 'bg-amber-500';
-                    }
                     if (this.crawlIsActive) {
-                        return this.crawlerRuntime.estimating_total ? 'bg-blue-500' : 'bg-emerald-500';
+                        return 'bg-emerald-500';
                     }
                     if (normalized === 'failed') {
                         return 'bg-red-500';
@@ -1407,14 +1396,8 @@
                 get volumeProgressLabel() {
                     const processed = this.animatedProcessedBytes ?? 0;
                     const discovered = this.animatedDiscoveredBytes ?? 0;
-                    if ((this.crawlOverview.monitoring.latest_run_status || '').toLowerCase() === 'estimating' && !this.crawlIsActive) {
-                        return 'Pré-estimation volumétrique en cours avant lancement de l\'explorateur';
-                    }
                     if (this.engineIsIdle && this.crawlerRuntime.last_activity_at) {
                         return `Dernier signal moteur: ${this.formatDate(this.crawlerRuntime.last_activity_at)}`;
-                    }
-                    if (this.crawlIsActive && this.crawlerRuntime.estimating_total && discovered > 0) {
-                        return `${this.formatBytes(discovered)} déjà inventoriés, ${this.formatBytes(processed)} déjà traités`;
                     }
                     if (this.crawlIsActive && discovered > 0) {
                         return `${this.formatBytes(processed)} explorés sur ${this.formatBytes(discovered)} découverts`;

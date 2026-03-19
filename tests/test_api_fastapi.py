@@ -140,14 +140,14 @@ class DummyDB:
         return item
 
     def start_crawl(self, config_id):
-        if any(run["config_id"] == config_id and run["status"] in {"estimating", "queued", "running", "pending", "in_progress", "cancelling"} for run in self.crawl_runs):
+        if any(run["config_id"] == config_id and run["status"] in {"queued", "running", "pending", "in_progress", "cancelling"} for run in self.crawl_runs):
             raise ValueError("Une exploration est deja active pour cette configuration (queued).")
         if not any(cfg["id"] == config_id for cfg in self.crawl_configs):
             return None
         run = {
             "run_id": f"run-{len(self.crawl_runs) + 1}",
             "config_id": config_id,
-            "status": "estimating",
+            "status": "queued",
             "triggered_at": "2026-03-10T12:05:00+00:00",
         }
         self.crawl_runs.append(run)
@@ -157,7 +157,7 @@ class DummyDB:
         for run in self.crawl_runs:
             if run["run_id"] != run_id:
                 continue
-            if run["status"] in {"estimating", "queued", "pending"}:
+            if run["status"] in {"queued", "pending"}:
                 run["status"] = "cancelled"
             elif run["status"] in {"running", "in_progress"}:
                 run["status"] = "cancelling"
@@ -168,7 +168,7 @@ class DummyDB:
         for index, run in enumerate(self.crawl_runs):
             if run["run_id"] != run_id:
                 continue
-            if run["status"] in {"estimating", "queued", "pending", "running", "in_progress", "cancelling"}:
+            if run["status"] in {"queued", "pending", "running", "in_progress", "cancelling"}:
                 return False
             del self.crawl_runs[index]
             return True
@@ -180,7 +180,7 @@ class DummyDB:
             "total_configs": len(self.crawl_configs),
             "total_runs": len(self.crawl_runs),
             "queued_runs": sum(1 for run in self.crawl_runs if run["status"] == "queued"),
-            "running_runs": sum(1 for run in self.crawl_runs if run["status"] in {"estimating", "running", "in_progress"}),
+            "running_runs": sum(1 for run in self.crawl_runs if run["status"] in {"running", "in_progress"}),
             "completed_runs": sum(1 for run in self.crawl_runs if run["status"] == "completed"),
             "failed_runs": sum(1 for run in self.crawl_runs if run["status"] == "failed"),
             "latest_run_status": latest["status"] if latest else "Aucun run",
@@ -230,7 +230,6 @@ def run_request(method, path, *, params=None, json=None):
 def client(monkeypatch):
     db = DummyDB()
     monkeypatch.setattr(api_main, "get_db_adapter", lambda: db)
-    monkeypatch.setattr(api_main, "run_estimation_before_crawl", lambda run_id: None)
     return run_request
 
 
@@ -240,18 +239,18 @@ def test_health_endpoint(client):
     assert response.json()["status"] == "healthy"
 
 
-def test_extract_runtime_metrics_handles_pre_estimation_phase():
+def test_extract_runtime_metrics_handles_runtime_progress_line():
     metrics = api_main._extract_runtime_metrics(
         [
-            "2026-03-19 13:00:00 - smb_crawler_postgresql - INFO - 🔎 Pré-estimation: 120 fichiers, 15 dossiers | Volume cible=11051758928 octets | Dossiers restants=3 | Durée: 12.0s | Erreurs: 0"
+            "2026-03-19 13:00:00 - smb_crawler_postgresql - INFO - 📊 Progression: 120 fichiers, 15 dossiers, 2 gros fichiers | Queues: Dossiers à explorer=3, Dossiers à indexer=4, Vérification d'intégrité=5, Gros fichiers en attente=1 | Volume cible=11051758928 octets, Volume traité=2048 octets, Volume découvert=4096 octets, Progression volume=0.02%"
         ]
     )
 
-    assert metrics["estimating_total"] is True
     assert metrics["discovered_files"] == 120
     assert metrics["discovered_directories"] == 15
     assert metrics["target_bytes"] == 11051758928
     assert metrics["queue_dirs"] == 3
+    assert metrics["processed_bytes"] == 2048
 
 
 def test_get_files_endpoint(client):
@@ -473,7 +472,7 @@ def test_start_crawl_requires_existing_config(client):
     started = client("POST", "/api/crawls/start", json={"config_id": created["id"]})
     assert started.status_code == 200
     payload = started.json()
-    assert payload['status'] == 'estimating'
+    assert payload['status'] == 'queued'
     assert payload['config_id'] == created['id']
 
     duplicated = client("POST", "/api/crawls/start", json={"config_id": created["id"]})

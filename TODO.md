@@ -5,20 +5,10 @@
 - [ ] **P-01 — Pré-estimation volumétrique avant exploration**
   - Revoir le protocole moteur pour obtenir une estimation la plus fidèle possible du volume total avant exploration.
   - Hypothèse rejetée en exploitation: l'approche `worker Docker éphémère + montage CIFS + du -sb` n'est pas viable dans son état actuel pour un budget opérateur raisonnable; elle ne doit plus être considérée comme cible par défaut.
-  - Décision appliquée dans le code: les nouveaux runs ne déclenchent plus la pré-estimation Docker au lancement; ils repartent directement en `queued` pour laisser la priorité au suivi runtime réel.
-  - Le worker d'estimation doit être isolé du crawler principal, avec les droits minimaux de montage, et s'arrêter dès que l'estimation est renvoyée.
-  - L'API doit piloter la séquence `estimation -> validation du retour -> lancement explorateur`, avec contrôle explicite du cleanup du conteneur temporaire.
-  - Prévoir les fallbacks SMB si le montage n'est pas possible.
-  - État actuel: fallback SMB récursif implémenté avant le crawl avec baseline `Volume cible` exposée au runtime.
-  - Avancement validé: worker `estimate-{hash}` lancé par l'API via le socket Docker, montage CIFS read-only fonctionnel après ajustement des capacités (`SYS_ADMIN`, `DAC_READ_SEARCH`, AppArmor/seccomp relâchés uniquement pour ce worker), logs JSON relus côté API.
-  - Avancement validé en plus: le timeout parasite sur l'attente Docker `/wait` a été allongé; l'API ne coupe plus artificiellement l'estimation après 30 s, et le worker peut rester en exécution réelle au-delà d'une minute.
-  - Dette technique observée en debug: le worker d'estimation doit être robuste à ses outils de diagnostic internes; un heartbeat cassé ne doit ni faire échouer l'estimation, ni empêcher le démontage propre du partage.
-  - Dette de validation restante: confirmer la durée nominale du `du -sb` sur `\\172.16.252.34\Public\SMIDEN\` puis la transition complète `estimating -> queued/running` une fois l'estimation revenue.
-  - Dette de stratégie potentielle: si `du -sb` dépasse durablement le budget opérateur en pré-lancement, prévoir une alternative plus rapide que l'estimation exhaustive synchrone (cache de baseline précédente, estimation partielle, ou lancement différé du crawl avec recalage progressif).
-  - Dette d'exploitation restante: éviter que la suppression d'un run failed depuis l'UI fasse disparaître trop vite la preuve de diagnostic du dernier `estimate-*`; conserver au moins l'erreur d'estimation visible tant que l'opérateur n'a pas confirmé le nettoyage.
-  - Nouveau cap à étudier: privilégier un suivi précis des métriques et logs runtime pendant l'exploration, plutôt qu'une barre de progression fondée sur une pré-estimation volumétrique lente ou fragile.
-  - Reste à faire: documenter le retrait ou la mise en sommeil de la stratégie `du -sb`, définir l'alternative retenue, et réaligner l'UI sur un pilotage par valeurs observées plutôt que par pourcentage estimé.
-  - Revue de schéma à mener: `crawl_runs.estimated_total_size` et les colonnes `estimate_*` sont désormais du legacy; préparer une migration explicite de suppression ou d'archivage une fois le retrait du flux de pré-estimation totalement stabilisé.
+  - Décision appliquée dans le code: les nouveaux runs partent directement en `queued`; le pilotage opérateur repose sur les métriques runtime et le journal réel.
+  - Décision de schéma: les colonnes `estimated_total_size` et `estimate_*` sont retirées de `crawl_runs` sur la base de test; on repart sur une structure minimale cohérente avec le flux réel.
+  - Dette documentaire: archiver l'historique du prototype `estimate-{hash}` dans une note dédiée si l'on veut conserver la trace d'exploitation, mais ne plus le laisser polluer le chemin nominal.
+  - Nouveau cap retenu: privilégier un suivi précis des métriques et logs runtime pendant l'exploration, plutôt qu'une barre de progression fondée sur une pré-estimation volumétrique lente ou fragile.
 
 - [ ] **P-02 — Indicateurs de progression lisibles et fiables**
   - Exploiter les retours actuels du moteur pour des indicateurs de progression fiables.

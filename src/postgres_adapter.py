@@ -448,8 +448,7 @@ class PostgreSQLAdapter:
                     RETURNING
                         r.id::text AS run_id,
                         r.config_id::text AS config_id,
-                        r.triggered_at::text,
-                        r.estimated_total_size
+                        r.triggered_at::text
                     """
                 )
                 run = cursor.fetchone()
@@ -518,7 +517,7 @@ class PostgreSQLAdapter:
                 """
                 UPDATE crawl_runs
                 SET status = 'failed'
-                WHERE LOWER(status) IN ('estimating', 'running', 'in_progress', 'cancelling')
+                WHERE LOWER(status) IN ('running', 'in_progress', 'cancelling')
                 """
             )
             conn.commit()

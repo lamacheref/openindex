@@ -71,28 +71,8 @@ CREATE TABLE IF NOT EXISTS crawl_runs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     config_id UUID NOT NULL REFERENCES crawl_configs(id) ON DELETE CASCADE,
     status TEXT NOT NULL DEFAULT 'queued',
-    triggered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    estimated_total_size BIGINT,
-    estimate_container_name TEXT,
-    estimate_error TEXT,
-    estimate_started_at TIMESTAMP WITH TIME ZONE,
-    estimate_completed_at TIMESTAMP WITH TIME ZONE
+    triggered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
-
-ALTER TABLE crawl_runs
-ADD COLUMN IF NOT EXISTS estimated_total_size BIGINT;
-
-ALTER TABLE crawl_runs
-ADD COLUMN IF NOT EXISTS estimate_container_name TEXT;
-
-ALTER TABLE crawl_runs
-ADD COLUMN IF NOT EXISTS estimate_error TEXT;
-
-ALTER TABLE crawl_runs
-ADD COLUMN IF NOT EXISTS estimate_started_at TIMESTAMP WITH TIME ZONE;
-
-ALTER TABLE crawl_runs
-ADD COLUMN IF NOT EXISTS estimate_completed_at TIMESTAMP WITH TIME ZONE;
 
 ALTER TABLE files
 ADD COLUMN IF NOT EXISTS crawl_config_id UUID REFERENCES crawl_configs(id) ON DELETE SET NULL;

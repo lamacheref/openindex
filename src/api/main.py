@@ -9,16 +9,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import asyncio
-import json
 import logging
 import os
 import re
-import socket
 from contextlib import contextmanager
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
-from uuid import uuid4
 try:
     from src.versioning import get_current_version
 except ModuleNotFoundError:  # pragma: no cover
@@ -210,7 +207,6 @@ class CrawlerRuntime(BaseModel):
     discovered_directories: int = 0
     large_files_detected: int = 0
     large_files_bytes: int = 0
-    estimating_total: bool = False
     progress_hint: str = ""
     last_activity_at: Optional[str] = None
     progress_indicators: List[ProgressIndicator]
@@ -220,171 +216,6 @@ class CrawlerRuntime(BaseModel):
 
 
 STALE_RUN_TIMEOUT_SECONDS = int(os.getenv("OPENINDEX_CRAWLER_STALE_TIMEOUT_SECONDS", "1200"))
-DOCKER_SOCKET_PATH = os.getenv("OPENINDEX_DOCKER_SOCKET_PATH", "/var/run/docker.sock")
-ESTIMATE_WORKER_IMAGE = os.getenv("OPENINDEX_ESTIMATE_WORKER_IMAGE", "openindex-estimate-worker:local")
-ESTIMATE_CONTAINER_PREFIX = os.getenv("OPENINDEX_ESTIMATE_CONTAINER_PREFIX", "estimate")
-ESTIMATE_MOUNT_BASE = os.getenv("OPENINDEX_ESTIMATE_MOUNT_BASE", "/mnt")
-DOCKER_SOCKET_TIMEOUT_SECONDS = int(os.getenv("OPENINDEX_DOCKER_SOCKET_TIMEOUT_SECONDS", "30"))
-ESTIMATE_WAIT_TIMEOUT_SECONDS = int(os.getenv("OPENINDEX_ESTIMATE_WAIT_TIMEOUT_SECONDS", "3600"))
-
-
-class DockerSocketError(RuntimeError):
-    pass
-
-
-class DockerSocketClient:
-    def __init__(self, socket_path: str):
-        self.socket_path = socket_path
-
-    def _request(
-        self,
-        method: str,
-        path: str,
-        body: Optional[Dict[str, Any]] = None,
-        expected_statuses: Optional[List[int]] = None,
-        timeout_seconds: Optional[int] = None,
-    ) -> Any:
-        expected_statuses = expected_statuses or [200, 201, 204]
-        payload = b""
-        headers = ["Host: docker", "Connection: close"]
-        if body is not None:
-            payload = json.dumps(body).encode("utf-8")
-            headers.extend(
-                [
-                    "Content-Type: application/json",
-                    f"Content-Length: {len(payload)}",
-                ]
-            )
-        request_bytes = (
-            f"{method} {path} HTTP/1.1\r\n" + "\r\n".join(headers) + "\r\n\r\n"
-        ).encode("utf-8") + payload
-
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.settimeout(timeout_seconds or DOCKER_SOCKET_TIMEOUT_SECONDS)
-        try:
-            sock.connect(self.socket_path)
-            sock.sendall(request_bytes)
-            response = bytearray()
-            while True:
-                chunk = sock.recv(65536)
-                if not chunk:
-                    break
-                response.extend(chunk)
-        finally:
-            sock.close()
-
-        header_bytes, _, body_bytes = response.partition(b"\r\n\r\n")
-        header_lines = header_bytes.decode("utf-8", errors="replace").split("\r\n")
-        if not header_lines:
-            raise DockerSocketError("Réponse Docker vide")
-        status_parts = header_lines[0].split(" ", 2)
-        status_code = int(status_parts[1])
-        if status_code not in expected_statuses:
-            error_body = body_bytes.decode("utf-8", errors="replace").strip()
-            raise DockerSocketError(f"Docker API {status_code}: {error_body or status_parts[-1]}")
-
-        transfer_encoding = ""
-        if not body_bytes:
-            return None
-
-        decoded = body_bytes.decode("utf-8", errors="replace")
-        content_type = ""
-        for line in header_lines[1:]:
-            if line.lower().startswith("content-type:"):
-                content_type = line.split(":", 1)[1].strip().lower()
-            if line.lower().startswith("transfer-encoding:"):
-                transfer_encoding = line.split(":", 1)[1].strip().lower()
-
-        if transfer_encoding == "chunked":
-            body_bytes = self._decode_chunked_body(body_bytes)
-            decoded = body_bytes.decode("utf-8", errors="replace")
-
-        if "application/json" in content_type:
-            return json.loads(decoded)
-        return decoded
-
-    def _decode_chunked_body(self, body_bytes: bytes) -> bytes:
-        decoded = bytearray()
-        cursor = 0
-        total_length = len(body_bytes)
-
-        while cursor < total_length:
-            line_end = body_bytes.find(b"\r\n", cursor)
-            if line_end == -1:
-                break
-            chunk_size_hex = body_bytes[cursor:line_end].decode("utf-8", errors="replace").strip()
-            chunk_size = int(chunk_size_hex or "0", 16)
-            cursor = line_end + 2
-            if chunk_size == 0:
-                break
-            decoded.extend(body_bytes[cursor:cursor + chunk_size])
-            cursor += chunk_size + 2
-
-        return bytes(decoded)
-
-    def ensure_image_available(self, image_name: str) -> None:
-        self._request("GET", f"/images/{image_name}/json", expected_statuses=[200])
-
-    def remove_container(self, container_name: str, force: bool = False) -> None:
-        try:
-            self._request(
-                "DELETE",
-                f"/containers/{container_name}?force={'1' if force else '0'}",
-                expected_statuses=[204, 404],
-            )
-        except DockerSocketError:
-            return
-
-    def create_container(self, container_name: str, payload: Dict[str, Any]) -> str:
-        response = self._request(
-            "POST",
-            f"/containers/create?name={container_name}",
-            body=payload,
-            expected_statuses=[201],
-        )
-        return response["Id"]
-
-    def start_container(self, container_id: str) -> None:
-        self._request("POST", f"/containers/{container_id}/start", expected_statuses=[204])
-
-    def wait_container(self, container_id: str) -> Dict[str, Any]:
-        return self._request(
-            "POST",
-            f"/containers/{container_id}/wait?condition=not-running",
-            expected_statuses=[200],
-            timeout_seconds=ESTIMATE_WAIT_TIMEOUT_SECONDS,
-        )
-
-    def get_logs(self, container_id: str) -> str:
-        logs = self._request(
-            "GET",
-            f"/containers/{container_id}/logs?stdout=1&stderr=1",
-            expected_statuses=[200],
-        )
-        return logs or ""
-
-    def kill_container(self, container_name: str) -> None:
-        self._request(
-            "POST",
-            f"/containers/{container_name}/kill",
-            expected_statuses=[204, 404, 409],
-        )
-
-
-def build_estimate_container_name(run_id: str) -> str:
-    return f"{ESTIMATE_CONTAINER_PREFIX}-{run_id.replace('-', '')[:12]}"
-
-
-def extract_json_line(raw_logs: str) -> Optional[Dict[str, Any]]:
-    for line in reversed((raw_logs or "").splitlines()):
-        line = line.strip()
-        if not line.startswith("{"):
-            continue
-        try:
-            return json.loads(line)
-        except json.JSONDecodeError:
-            continue
-    return None
 
 
 def extract_space_prefix(path: str) -> Optional[str]:
@@ -564,20 +395,10 @@ class PostgreSQLAdapter:
                 id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
                 config_id UUID NOT NULL REFERENCES crawl_configs(id) ON DELETE CASCADE,
                 status TEXT NOT NULL DEFAULT 'queued',
-                triggered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                estimated_total_size BIGINT,
-                estimate_container_name TEXT,
-                estimate_error TEXT,
-                estimate_started_at TIMESTAMP WITH TIME ZONE,
-                estimate_completed_at TIMESTAMP WITH TIME ZONE
+                triggered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
             """,
             "CREATE INDEX IF NOT EXISTS idx_crawl_runs_triggered_at ON crawl_runs(triggered_at)",
-            "ALTER TABLE crawl_runs ADD COLUMN IF NOT EXISTS estimated_total_size BIGINT",
-            "ALTER TABLE crawl_runs ADD COLUMN IF NOT EXISTS estimate_container_name TEXT",
-            "ALTER TABLE crawl_runs ADD COLUMN IF NOT EXISTS estimate_error TEXT",
-            "ALTER TABLE crawl_runs ADD COLUMN IF NOT EXISTS estimate_started_at TIMESTAMP WITH TIME ZONE",
-            "ALTER TABLE crawl_runs ADD COLUMN IF NOT EXISTS estimate_completed_at TIMESTAMP WITH TIME ZONE",
             """
             ALTER TABLE files
             ADD COLUMN IF NOT EXISTS crawl_config_id UUID REFERENCES crawl_configs(id) ON DELETE SET NULL
@@ -682,7 +503,7 @@ class PostgreSQLAdapter:
             SELECT id::text, status
             FROM crawl_runs
             WHERE config_id::text = %s
-              AND LOWER(status) IN ('estimating', 'queued', 'pending', 'running', 'in_progress', 'cancelling')
+              AND LOWER(status) IN ('queued', 'pending', 'running', 'in_progress', 'cancelling')
             ORDER BY triggered_at DESC
             LIMIT 1
             """,
@@ -724,8 +545,6 @@ class PostgreSQLAdapter:
                 r.config_id::text,
                 r.status,
                 r.triggered_at::text,
-                r.estimated_total_size,
-                r.estimate_container_name,
                 c.name,
                 c.domain_zone,
                 c.start_path,
@@ -747,63 +566,13 @@ class PostgreSQLAdapter:
             "config_id": row[1],
             "status": row[2],
             "triggered_at": row[3],
-            "estimated_total_size": row[4],
-            "estimate_container_name": row[5],
-            "name": row[6],
-            "domain_zone": row[7],
-            "start_path": row[8],
-            "connection_username": row[9],
-            "connection_password": row[10],
-            "connection_domain": row[11],
+            "name": row[4],
+            "domain_zone": row[5],
+            "start_path": row[6],
+            "connection_username": row[7],
+            "connection_password": row[8],
+            "connection_domain": row[9],
         }
-
-    def mark_run_estimation_started(self, run_id: str, container_name: str) -> None:
-        with self.get_connection() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    """
-                    UPDATE crawl_runs
-                    SET status = 'estimating',
-                        estimate_container_name = %s,
-                        estimate_error = NULL,
-                        estimate_started_at = CURRENT_TIMESTAMP,
-                        estimate_completed_at = NULL
-                    WHERE id::text = %s
-                    """,
-                    [container_name, run_id],
-                )
-            conn.commit()
-
-    def complete_run_estimation(self, run_id: str, estimated_total_size: int) -> None:
-        with self.get_connection() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    """
-                    UPDATE crawl_runs
-                    SET status = 'queued',
-                        estimated_total_size = %s,
-                        estimate_error = NULL,
-                        estimate_completed_at = CURRENT_TIMESTAMP
-                    WHERE id::text = %s
-                    """,
-                    [estimated_total_size, run_id],
-                )
-            conn.commit()
-
-    def fail_run_estimation(self, run_id: str, error_message: str) -> None:
-        with self.get_connection() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    """
-                    UPDATE crawl_runs
-                    SET status = 'failed',
-                        estimate_error = %s,
-                        estimate_completed_at = CURRENT_TIMESTAMP
-                    WHERE id::text = %s
-                    """,
-                    [error_message[:2000], run_id],
-                )
-            conn.commit()
 
     def request_stop_run(self, run_id: str) -> Optional[Dict[str, Any]]:
         with self.get_connection() as conn:
@@ -812,13 +581,12 @@ class PostgreSQLAdapter:
                     """
                     UPDATE crawl_runs
                     SET status = CASE
-                        WHEN LOWER(status) = 'estimating' THEN 'cancelled'
                         WHEN LOWER(status) IN ('queued', 'pending') THEN 'cancelled'
                         WHEN LOWER(status) IN ('running', 'in_progress') THEN 'cancelling'
                         ELSE status
                     END
                     WHERE id::text = %s
-                    RETURNING id::text, status, estimate_container_name
+                    RETURNING id::text, status
                     """,
                     [run_id],
                 )
@@ -827,7 +595,7 @@ class PostgreSQLAdapter:
 
         if not row:
             return None
-        return {"run_id": row[0], "status": row[1], "estimate_container_name": row[2]}
+        return {"run_id": row[0], "status": row[1]}
 
     def delete_run(self, run_id: str) -> bool:
         with self.get_connection() as conn:
@@ -836,7 +604,7 @@ class PostgreSQLAdapter:
                     """
                     DELETE FROM crawl_runs
                     WHERE id::text = %s
-                      AND LOWER(status) NOT IN ('estimating', 'running', 'in_progress', 'cancelling')
+                      AND LOWER(status) NOT IN ('running', 'in_progress', 'cancelling')
                     RETURNING id::text
                     """,
                     [run_id],
@@ -852,7 +620,7 @@ class PostgreSQLAdapter:
                     """
                     UPDATE crawl_runs
                     SET status = 'failed'
-                    WHERE LOWER(status) IN ('estimating', 'running', 'in_progress', 'cancelling')
+                    WHERE LOWER(status) IN ('running', 'in_progress', 'cancelling')
                     """
                 )
                 updated = cursor.rowcount or 0
@@ -893,8 +661,7 @@ class PostgreSQLAdapter:
         )
         failed_runs = status_counts.get("failed", 0) + status_counts.get("error", 0)
         running_runs = (
-            status_counts.get("estimating", 0)
-            + status_counts.get("running", 0)
+            status_counts.get("running", 0)
             + status_counts.get("in_progress", 0)
         )
         queued_runs = status_counts.get("queued", 0) + status_counts.get("pending", 0)
@@ -1047,12 +814,6 @@ EXPLAIN_QUERIES = {
         FROM files
     """,
 }
-
-CRAWL_CONFIGS: List[Dict[str, Any]] = []
-CRAWL_RUNS: List[Dict[str, Any]] = []
-
-
-
 
 @app.get("/health")
 async def health_check():
@@ -1277,14 +1038,6 @@ PROGRESS_RE = re.compile(
     re.IGNORECASE,
 )
 
-PRE_ESTIMATION_RE = re.compile(
-    r"Pré-estimation:\s*(?P<files>\d+)\s*fichiers,\s*"
-    r"(?P<dirs>\d+)\s*dossiers\s*\|\s*"
-    r"Volume cible=(?P<target_bytes>\d+)\s*octets\s*\|\s*"
-    r"Dossiers restants=(?P<remaining_dirs>\d+)",
-    re.IGNORECASE,
-)
-
 LOG_TIMESTAMP_RE = re.compile(r"^(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})")
 LARGE_FILE_RE = re.compile(r"Gros fichier détecté: .*?\((?P<size>[\d,]+) bytes\)")
 
@@ -1355,30 +1108,8 @@ def _extract_runtime_metrics(log_lines: List[str]) -> Dict[str, Any]:
             "queue_files": queue_files,
             "queue_checksums": queue_checksums,
             "queue_large": queue_large,
-            "estimating_total": False,
             "progress_percent": float(match.group("progress_percent")),
             "progress_hint": "Le volume cible est stabilisé. La progression reflète maintenant le traitement restant.",
-        }
-
-    for line in reversed(log_lines):
-        match = PRE_ESTIMATION_RE.search(line)
-        if not match:
-            continue
-        target_bytes = int(match.group("target_bytes"))
-        return {
-            "discovered_files": int(match.group("files")),
-            "discovered_directories": int(match.group("dirs")),
-            "large_files_detected": 0,
-            "processed_bytes": 0,
-            "discovered_bytes": target_bytes,
-            "target_bytes": target_bytes,
-            "queue_dirs": int(match.group("remaining_dirs")),
-            "queue_files": 0,
-            "queue_checksums": 0,
-            "queue_large": 0,
-            "estimating_total": True,
-            "progress_percent": None,
-            "progress_hint": "Pré-estimation du volume global en cours avant démarrage du crawl principal.",
         }
     return {
         "discovered_files": 0,
@@ -1392,7 +1123,6 @@ def _extract_runtime_metrics(log_lines: List[str]) -> Dict[str, Any]:
         "queue_files": 0,
         "queue_checksums": 0,
         "queue_large": 0,
-        "estimating_total": False,
         "progress_percent": None,
         "progress_hint": "Aucune exploration active.",
         "last_activity_at": None,
@@ -1418,7 +1148,7 @@ def _format_volume_compact(bytes_value: int) -> str:
 
 def _extract_last_progress_timestamp(log_lines: List[str]) -> Optional[datetime]:
     for line in reversed(log_lines):
-        if not (PROGRESS_RE.search(line) or PRE_ESTIMATION_RE.search(line)):
+        if not PROGRESS_RE.search(line):
             continue
         match = LOG_TIMESTAMP_RE.match(line)
         if not match:
@@ -1486,78 +1216,6 @@ def _slice_current_run_log_lines(raw_log_lines: List[str]) -> List[str]:
     return raw_log_lines[last_run_start_index:]
 
 
-def _run_estimation_in_container(run_details: Dict[str, Any], container_name: str) -> Dict[str, Any]:
-    docker_client = DockerSocketClient(DOCKER_SOCKET_PATH)
-    docker_client.ensure_image_available(ESTIMATE_WORKER_IMAGE)
-    docker_client.remove_container(container_name, force=True)
-
-    payload = {
-        "Image": ESTIMATE_WORKER_IMAGE,
-        "Tty": True,
-        "Env": [
-            f"OPENINDEX_RUN_ID={run_details['run_id']}",
-            f"OPENINDEX_START_PATH={run_details['start_path']}",
-            f"OPENINDEX_SMB_USERNAME={run_details['connection_username']}",
-            f"OPENINDEX_SMB_PASSWORD={run_details['connection_password']}",
-            f"OPENINDEX_SMB_DOMAIN={run_details.get('connection_domain') or ''}",
-            f"OPENINDEX_ESTIMATE_MOUNT_BASE={ESTIMATE_MOUNT_BASE}",
-        ],
-        "HostConfig": {
-            "CapAdd": ["SYS_ADMIN", "DAC_READ_SEARCH"],
-            "SecurityOpt": ["apparmor:unconfined", "seccomp:unconfined"],
-        },
-    }
-    container_id = docker_client.create_container(container_name, payload)
-    try:
-        docker_client.start_container(container_id)
-        wait_result = docker_client.wait_container(container_id)
-        raw_logs = docker_client.get_logs(container_id)
-    finally:
-        docker_client.remove_container(container_name, force=True)
-
-    exit_code = int(wait_result.get("StatusCode", 1))
-    json_result = extract_json_line(raw_logs)
-    if exit_code != 0:
-        error_message = (json_result or {}).get("error") or raw_logs.strip() or "Estimation échouée"
-        raise RuntimeError(error_message)
-    if not json_result or json_result.get("status") != "ok":
-        raise RuntimeError("Résultat d'estimation introuvable dans les logs du worker")
-    estimated_total_size = int(json_result.get("estimated_total_size") or 0)
-    if estimated_total_size <= 0:
-        raise RuntimeError("Estimation volumétrique invalide ou nulle")
-    return json_result
-
-
-def run_estimation_before_crawl(run_id: str) -> None:
-    db = get_db_adapter()
-    run_details = db.get_crawl_run_details(run_id)
-    if not run_details:
-        logger.error("Run introuvable pour estimation: %s", run_id)
-        return
-
-    if (run_details.get("status") or "").lower() != "estimating":
-        logger.info("Run %s ignore pour estimation, statut=%s", run_id, run_details.get("status"))
-        return
-
-    container_name = build_estimate_container_name(run_id)
-    db.mark_run_estimation_started(run_id, container_name)
-    try:
-        result = _run_estimation_in_container(run_details, container_name)
-        refreshed_run = db.get_crawl_run_details(run_id)
-        if not refreshed_run or (refreshed_run.get("status") or "").lower() != "estimating":
-            logger.info("Run %s non queue apres estimation, statut courant=%s", run_id, refreshed_run.get("status") if refreshed_run else "missing")
-            return
-        db.complete_run_estimation(run_id, int(result["estimated_total_size"]))
-        logger.info(
-            "Pré-estimation terminée pour %s: %s octets",
-            run_id,
-            result["estimated_total_size"],
-        )
-    except Exception as exc:
-        logger.error("Échec de la pré-estimation pour %s: %s", run_id, exc)
-        db.fail_run_estimation(run_id, str(exc))
-
-
 @app.get("/api/crawl-configs", response_model=List[CrawlConfigPublic])
 async def list_crawl_configs():
     try:
@@ -1607,13 +1265,6 @@ async def stop_crawl_run(run_id: str):
         result = db.request_stop_run(run_id)
         if not result:
             raise HTTPException(status_code=404, detail="Run d'exploration introuvable")
-        if result.get("estimate_container_name"):
-            try:
-                docker_client = DockerSocketClient(DOCKER_SOCKET_PATH)
-                docker_client.kill_container(result["estimate_container_name"])
-                docker_client.remove_container(result["estimate_container_name"], force=True)
-            except Exception as exc:
-                logger.warning("Impossible d'interrompre le worker d'estimation %s: %s", result["estimate_container_name"], exc)
         return CrawlRunActionResult(**result)
     except HTTPException:
         raise
@@ -1800,7 +1451,6 @@ async def get_crawler_runtime(log_limit: int = 80):
             discovered_directories=runtime_metrics["discovered_directories"],
             large_files_detected=large_file_metrics["count"] or runtime_metrics["large_files_detected"],
             large_files_bytes=large_file_metrics["bytes"],
-            estimating_total=runtime_metrics["estimating_total"],
             progress_hint=(
                 "Aucun signal moteur récent. Le run paraît idle et doit être vérifié."
                 if idle
