@@ -44,6 +44,7 @@
   - Rendre le fuseau d'affichage configurable dans l'interface via l'engrenage.
   - Afficher les dates de build et d'exécution dans le fuseau choisi.
   - Livré via le commit `1a2407a`.
+  - Dette mineure restante: le flux WebSocket API peut encore journaliser `Cannot call "send" once a close message has been sent.` quand un client se déconnecte; fiabiliser la purge des connexions fermées.
 
 ## Objectif
 
