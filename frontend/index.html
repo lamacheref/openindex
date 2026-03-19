@@ -147,15 +147,14 @@
                     <p class="mt-1 text-xs text-slate-500" x-text="latestRunDateLabel"></p>
                 </section>
 
-                <section class="card p-5">
-                    <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">État de l'exploration</p>
-                    <div class="mt-3 flex items-center justify-between">
+                <section class="card p-5 transition-colors" :class="engineStatusCardClass">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.22em]" :class="engineStatusCardLabelClass">État de l'exploration</p>
+                    <div class="mt-3">
                         <span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium"
                               :class="engineStatusBadgeClass">
                             <span class="h-2.5 w-2.5 rounded-full" :class="engineStatusDotClass"></span>
                             <span x-text="engineStatusLabel"></span>
                         </span>
-                        <span class="text-xs text-slate-500" x-text="wsConnected ? 'WebSocket actif' : 'WebSocket hors ligne'"></span>
                     </div>
                 </section>
 
@@ -257,11 +256,6 @@
                                 <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Avancement de l'exploration</p>
                                 <div class="mt-2 flex flex-wrap items-center gap-3">
                                     <h3 class="text-xl font-semibold">Pilotage de l'exploration</h3>
-                                    <span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium"
-                                          :class="engineStatusBadgeClass">
-                                        <span class="h-2.5 w-2.5 rounded-full" :class="engineStatusDotClass"></span>
-                                        <span x-text="engineStatusLabel"></span>
-                                    </span>
                                 </div>
                             </div>
                             <div class="flex flex-wrap gap-3">
@@ -1425,6 +1419,40 @@
                         return 'bg-blue-100 text-blue-800';
                     }
                     return 'bg-slate-100 text-slate-700';
+                },
+
+                get engineStatusCardClass() {
+                    const normalized = (this.crawlOverview.monitoring.latest_run_status || '').toLowerCase();
+                    if (this.engineIsIdle) {
+                        return 'border-slate-200 bg-slate-50';
+                    }
+                    if (this.crawlIsActive) {
+                        return 'border-emerald-200 bg-emerald-50';
+                    }
+                    if (normalized === 'failed') {
+                        return 'border-red-200 bg-red-50';
+                    }
+                    if (['queued', 'pending'].includes(normalized)) {
+                        return 'border-blue-200 bg-blue-50';
+                    }
+                    return 'border-slate-200 bg-slate-50';
+                },
+
+                get engineStatusCardLabelClass() {
+                    const normalized = (this.crawlOverview.monitoring.latest_run_status || '').toLowerCase();
+                    if (this.engineIsIdle) {
+                        return 'text-slate-500';
+                    }
+                    if (this.crawlIsActive) {
+                        return 'text-emerald-700';
+                    }
+                    if (normalized === 'failed') {
+                        return 'text-red-700';
+                    }
+                    if (['queued', 'pending'].includes(normalized)) {
+                        return 'text-blue-700';
+                    }
+                    return 'text-slate-500';
                 },
 
                 get engineStatusDotClass() {
