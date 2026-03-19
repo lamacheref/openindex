@@ -275,25 +275,22 @@
                             </div>
                         </div>
 
-                        <div class="mt-6">
-                            <div class="flex items-center justify-between text-sm">
-                                <span class="text-slate-600" x-text="crawlerRuntime.estimating_total ? 'Estimation initiale' : 'Progression actuelle'"></span>
-                                <span class="font-semibold"
-                                      :class="crawlerRuntime.estimating_total ? 'text-amber-700' : 'text-teal-800'"
-                                      x-text="crawlerRuntime.estimating_total ? 'Volume en cours d\\'estimation' : `${effectiveProgressPercent}%`"></span>
+                        <div class="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(18rem,0.7fr)]">
+                            <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                                <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Signal runtime</p>
+                                <p class="mt-3 text-base font-semibold text-slate-900" x-text="volumeProgressLabel"></p>
+                                <p class="mt-2 text-sm text-slate-500" x-text="crawlerRuntime.progress_hint || 'Suivi détaillé via les métriques et le journal runtime.'"></p>
                             </div>
-                            <div class="mt-2 h-4 overflow-hidden rounded-full bg-slate-200">
-                                <div class="h-4 rounded-full transition-all duration-500"
-                                     :class="crawlerRuntime.estimating_total ? 'bg-gradient-to-r from-amber-500 via-orange-400 to-amber-500 animate-pulse' : 'bg-gradient-to-r from-teal-700 to-emerald-500'"
-                                     :style="crawlerRuntime.estimating_total ? 'width: 100%' : `width: ${effectiveProgressPercent}%`"></div>
-                            </div>
-                            <p class="mt-1 text-sm text-slate-600" x-text="volumeProgressLabel"></p>
-                            <div class="mt-3">
-                                <button @click="showCrawlerLogs = !showCrawlerLogs"
-                                        :disabled="!engineHasRunningRun"
-                                        class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
-                                    Voir les logs
-                                </button>
+                            <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                                <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Journal runtime</p>
+                                <p class="mt-3 text-sm text-slate-600">Le suivi précis passe par les compteurs exposés et les lignes de log réelles, sans barre de progression volumétrique.</p>
+                                <div class="mt-3">
+                                    <button @click="showCrawlerLogs = !showCrawlerLogs"
+                                            :disabled="!engineHasRunningRun"
+                                            class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
+                                        Voir les logs
+                                    </button>
+                                </div>
                             </div>
                         </div>
 

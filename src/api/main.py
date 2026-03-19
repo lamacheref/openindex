@@ -3,7 +3,7 @@ API FastAPI pour OpenIndex
 Backend moderne avec WebSocket et monitoring temps réel
 """
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -695,7 +695,7 @@ class PostgreSQLAdapter:
 
         query = """
             INSERT INTO crawl_runs (config_id, status)
-            SELECT id, 'estimating'
+            SELECT id, 'queued'
             FROM crawl_configs
             WHERE id::text = %s
             RETURNING id::text, config_id::text, status, triggered_at::text
@@ -1582,14 +1582,13 @@ async def create_crawl_config(payload: CrawlConfigCreate):
 
 
 @app.post("/api/crawls/start", response_model=CrawlRun)
-async def start_crawl(payload: CrawlStartRequest, background_tasks: BackgroundTasks):
+async def start_crawl(payload: CrawlStartRequest):
     try:
         db = get_db_adapter()
         ensure_crawl_storage_ready(db)
         run = db.start_crawl(payload.config_id)
         if not run:
             raise HTTPException(status_code=404, detail="Configuration d'exploration introuvable")
-        background_tasks.add_task(run_estimation_before_crawl, run["run_id"])
         return CrawlRun(**run)
     except HTTPException:
         raise

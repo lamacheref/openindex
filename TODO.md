@@ -4,7 +4,8 @@
 
 - [ ] **P-01 — Pré-estimation volumétrique avant exploration**
   - Revoir le protocole moteur pour obtenir une estimation la plus fidèle possible du volume total avant exploration.
-  - Priorité cible: worker Docker éphémère `estimate-{hash_du_run}` lancé par l'API, montage CIFS temporaire read-only dans le conteneur, puis `du -sb`, selon `docs/operations/CRAWL_PRE_ESTIMATION_PROTOCOL.md`.
+  - Hypothèse rejetée en exploitation: l'approche `worker Docker éphémère + montage CIFS + du -sb` n'est pas viable dans son état actuel pour un budget opérateur raisonnable; elle ne doit plus être considérée comme cible par défaut.
+  - Décision appliquée dans le code: les nouveaux runs ne déclenchent plus la pré-estimation Docker au lancement; ils repartent directement en `queued` pour laisser la priorité au suivi runtime réel.
   - Le worker d'estimation doit être isolé du crawler principal, avec les droits minimaux de montage, et s'arrêter dès que l'estimation est renvoyée.
   - L'API doit piloter la séquence `estimation -> validation du retour -> lancement explorateur`, avec contrôle explicite du cleanup du conteneur temporaire.
   - Prévoir les fallbacks SMB si le montage n'est pas possible.
@@ -15,7 +16,8 @@
   - Dette de validation restante: confirmer la durée nominale du `du -sb` sur `\\172.16.252.34\Public\SMIDEN\` puis la transition complète `estimating -> queued/running` une fois l'estimation revenue.
   - Dette de stratégie potentielle: si `du -sb` dépasse durablement le budget opérateur en pré-lancement, prévoir une alternative plus rapide que l'estimation exhaustive synchrone (cache de baseline précédente, estimation partielle, ou lancement différé du crawl avec recalage progressif).
   - Dette d'exploitation restante: éviter que la suppression d'un run failed depuis l'UI fasse disparaître trop vite la preuve de diagnostic du dernier `estimate-*`; conserver au moins l'erreur d'estimation visible tant que l'opérateur n'a pas confirmé le nettoyage.
-  - Reste à faire: finaliser la preuve opératoire complète `estimating -> queued/running`, valider le cleanup robuste des workers `estimate-*` en fin normale et documenter le protocole de diagnostic associé.
+  - Nouveau cap à étudier: privilégier un suivi précis des métriques et logs runtime pendant l'exploration, plutôt qu'une barre de progression fondée sur une pré-estimation volumétrique lente ou fragile.
+  - Reste à faire: documenter le retrait ou la mise en sommeil de la stratégie `du -sb`, définir l'alternative retenue, et réaligner l'UI sur un pilotage par valeurs observées plutôt que par pourcentage estimé.
 
 - [ ] **P-02 — Indicateurs de progression lisibles et fiables**
   - Exploiter les retours actuels du moteur pour des indicateurs de progression fiables.
