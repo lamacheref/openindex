@@ -41,10 +41,13 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
   - Livré le `2026-03-19` via `docs/artifacts/j4_recrawl_live_snapshot_2026-03-19.json`: volumétrie réelle observée, découverte stabilisée, `0` erreur bloquante et rapport J4/Go-No-Go révisés.
   - La completion totale du traitement d'intégrité n'est plus portée comme bloqueur J4; elle est transférée au cycle J5 avec nouveaux tests dédiés.
 
-- [ ] **T-05 — Validation de performance PostgreSQL sur base recrawlée**
+- [x] **T-05 — Validation de performance PostgreSQL sur base recrawlée**
   - Rejouer le benchmark PostgreSQL sur endpoints critiques après le recrawl complet de référence.
   - Vérifier le respect des seuils P95 annoncés avec PostgreSQL.
   - Publier les résultats dans `docs/` avec conclusion explicite (OK / NOK) sur la base active PostgreSQL.
+  - Commande exécutée : `docker compose exec api python /app/scripts/benchmark_dual_db.py --base-url http://localhost:8000 --samples 30 --runs 3 --output /tmp/bench_postgresql_active_2026-03-26.json`
+  - Artefacts : `docs/artifacts/bench_postgresql_active_2026-03-26.json`, `docs/bench_postgresql_active_2026-03-26.md`
+  - Conclusion : P95 `/api/stats` ≈ 56 ms / `/api/files` ≈ 66 ms stable sur les trois runs ⇒ OK.
 
 - [ ] **T-06 — Durcir la CI PostgreSQL de référence**
   - Rendre obligatoire le passage des jobs CI PostgreSQL avant merge.
