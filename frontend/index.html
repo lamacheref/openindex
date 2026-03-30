@@ -432,27 +432,201 @@
 
                 <div x-show="currentView === 'fileExplorer'" class="fade-in">
                     <div class="pt-2">
-                        <h2 class="text-3xl font-bold tracking-tight">Explorateur de fichiers</h2>
-                    </div>
-                    <div class="mt-6 grid grid-cols-1 gap-5 xl:grid-cols-[1fr_auto_1fr]">
-                        <div class="card min-h-[28rem] p-6">
-                            <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Panneau source</p>
-                            <div class="mt-4 flex h-[22rem] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-8 text-center text-sm text-slate-500">
-                                Vue arborescente source à implémenter.
+                        <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                            <div>
+                                <h2 class="text-3xl font-bold tracking-tight">Explorateur de fichiers</h2>
+                                <p class="mt-2 text-sm text-slate-500">Classement manuel entre l’espace SMB actif et un espace d’archivage déjà configuré.</p>
+                            </div>
+                            <div class="flex flex-wrap gap-3">
+                                <button @click="refreshExplorerPanels()" class="rounded-2xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-800">
+                                    <i class="fas fa-rotate mr-2"></i>Rafraîchir les panneaux
+                                </button>
                             </div>
                         </div>
-                        <div class="flex flex-col items-center justify-center gap-3">
-                            <button class="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                                <i class="fas fa-arrow-right"></i>
-                            </button>
-                            <button class="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                                <i class="fas fa-arrow-left"></i>
-                            </button>
+                    </div>
+                    <div class="mt-6 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_20rem_minmax(0,1fr)]">
+                        <div class="card min-h-[34rem] p-6">
+                            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                <div>
+                                    <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Panneau source</p>
+                                    <h3 class="mt-2 text-lg font-semibold" x-text="fileExplorer.source.rootLabel || 'Espace source'"></h3>
+                                    <p class="mt-1 break-all text-xs text-slate-500" x-text="fileExplorer.source.currentPath || 'Aucun chemin actif'"></p>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button @click="goToExplorerParent('source')"
+                                            :disabled="!canGoToParent('source')"
+                                            class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
+                                        <i class="fas fa-arrow-up mr-2"></i>Parent
+                                    </button>
+                                    <button @click="refreshExplorerPanel('source')"
+                                            class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                                        <i class="fas fa-rotate"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="mt-4 flex flex-wrap gap-2">
+                                <template x-for="crumb in explorerBreadcrumbs('source')" :key="crumb.path">
+                                    <button @click="openExplorerPath('source', crumb.path)"
+                                            class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                                            x-text="crumb.label"></button>
+                                </template>
+                            </div>
+                            <div x-show="fileExplorer.source.error" class="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" x-text="fileExplorer.source.error"></div>
+                            <div class="mt-4 overflow-hidden rounded-2xl border border-slate-200">
+                                <div class="grid grid-cols-[minmax(0,1fr)_7rem_11rem] bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                                    <span>Nom</span>
+                                    <span>Taille</span>
+                                    <span>Modifié le</span>
+                                </div>
+                                <div x-show="fileExplorer.source.loading" class="flex h-[26rem] items-center justify-center bg-white">
+                                    <div class="loading"></div>
+                                </div>
+                                <div x-show="!fileExplorer.source.loading && fileExplorer.source.items.length === 0" class="flex h-[26rem] items-center justify-center bg-white px-8 text-center text-sm text-slate-500">
+                                    Aucun élément indexé dans ce répertoire.
+                                </div>
+                                <div x-show="!fileExplorer.source.loading && fileExplorer.source.items.length > 0" class="h-[26rem] overflow-y-auto bg-white">
+                                    <template x-for="item in fileExplorer.source.items" :key="item.path">
+                                        <button @click="selectExplorerItem('source', item)"
+                                                @dblclick="item.is_directory ? openExplorerItem('source', item) : openPreview(item)"
+                                                class="grid w-full grid-cols-[minmax(0,1fr)_7rem_11rem] gap-3 border-t border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50"
+                                                :class="fileExplorer.source.selectedPath === item.path ? 'bg-teal-50' : 'bg-white'">
+                                            <span class="flex min-w-0 items-center gap-3">
+                                                <i class="fas" :class="item.is_directory ? 'fa-folder text-amber-500' : fileIconClass(item.path)"></i>
+                                                <span class="truncate text-sm font-medium text-slate-800" x-text="item.name"></span>
+                                            </span>
+                                            <span class="text-sm text-slate-500" x-text="item.is_directory ? '-' : formatBytes(item.size || 0)"></span>
+                                            <span class="text-sm text-slate-500" x-text="formatDate(item.last_modified)"></span>
+                                        </button>
+                                    </template>
+                                </div>
+                            </div>
                         </div>
-                        <div class="card min-h-[28rem] p-6">
-                            <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Panneau destination</p>
-                            <div class="mt-4 flex h-[22rem] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-8 text-center text-sm text-slate-500">
-                                Vue arborescente destination à implémenter.
+
+                        <div class="space-y-5">
+                            <div class="card p-5">
+                                <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Archivage</p>
+                                <div class="mt-4 space-y-3">
+                                    <div>
+                                        <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Mode</label>
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <button @click="archiveMode = 'copy'"
+                                                    class="rounded-xl px-3 py-2 text-sm font-semibold transition"
+                                                    :class="archiveMode === 'copy' ? 'bg-teal-700 text-white' : 'border border-slate-300 bg-white text-slate-700'">
+                                                Copier
+                                            </button>
+                                            <button @click="archiveMode = 'move'"
+                                                    class="rounded-xl px-3 py-2 text-sm font-semibold transition"
+                                                    :class="archiveMode === 'move' ? 'bg-amber-600 text-white' : 'border border-slate-300 bg-white text-slate-700'">
+                                                Déplacer
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <button @click="archiveSelectedFile()"
+                                            :disabled="!canArchiveSelectedFile || archiveBusy"
+                                            class="w-full rounded-2xl px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-300"
+                                            :class="archiveMode === 'move' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-teal-700 hover:bg-teal-800'">
+                                        <i class="fas fa-box-archive mr-2"></i>
+                                        <span x-text="archiveMode === 'move' ? 'Déplacer vers archives' : 'Copier vers archives'"></span>
+                                    </button>
+                                    <button @click="openSelectedPreview()"
+                                            :disabled="!selectedSourceFile"
+                                            class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
+                                        <i class="fas fa-up-right-and-down-left-from-center mr-2"></i>Ouvrir le lightbox
+                                    </button>
+                                </div>
+                                <div class="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                    <p class="text-xs uppercase tracking-[0.18em] text-slate-400">Fichier sélectionné</p>
+                                    <template x-if="selectedSourceFile">
+                                        <div class="mt-3 space-y-2">
+                                            <p class="break-all text-sm font-semibold text-slate-800" x-text="selectedSourceFile.name"></p>
+                                            <p class="break-all text-xs text-slate-500" x-text="selectedSourceFile.path"></p>
+                                            <p class="text-xs text-slate-500" x-text="`Type: ${previewLabelForPath(selectedSourceFile.path)}`"></p>
+                                        </div>
+                                    </template>
+                                    <template x-if="!selectedSourceFile">
+                                        <p class="mt-3 text-sm text-slate-500">Sélectionnez un fichier côté source pour le classer ou l’ouvrir.</p>
+                                    </template>
+                                </div>
+                                <div x-show="archiveStatus" class="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600" x-text="archiveStatus"></div>
+                                <p class="mt-4 text-xs text-slate-500">Le mode “Copier” conserve l’original dans le partage source. Le remplacement par un lien SMB reste à concevoir côté serveur.</p>
+                            </div>
+                            <div class="card p-5">
+                                <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Aperçus pris en charge</p>
+                                <div class="mt-4 flex flex-wrap gap-2 text-xs text-slate-600">
+                                    <span class="rounded-full bg-slate-100 px-3 py-1.5">PDF</span>
+                                    <span class="rounded-full bg-slate-100 px-3 py-1.5">Images</span>
+                                    <span class="rounded-full bg-slate-100 px-3 py-1.5">Vidéos</span>
+                                    <span class="rounded-full bg-slate-100 px-3 py-1.5">Office / LibreOffice</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card min-h-[34rem] p-6">
+                            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                <div class="min-w-0">
+                                    <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Panneau archivage</p>
+                                    <div class="mt-3">
+                                        <label class="mb-1 block text-xs text-slate-500">Espace d’archivage</label>
+                                        <select x-model="fileExplorer.archive.root" @change="selectArchiveRoot(fileExplorer.archive.root)" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                                            <option value="">Choisir un espace d’archivage</option>
+                                            <template x-for="space in archiveExplorerSpaces" :key="space.path_prefix">
+                                                <option :value="space.path_prefix" x-text="`${getSpaceDisplayName(space)} (${space.file_count})`"></option>
+                                            </template>
+                                        </select>
+                                    </div>
+                                    <p class="mt-2 break-all text-xs text-slate-500" x-text="fileExplorer.archive.currentPath || 'Aucun espace d’archivage sélectionné'"></p>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button @click="goToExplorerParent('archive')"
+                                            :disabled="!canGoToParent('archive')"
+                                            class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
+                                        <i class="fas fa-arrow-up mr-2"></i>Parent
+                                    </button>
+                                    <button @click="refreshExplorerPanel('archive')"
+                                            :disabled="!fileExplorer.archive.root"
+                                            class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
+                                        <i class="fas fa-rotate"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="mt-4 flex flex-wrap gap-2" x-show="fileExplorer.archive.root">
+                                <template x-for="crumb in explorerBreadcrumbs('archive')" :key="crumb.path">
+                                    <button @click="openExplorerPath('archive', crumb.path)"
+                                            class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                                            x-text="crumb.label"></button>
+                                </template>
+                            </div>
+                            <div x-show="fileExplorer.archive.error" class="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" x-text="fileExplorer.archive.error"></div>
+                            <div x-show="!fileExplorer.archive.root" class="mt-4 flex h-[26rem] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-8 text-center text-sm text-slate-500">
+                                Configurez au moins un second espace SMB pour servir d’archivage.
+                            </div>
+                            <div x-show="fileExplorer.archive.root" class="mt-4 overflow-hidden rounded-2xl border border-slate-200">
+                                <div class="grid grid-cols-[minmax(0,1fr)_7rem_11rem] bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                                    <span>Nom</span>
+                                    <span>Taille</span>
+                                    <span>Modifié le</span>
+                                </div>
+                                <div x-show="fileExplorer.archive.loading" class="flex h-[26rem] items-center justify-center bg-white">
+                                    <div class="loading"></div>
+                                </div>
+                                <div x-show="!fileExplorer.archive.loading && fileExplorer.archive.items.length === 0" class="flex h-[26rem] items-center justify-center bg-white px-8 text-center text-sm text-slate-500">
+                                    Aucun élément indexé dans ce répertoire d’archives.
+                                </div>
+                                <div x-show="!fileExplorer.archive.loading && fileExplorer.archive.items.length > 0" class="h-[26rem] overflow-y-auto bg-white">
+                                    <template x-for="item in fileExplorer.archive.items" :key="item.path">
+                                        <button @click="selectExplorerItem('archive', item)"
+                                                @dblclick="item.is_directory ? openExplorerItem('archive', item) : openPreview(item)"
+                                                class="grid w-full grid-cols-[minmax(0,1fr)_7rem_11rem] gap-3 border-t border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50"
+                                                :class="fileExplorer.archive.selectedPath === item.path ? 'bg-teal-50' : 'bg-white'">
+                                            <span class="flex min-w-0 items-center gap-3">
+                                                <i class="fas" :class="item.is_directory ? 'fa-folder text-amber-500' : fileIconClass(item.path)"></i>
+                                                <span class="truncate text-sm font-medium text-slate-800" x-text="item.name"></span>
+                                            </span>
+                                            <span class="text-sm text-slate-500" x-text="item.is_directory ? '-' : formatBytes(item.size || 0)"></span>
+                                            <span class="text-sm text-slate-500" x-text="formatDate(item.last_modified)"></span>
+                                        </button>
+                                    </template>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -717,6 +891,57 @@
         </div>
     </div>
 
+    <div x-cloak x-show="previewModal.open" class="fixed inset-0 z-[90]">
+        <div class="absolute inset-0 bg-slate-950/75" @click="closePreview()"></div>
+        <div class="relative mx-auto mt-10 w-[min(88rem,calc(100vw-2rem))] rounded-[28px] border border-slate-200 bg-white shadow-2xl shadow-slate-900/30">
+            <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-5">
+                <div class="min-w-0">
+                    <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Lightbox</p>
+                    <h2 class="mt-2 truncate text-2xl font-bold tracking-tight" x-text="previewModal.name"></h2>
+                    <p class="mt-1 break-all text-xs text-slate-500" x-text="previewModal.path"></p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <a :href="previewDownloadUrl"
+                       class="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                        Télécharger
+                    </a>
+                    <button @click="closePreview()" class="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                        Fermer
+                    </button>
+                </div>
+            </div>
+            <div class="px-6 py-6">
+                <div x-show="previewModal.kind === 'image'" class="flex max-h-[75vh] items-center justify-center overflow-hidden rounded-3xl bg-slate-950 p-4">
+                    <img :src="previewInlineUrl" :alt="previewModal.name" class="max-h-[70vh] max-w-full rounded-2xl object-contain">
+                </div>
+                <div x-show="previewModal.kind === 'video'" class="rounded-3xl bg-slate-950 p-4">
+                    <video :src="previewInlineUrl" controls class="max-h-[70vh] w-full rounded-2xl"></video>
+                </div>
+                <div x-show="previewModal.kind === 'pdf'" class="rounded-3xl bg-slate-100 p-2">
+                    <iframe :src="previewInlineUrl" class="h-[75vh] w-full rounded-2xl bg-white"></iframe>
+                </div>
+                <div x-show="previewModal.kind === 'office'" class="rounded-3xl border border-slate-200 bg-slate-50 p-8">
+                    <div class="mx-auto max-w-2xl text-center">
+                        <div class="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-white text-3xl text-slate-600 shadow-sm">
+                            <i class="fas fa-file-lines"></i>
+                        </div>
+                        <h3 class="mt-5 text-xl font-semibold text-slate-900">Prévisualisation bureautique</h3>
+                        <p class="mt-3 text-sm text-slate-600">Le lightbox reconnaît les formats Word, Excel, PowerPoint et LibreOffice. Le flux fichier est prêt, mais le rendu HTML/Office nécessite encore un convertisseur serveur dédié.</p>
+                        <div class="mt-5 flex flex-wrap justify-center gap-2 text-xs text-slate-600">
+                            <span class="rounded-full bg-white px-3 py-1.5">DOC / DOCX</span>
+                            <span class="rounded-full bg-white px-3 py-1.5">XLS / XLSX</span>
+                            <span class="rounded-full bg-white px-3 py-1.5">PPT / PPTX</span>
+                            <span class="rounded-full bg-white px-3 py-1.5">ODT / ODS / ODP</span>
+                        </div>
+                    </div>
+                </div>
+                <div x-show="previewModal.kind === 'unsupported'" class="rounded-3xl border border-slate-200 bg-slate-50 p-8 text-center">
+                    <p class="text-sm text-slate-600">Aperçu non disponible pour ce type de fichier. Le téléchargement direct reste possible.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         function openIndexApp() {
             return {
@@ -818,6 +1043,35 @@
                 showActiveConfiguration: false,
                 operationalLogs: [],
                 editingCrawlId: '',
+                archiveMode: 'copy',
+                archiveBusy: false,
+                archiveStatus: '',
+                fileExplorer: {
+                    source: {
+                        root: '',
+                        rootLabel: '',
+                        currentPath: '',
+                        items: [],
+                        selectedPath: '',
+                        loading: false,
+                        error: ''
+                    },
+                    archive: {
+                        root: '',
+                        rootLabel: '',
+                        currentPath: '',
+                        items: [],
+                        selectedPath: '',
+                        loading: false,
+                        error: ''
+                    }
+                },
+                previewModal: {
+                    open: false,
+                    path: '',
+                    name: '',
+                    kind: 'unsupported'
+                },
                 newCrawl: {
                     name: '',
                     domain_zone: '',
@@ -835,6 +1089,8 @@
                     await this.loadSpaces();
                     await this.loadStats();
                     await this.loadCrawlConfigs();
+                    this.syncExplorerRoots();
+                    await this.refreshExplorerPanels();
                     await this.loadMonitoringSummary();
                     await this.loadCrawlOverview();
                     await this.loadSystemStatus();
@@ -899,6 +1155,7 @@
                             this.activeSpace = this.spaces[0].path_prefix;
                         }
                         this.syncSelectedConfigWithActiveSpace();
+                        this.syncExplorerRoots();
                     } catch (error) {
                         console.error('Erreur espaces:', error);
                         this.addLogEntry(`Erreur espaces: ${error.message}`);
@@ -908,7 +1165,9 @@
                 async selectSpace(spacePrefix) {
                     this.activeSpace = spacePrefix;
                     this.syncSelectedConfigWithActiveSpace();
+                    this.syncExplorerRoots();
                     await this.loadStats();
+                    await this.refreshExplorerPanel('source');
                     this.addLogEntry(`Espace actif: ${spacePrefix}`);
                 },
 
@@ -917,6 +1176,7 @@
                         const response = await fetch('/api/crawl-configs');
                         this.crawlConfigs = await response.json();
                         this.syncSelectedConfigWithActiveSpace();
+                        this.syncExplorerRoots();
                     } catch (error) {
                         console.error('Erreur configs exploration:', error);
                         this.addLogEntry(`Erreur configs exploration: ${error.message}`);
@@ -1176,6 +1436,203 @@
                         this.addLogEntry(`Erreur Explain: ${error.message}`);
                     } finally {
                         this.loadingDbExplain = false;
+                    }
+                },
+
+                syncExplorerRoots() {
+                    this.fileExplorer.source.root = this.activeSpace || '';
+                    this.fileExplorer.source.rootLabel = this.activeSpaceName || 'Espace source';
+                    this.fileExplorer.source.currentPath = this.fileExplorer.source.root || '';
+                    this.fileExplorer.source.selectedPath = '';
+
+                    const archiveSpace = this.archiveExplorerSpaces.find((space) => space.path_prefix === this.fileExplorer.archive.root)
+                        || this.archiveExplorerSpaces[0]
+                        || null;
+                    this.fileExplorer.archive.root = archiveSpace?.path_prefix || '';
+                    this.fileExplorer.archive.rootLabel = archiveSpace ? this.getSpaceDisplayName(archiveSpace) : '';
+                    this.fileExplorer.archive.currentPath = archiveSpace?.path_prefix || '';
+                    this.fileExplorer.archive.selectedPath = '';
+                },
+
+                async selectArchiveRoot(rootPath) {
+                    const archiveSpace = this.archiveExplorerSpaces.find((space) => space.path_prefix === rootPath) || null;
+                    this.fileExplorer.archive.root = archiveSpace?.path_prefix || '';
+                    this.fileExplorer.archive.rootLabel = archiveSpace ? this.getSpaceDisplayName(archiveSpace) : '';
+                    this.fileExplorer.archive.currentPath = archiveSpace?.path_prefix || '';
+                    this.fileExplorer.archive.selectedPath = '';
+                    this.fileExplorer.archive.items = [];
+                    if (this.fileExplorer.archive.root) {
+                        await this.refreshExplorerPanel('archive');
+                    }
+                },
+
+                async refreshExplorerPanels() {
+                    await Promise.all([
+                        this.refreshExplorerPanel('source'),
+                        this.refreshExplorerPanel('archive')
+                    ]);
+                },
+
+                async refreshExplorerPanel(panelName) {
+                    const panel = this.fileExplorer[panelName];
+                    if (!panel.root || !panel.currentPath) {
+                        panel.items = [];
+                        panel.error = '';
+                        return;
+                    }
+                    panel.loading = true;
+                    panel.error = '';
+                    try {
+                        const params = new URLSearchParams({
+                            root: panel.root,
+                            current_path: panel.currentPath
+                        });
+                        const response = await fetch(`/api/explorer/items?${params.toString()}`);
+                        if (!response.ok) {
+                            const payload = await response.json();
+                            throw new Error(payload.detail || 'Chargement impossible');
+                        }
+                        panel.items = await response.json();
+                    } catch (error) {
+                        panel.items = [];
+                        panel.error = error.message;
+                    } finally {
+                        panel.loading = false;
+                    }
+                },
+
+                async openExplorerItem(panelName, item) {
+                    if (!item?.is_directory) {
+                        this.selectExplorerItem(panelName, item);
+                        return;
+                    }
+                    const panel = this.fileExplorer[panelName];
+                    panel.currentPath = item.path;
+                    panel.selectedPath = '';
+                    await this.refreshExplorerPanel(panelName);
+                },
+
+                async openExplorerPath(panelName, path) {
+                    const panel = this.fileExplorer[panelName];
+                    if (!panel.root) return;
+                    panel.currentPath = path;
+                    panel.selectedPath = '';
+                    await this.refreshExplorerPanel(panelName);
+                },
+
+                async goToExplorerParent(panelName) {
+                    const panel = this.fileExplorer[panelName];
+                    if (!panel.root || !panel.currentPath || panel.currentPath === panel.root) return;
+                    const normalizedCurrent = panel.currentPath.replaceAll('/', '\\');
+                    const normalizedRoot = panel.root.replaceAll('/', '\\');
+                    const parent = normalizedCurrent.lastIndexOf('\\') > 1
+                        ? normalizedCurrent.slice(0, normalizedCurrent.lastIndexOf('\\'))
+                        : normalizedRoot;
+                    panel.currentPath = parent.length < normalizedRoot.length ? normalizedRoot : parent;
+                    panel.selectedPath = '';
+                    await this.refreshExplorerPanel(panelName);
+                },
+
+                canGoToParent(panelName) {
+                    const panel = this.fileExplorer[panelName];
+                    return !!panel.root && !!panel.currentPath && panel.currentPath !== panel.root;
+                },
+
+                explorerBreadcrumbs(panelName) {
+                    const panel = this.fileExplorer[panelName];
+                    if (!panel.root || !panel.currentPath) return [];
+                    const rootParts = panel.root.split('\\').filter(Boolean);
+                    const currentParts = panel.currentPath.split('\\').filter(Boolean);
+                    const crumbs = [];
+                    for (let index = 0; index < currentParts.length; index += 1) {
+                        const path = `\\\\${currentParts.slice(0, index + 1).join('\\')}`;
+                        if (index + 1 < rootParts.length) continue;
+                        crumbs.push({
+                            path,
+                            label: index + 1 === rootParts.length ? (panel.rootLabel || currentParts[index]) : currentParts[index]
+                        });
+                    }
+                    return crumbs;
+                },
+
+                selectExplorerItem(panelName, item) {
+                    this.fileExplorer[panelName].selectedPath = item.path;
+                },
+
+                fileIconClass(path) {
+                    const previewKind = this.previewKindForPath(path);
+                    if (previewKind === 'image') return 'fa-file-image text-cyan-600';
+                    if (previewKind === 'video') return 'fa-file-video text-rose-600';
+                    if (previewKind === 'pdf') return 'fa-file-pdf text-red-600';
+                    if (previewKind === 'office') return 'fa-file-word text-blue-600';
+                    return 'fa-file text-slate-500';
+                },
+
+                previewKindForPath(path) {
+                    const extension = (path.split('.').pop() || '').toLowerCase();
+                    if (['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'svg'].includes(extension)) return 'image';
+                    if (['mp4', 'webm', 'ogg', 'mov', 'm4v'].includes(extension)) return 'video';
+                    if (extension === 'pdf') return 'pdf';
+                    if (['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp'].includes(extension)) return 'office';
+                    return 'unsupported';
+                },
+
+                previewLabelForPath(path) {
+                    const previewKind = this.previewKindForPath(path);
+                    if (previewKind === 'image') return 'Image';
+                    if (previewKind === 'video') return 'Vidéo';
+                    if (previewKind === 'pdf') return 'PDF';
+                    if (previewKind === 'office') return 'Document bureautique';
+                    return 'Aperçu limité';
+                },
+
+                openSelectedPreview() {
+                    if (!this.selectedSourceFile) return;
+                    this.openPreview(this.selectedSourceFile);
+                },
+
+                openPreview(item) {
+                    if (!item || item.is_directory) return;
+                    this.previewModal = {
+                        open: true,
+                        path: item.path,
+                        name: item.name,
+                        kind: this.previewKindForPath(item.path)
+                    };
+                },
+
+                closePreview() {
+                    this.previewModal.open = false;
+                },
+
+                async archiveSelectedFile() {
+                    if (!this.canArchiveSelectedFile) return;
+                    this.archiveBusy = true;
+                    this.archiveStatus = '';
+                    try {
+                        const response = await fetch('/api/archive/file', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                source_path: this.selectedSourceFile.path,
+                                target_directory_path: this.fileExplorer.archive.currentPath,
+                                mode: this.archiveMode,
+                                overwrite: false
+                            })
+                        });
+                        const payload = await response.json();
+                        if (!response.ok) {
+                            throw new Error(payload.detail || 'Archivage impossible');
+                        }
+                        this.archiveStatus = this.archiveMode === 'move'
+                            ? `Fichier déplacé vers ${payload.target_path}`
+                            : `Fichier copié vers ${payload.target_path}`;
+                        this.fileExplorer.source.selectedPath = '';
+                        await this.refreshExplorerPanels();
+                    } catch (error) {
+                        this.archiveStatus = error.message;
+                    } finally {
+                        this.archiveBusy = false;
                     }
                 },
 
@@ -1596,6 +2053,35 @@
 
                 get activeSpacePath() {
                     return this.activeSpaceObject?.path_prefix || 'non défini';
+                },
+
+                get archiveExplorerSpaces() {
+                    return this.spaces.filter((space) => space.path_prefix !== this.activeSpace);
+                },
+
+                get selectedSourceFile() {
+                    const selectedPath = this.fileExplorer.source.selectedPath;
+                    if (!selectedPath) return null;
+                    const item = this.fileExplorer.source.items.find((entry) => entry.path === selectedPath) || null;
+                    if (!item || item.is_directory) return null;
+                    return item;
+                },
+
+                get canArchiveSelectedFile() {
+                    return !!this.selectedSourceFile
+                        && !!this.fileExplorer.archive.root
+                        && !!this.fileExplorer.archive.currentPath
+                        && this.fileExplorer.archive.root !== this.fileExplorer.source.root;
+                },
+
+                get previewInlineUrl() {
+                    if (!this.previewModal.path) return '';
+                    return `/api/file-content?path=${encodeURIComponent(this.previewModal.path)}`;
+                },
+
+                get previewDownloadUrl() {
+                    if (!this.previewModal.path) return '#';
+                    return `/api/file-content?path=${encodeURIComponent(this.previewModal.path)}&download=true`;
                 },
 
                 getSpaceDisplayName(space) {

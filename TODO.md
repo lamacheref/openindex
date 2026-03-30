@@ -53,6 +53,9 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
   - Rendre obligatoire le passage des jobs CI PostgreSQL avant merge.
   - Ajouter la collecte d'artefacts minimaux en cas d'échec (logs API/tests).
   - Documenter le chemin de diagnostic rapide en cas de pipeline rouge.
+  - Workflow durci localement le `2026-03-26` : le job `api-tests-postgresql` échoue désormais si PostgreSQL n'est pas joignable ou si la connexion SQL échoue; la collecte d'artefacts `api-tests-postgresql-diagnostics-*` est systématique.
+  - Références : `scripts/run_release_gate.sh`, `docs/operations/CI_POSTGRESQL_GATE.md`, `.github/workflows/docker-stack.yml`.
+  - Point d'application restant hors dépôt : déclarer `api-tests-postgresql` en `required status check` sur les branches protégées GitHub (`main`, `develop`).
 
 - [x] **T-07 — Drill de rollback J4**
   - Simuler un incident post-migration PostgreSQL.
@@ -64,20 +67,28 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
 
 ## 3) Préparation J5 (qualité & observabilité)
 
-- [ ] **T-08 — Définir les SLI/SLO opérationnels minimum**
+- [x] **T-08 — Définir les SLI/SLO opérationnels minimum**
   - Disponibilité API, latence P95, taux d'erreurs, temps de recovery.
   - Seuils d'alerte + responsables + fréquence de revue.
+  - Livré le `2026-03-26` via `docs/operations/J5_SLI_SLO.md`.
+  - Références de preuve : benchmark actif `docs/bench_postgresql_active_2026-03-26.md` et gate CI PostgreSQL `docs/operations/CI_POSTGRESQL_GATE.md`.
 
-- [ ] **T-09 — Pack de tests critiques "release gate"**
+- [x] **T-09 — Pack de tests critiques "release gate"**
   - API smoke critique avec PostgreSQL.
   - Non-régression frontend structurelle.
   - Vérification DB explain / requêtes clés.
   - Exécution via une commande unique documentée.
+  - Livré le `2026-03-26` avec `scripts/run_release_gate.sh` et `docs/operations/J5_RELEASE_GATE.md`.
+  - Couverture pack: smoke API, DB explain, feature flag PostgreSQL et non-régression frontend structurelle.
+  - Intégration CI branchée sur `api-tests-postgresql`.
 
-- [ ] **T-10 — Observabilité minimale exploitable**
+- [x] **T-10 — Observabilité minimale exploitable**
   - Standardiser les logs applicatifs (format, niveau, corrélation).
   - Définir un dashboard santé + une vue incidents.
   - Définir la procédure d'escalade en cas de dérive.
+  - Livré le `2026-03-26` avec la vue opératoire `GET /api/operations/status` dans `src/api/main.py`.
+  - Logs API standardisés via `OPENINDEX_LOG_LEVEL` et format horodaté homogène.
+  - Références opératoires: `docs/operations/J5_OBSERVABILITY_BASELINE.md` et `docs/operations/EXPLOITATION.md`.
 
 - [ ] **T-14 — Revoir l'UI pour le pilotage des tests et crawls**
   - Repenser l'interface actuelle, jugée insuffisante pour le suivi opérationnel.
@@ -98,6 +109,8 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
   - Prévoir navigation arborescente, sélection, transfert inter-panneaux et actions contextuelles.
   - Déterminer les endpoints API nécessaires pour une navigation hiérarchique et des opérations de déplacement/copie pilotées.
   - Prévoir le mode d'entrée dans le menu en cohérence avec les arbitrages de shell validés dans `docs/definition_ui.md`.
+  - Premier socle livré le `2026-03-30` dans `frontend/index.html` et `src/api/main.py` : double panneau SMB indexé, sélection, archivage fichier par copie/déplacement entre espaces configurés, lightbox PDF/images/vidéos et reconnaissance des formats bureautiques.
+  - Dette restante : rendu bureautique complet (Word / Excel / PowerPoint / LibreOffice) dans le lightbox et stratégie explicite pour laisser un lien côté partage source après archivage.
 
 - [ ] **T-16 — Concevoir la page de traitements des artefacts**
   - Définir les catégories d'artefacts traitables: temporaires Office, doublons, fichiers système, archives obsolètes.

@@ -58,3 +58,14 @@ curl -f http://localhost:8000/health
 ## Convention de merge
 
 La convention opérationnelle de merge est d'imposer la CI `docker-stack.yml` sur toute PR touchant la stack.
+
+## Gate PostgreSQL de référence
+
+- Check nominal à imposer avant merge : `api-tests-postgresql`
+- Workflow : `.github/workflows/docker-stack.yml`
+- Commande mutualisée : `./scripts/run_release_gate.sh`
+- Artefact de diagnostic : `api-tests-postgresql-diagnostics-<run_id>-<run_attempt>`
+
+Le dépôt contient désormais le durcissement du job et la collecte systématique des diagnostics. Le blocage effectif avant merge dépend de la protection GitHub des branches `main` et `develop`, où `api-tests-postgresql` doit être déclaré en `required status check`.
+
+Chemin de diagnostic rapide : `docs/operations/CI_POSTGRESQL_GATE.md`

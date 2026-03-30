@@ -44,6 +44,10 @@ cp .env.example .env
 # Vérifier la disponibilité de PostgreSQL
 ./deploy.sh pull
 ./deploy.sh up
+
+# préproduction GHCR privée
+./deploy.sh pull --preprod
+./deploy.sh up --preprod
 ```
 
 ## Tests (commande unique)
@@ -58,6 +62,7 @@ Ce script crée un `.venv` local si nécessaire, installe `requirements/dev.txt`
 Pour cibler les tests critiques anti-flakiness uniquement:
 
 ```bash
+./scripts/run_release_gate.sh
 pytest -q tests/test_api_smoke_critical.py
 pytest -q tests/test_frontend_structure.py
 ```

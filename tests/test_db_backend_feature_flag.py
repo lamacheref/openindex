@@ -33,6 +33,14 @@ def test_get_db_adapter_postgresql(monkeypatch):
                 return
             if 'CREATE INDEX IF NOT EXISTS idx_crawl_runs_triggered_at' in query:
                 return
+            if 'CREATE TABLE IF NOT EXISTS crawl_run_checkpoints' in query:
+                return
+            if 'CREATE TABLE IF NOT EXISTS crawl_run_queue_items' in query:
+                return
+            if 'CREATE INDEX IF NOT EXISTS idx_crawl_run_queue_items_run_id' in query:
+                return
+            if 'CREATE INDEX IF NOT EXISTS idx_crawl_run_queue_items_run_queue' in query:
+                return
             if 'ALTER TABLE files' in query:
                 return
             if 'CREATE INDEX IF NOT EXISTS idx_files_crawl_config_id' in query:

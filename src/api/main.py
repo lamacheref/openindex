@@ -3,19 +3,27 @@ API FastAPI pour OpenIndex
 Backend moderne avec WebSocket et monitoring temps réel
 """
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import asyncio
 import logging
+import mimetypes
 import os
 import re
+import shutil
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import quote
+
+try:
+    import smbclient
+except ModuleNotFoundError:  # pragma: no cover
+    smbclient = None
 try:
     from src.versioning import get_current_version
 except ModuleNotFoundError:  # pragma: no cover
@@ -32,8 +40,12 @@ except ModuleNotFoundError:  # pragma: no cover
 APP_VERSION = get_current_version()
 
 # Configuration du logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+LOG_LEVEL = os.getenv("OPENINDEX_LOG_LEVEL", "INFO").strip().upper()
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+logger = logging.getLogger("openindex.api")
 
 # Initialisation de FastAPI
 app = FastAPI(
@@ -67,6 +79,30 @@ class FileInfo(BaseModel):
     duplicate_of: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+
+class ExplorerItem(BaseModel):
+    path: str
+    name: str
+    is_directory: bool
+    size: Optional[int] = None
+    last_modified: Optional[datetime] = None
+    extension: Optional[str] = None
+    crawl_config_id: Optional[str] = None
+
+
+class ArchiveFileRequest(BaseModel):
+    source_path: str
+    target_directory_path: str
+    mode: str = Field(pattern="^(copy|move)$")
+    overwrite: bool = False
+
+
+class ArchiveFileResult(BaseModel):
+    source_path: str
+    target_path: str
+    mode: str
+    source_deleted: bool
 
 
 class CrawlStats(BaseModel):
@@ -228,6 +264,31 @@ class CrawlerRuntime(BaseModel):
     queue_indicators: List[QueueIndicator]
     log_lines: List[str]
     log_source: str
+
+
+class OperationalCheck(BaseModel):
+    key: str
+    label: str
+    status: str
+    detail: str
+
+
+class OperationalIncident(BaseModel):
+    key: str
+    severity: str
+    summary: str
+    detail: str
+    action: str
+
+
+class OperationsStatus(BaseModel):
+    status: str
+    generated_at: str
+    system_status: SystemStatus
+    monitoring: MonitoringSummary
+    runtime: CrawlerRuntime
+    checks: List[OperationalCheck]
+    incidents: List[OperationalIncident]
 
 
 STALE_RUN_TIMEOUT_SECONDS = int(os.getenv("OPENINDEX_CRAWLER_STALE_TIMEOUT_SECONDS", "1200"))
@@ -501,6 +562,81 @@ class PostgreSQLAdapter:
             }
             for row in rows
         ]
+
+    def get_crawl_config_by_id(self, config_id: str) -> Optional[Dict[str, Any]]:
+        rows = self.execute_query(
+            """
+            SELECT
+                id::text,
+                name,
+                domain_zone,
+                start_path,
+                include_paths,
+                exclude_paths,
+                connection_username,
+                connection_password,
+                connection_domain,
+                created_at::text
+            FROM crawl_configs
+            WHERE id::text = %s
+            LIMIT 1
+            """,
+            [config_id],
+        )
+        if not rows:
+            return None
+        row = rows[0]
+        return {
+            "id": row[0],
+            "name": row[1],
+            "domain_zone": row[2],
+            "start_path": row[3],
+            "include_paths": row[4] or [],
+            "exclude_paths": row[5] or [],
+            "connection_username": row[6],
+            "connection_password": row[7],
+            "connection_domain": row[8],
+            "created_at": row[9],
+        }
+
+    def get_crawl_config_for_path(self, file_path: str) -> Optional[Dict[str, Any]]:
+        if not file_path:
+            return None
+        rows = self.execute_query(
+            """
+            SELECT
+                id::text,
+                name,
+                domain_zone,
+                start_path,
+                include_paths,
+                exclude_paths,
+                connection_username,
+                connection_password,
+                connection_domain,
+                created_at::text
+            FROM crawl_configs
+            WHERE %s LIKE start_path || '%%'
+            ORDER BY LENGTH(start_path) DESC, created_at DESC
+            LIMIT 1
+            """,
+            [file_path],
+        )
+        if not rows:
+            return None
+        row = rows[0]
+        return {
+            "id": row[0],
+            "name": row[1],
+            "domain_zone": row[2],
+            "start_path": row[3],
+            "include_paths": row[4] or [],
+            "exclude_paths": row[5] or [],
+            "connection_username": row[6],
+            "connection_password": row[7],
+            "connection_domain": row[8],
+            "created_at": row[9],
+        }
 
     def create_crawl_config(self, payload: CrawlConfigCreate) -> Dict[str, Any]:
         query = """
@@ -920,6 +1056,97 @@ def get_db_adapter():
     raise HTTPException(status_code=500, detail=f"Backend OPENINDEX_DB_BACKEND invalide: {backend}")
 
 
+def _require_smbclient() -> None:
+    if smbclient is None:
+        raise HTTPException(status_code=500, detail="smbclient non disponible sur l'API")
+
+
+def _normalize_smb_path(path: str) -> str:
+    normalized = (path or "").strip().replace("/", "\\")
+    if not normalized.startswith("\\\\"):
+        normalized = "\\\\" + normalized.lstrip("\\")
+    return normalized.rstrip("\\") or normalized
+
+
+def _join_smb_path(base_path: str, name: str) -> str:
+    base = _normalize_smb_path(base_path).rstrip("\\")
+    child = (name or "").strip("\\/")
+    if not child:
+        return base
+    return f"{base}\\{child}"
+
+
+def _parent_smb_path(path: str, root_path: str) -> str:
+    normalized = _normalize_smb_path(path)
+    normalized_root = _normalize_smb_path(root_path)
+    if normalized == normalized_root:
+        return normalized_root
+    parent = normalized.rsplit("\\", 1)[0]
+    if len(parent.strip("\\")) < len(normalized_root.strip("\\")):
+        return normalized_root
+    return parent or normalized_root
+
+
+def _smb_extension(path: str) -> Optional[str]:
+    suffix = Path(path).suffix.lower()
+    return suffix or None
+
+
+def _smb_name(path: str) -> str:
+    normalized = _normalize_smb_path(path)
+    return normalized.rsplit("\\", 1)[-1]
+
+
+def _guess_media_type(path: str) -> str:
+    extension = _smb_extension(path)
+    explicit_mapping = {
+        ".pdf": "application/pdf",
+        ".doc": "application/msword",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".xls": "application/vnd.ms-excel",
+        ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ".ppt": "application/vnd.ms-powerpoint",
+        ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        ".odt": "application/vnd.oasis.opendocument.text",
+        ".ods": "application/vnd.oasis.opendocument.spreadsheet",
+        ".odp": "application/vnd.oasis.opendocument.presentation",
+    }
+    if extension in explicit_mapping:
+        return explicit_mapping[extension]
+    guessed, _ = mimetypes.guess_type(path)
+    return guessed or "application/octet-stream"
+
+
+def _configure_smb_session(config: Dict[str, Any]) -> None:
+    _require_smbclient()
+    smbclient.ClientConfig(
+        username=config.get("connection_username"),
+        password=config.get("connection_password"),
+        domain=config.get("connection_domain") or "",
+    )
+
+
+def _get_config_for_path_or_404(file_path: str) -> Dict[str, Any]:
+    db = get_db_adapter()
+    config = db.get_crawl_config_for_path(_normalize_smb_path(file_path))
+    if not config:
+        raise HTTPException(status_code=404, detail="Aucune configuration SMB ne couvre ce chemin")
+    return config
+
+
+def _ensure_parent_directories(target_directory_path: str) -> None:
+    segments = [segment for segment in _normalize_smb_path(target_directory_path).split("\\") if segment]
+    if len(segments) < 2:
+        return
+    current = f"\\\\{segments[0]}\\{segments[1]}"
+    for segment in segments[2:]:
+        current = _join_smb_path(current, segment)
+        try:
+            smbclient.mkdir(current)
+        except OSError:
+            continue
+
+
 # Gestionnaire WebSocket pour le monitoring
 class ConnectionManager:
     def __init__(self):
@@ -985,6 +1212,140 @@ EXPLAIN_QUERIES = {
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
+
+@app.get("/api/explorer/items", response_model=List[ExplorerItem])
+async def get_explorer_items(
+    root: str = Query(...),
+    current_path: Optional[str] = Query(default=None),
+    limit: int = Query(default=2000, ge=1, le=10000),
+):
+    try:
+        db = get_db_adapter()
+        normalized_root = _normalize_smb_path(root)
+        normalized_current_path = _normalize_smb_path(current_path or root)
+
+        where_clause = "path LIKE %s"
+        params: List[Any] = [f"{normalized_current_path}%"]
+        config_id = db.resolve_space_config_id(normalized_root) if hasattr(db, "resolve_space_config_id") else None
+        if config_id:
+            where_clause += " AND crawl_config_id::text = %s"
+            params.append(config_id)
+
+        rows = db.execute_query(
+            f"""
+            SELECT path, name, size, last_modified, is_directory, crawl_config_id::text
+            FROM files
+            WHERE {where_clause}
+            ORDER BY is_directory DESC, name ASC
+            LIMIT %s
+            """,
+            params + [limit],
+        )
+
+        items_by_path: Dict[str, ExplorerItem] = {}
+        for row in rows:
+            raw_path = row[0]
+            if not raw_path:
+                continue
+            normalized_path = _normalize_smb_path(raw_path)
+            if normalized_path == normalized_current_path:
+                continue
+            relative = normalized_path[len(normalized_current_path):].lstrip("\\")
+            if not relative:
+                continue
+            child_name = relative.split("\\", 1)[0]
+            child_path = _join_smb_path(normalized_current_path, child_name)
+            existing = items_by_path.get(child_path)
+            is_directory = bool(row[4]) or ("\\" in relative)
+            if existing and existing.is_directory:
+                continue
+            items_by_path[child_path] = ExplorerItem(
+                path=child_path,
+                name=child_name,
+                is_directory=is_directory,
+                size=None if is_directory else row[2],
+                last_modified=row[3],
+                extension=None if is_directory else _smb_extension(child_path),
+                crawl_config_id=row[5],
+            )
+
+        return sorted(
+            items_by_path.values(),
+            key=lambda item: (not item.is_directory, item.name.lower()),
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur get_explorer_items: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors du chargement de l'explorateur")
+
+
+@app.get("/api/file-content")
+async def get_file_content(path: str, download: bool = False):
+    try:
+        normalized_path = _normalize_smb_path(path)
+        config = _get_config_for_path_or_404(normalized_path)
+        _configure_smb_session(config)
+        media_type = _guess_media_type(normalized_path)
+        filename = _smb_name(normalized_path) or "document"
+        with smbclient.open_file(normalized_path, mode="rb") as handle:
+            payload = handle.read()
+
+        headers = {
+            "Content-Disposition": (
+                f"attachment; filename*=UTF-8''{quote(filename)}"
+                if download
+                else f"inline; filename*=UTF-8''{quote(filename)}"
+            )
+        }
+        return Response(content=payload, media_type=media_type, headers=headers)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur get_file_content: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la lecture du fichier SMB")
+
+
+@app.post("/api/archive/file", response_model=ArchiveFileResult)
+async def archive_file(payload: ArchiveFileRequest):
+    try:
+        normalized_source_path = _normalize_smb_path(payload.source_path)
+        normalized_target_directory = _normalize_smb_path(payload.target_directory_path)
+        source_config = _get_config_for_path_or_404(normalized_source_path)
+        target_config = _get_config_for_path_or_404(normalized_target_directory)
+        _configure_smb_session(source_config)
+        _configure_smb_session(target_config)
+
+        target_path = _join_smb_path(normalized_target_directory, _smb_name(normalized_source_path))
+        if not payload.overwrite:
+            try:
+                smbclient.stat(target_path)
+                raise HTTPException(status_code=409, detail="Le fichier cible existe déjà")
+            except OSError:
+                pass
+
+        _ensure_parent_directories(normalized_target_directory)
+        with smbclient.open_file(normalized_source_path, mode="rb") as source_handle:
+            with smbclient.open_file(target_path, mode="wb") as target_handle:
+                shutil.copyfileobj(source_handle, target_handle, length=1024 * 1024)
+
+        source_deleted = False
+        if payload.mode == "move":
+            smbclient.remove(normalized_source_path)
+            source_deleted = True
+
+        return ArchiveFileResult(
+            source_path=normalized_source_path,
+            target_path=target_path,
+            mode=payload.mode,
+            source_deleted=source_deleted,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur archive_file: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors de l'archivage du fichier")
 
 
 @app.get("/api/files", response_model=List[FileInfo])
@@ -1469,6 +1830,137 @@ def _extract_large_file_metrics(raw_log_lines: List[str]) -> Dict[str, int]:
     }
 
 
+def _build_system_status_payload() -> SystemStatus:
+    version = os.getenv("OPENINDEX_APP_VERSION", app.version)
+    commit_hash = os.getenv("OPENINDEX_BUILD_COMMIT", "dev")
+    build_date = os.getenv("OPENINDEX_BUILD_DATE", datetime.now().date().isoformat())
+    timezone_name = os.getenv("OPENINDEX_TIMEZONE") or os.getenv("TZ") or "UTC"
+    repository_url = os.getenv("OPENINDEX_REPOSITORY_URL", "https://github.com/lamacheref/openindex")
+    newer_version_available = os.getenv("OPENINDEX_NEWER_VERSION_AVAILABLE", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    newest_version_url = os.getenv("OPENINDEX_NEWEST_VERSION_URL") or repository_url
+
+    return SystemStatus(
+        app_version=version,
+        commit_hash=commit_hash,
+        build_date=build_date,
+        timezone=timezone_name,
+        license_label="Licence",
+        license_owner="Copyright 2026 SMIDEN",
+        repository_url=repository_url,
+        newer_version_available=newer_version_available,
+        newest_version_url=newest_version_url if newer_version_available else None,
+    )
+
+
+def _build_operational_checks(monitoring: MonitoringSummary, runtime: CrawlerRuntime) -> List[OperationalCheck]:
+    checks: List[OperationalCheck] = [
+        OperationalCheck(
+            key="api_health",
+            label="Disponibilite API",
+            status="healthy",
+            detail="API joignable et synthese operatoire calculee.",
+        ),
+        OperationalCheck(
+            key="configs_defined",
+            label="Configurations d'exploration",
+            status="healthy" if monitoring.total_configs > 0 else "warning",
+            detail=(
+                f"{monitoring.total_configs} configuration(s) disponible(s)."
+                if monitoring.total_configs > 0
+                else "Aucune configuration d'exploration definie."
+            ),
+        ),
+        OperationalCheck(
+            key="run_failures",
+            label="Runs en echec",
+            status="critical" if monitoring.failed_runs > 0 else "healthy",
+            detail=(
+                f"{monitoring.failed_runs} run(s) en echec a traiter."
+                if monitoring.failed_runs > 0
+                else "Aucun run en echec detecte."
+            ),
+        ),
+        OperationalCheck(
+            key="crawler_idle",
+            label="Activite crawler",
+            status="critical" if runtime.idle else "healthy",
+            detail=(
+                runtime.progress_hint or "Aucun signal moteur recent."
+                if runtime.idle
+                else "Aucune derive d'activite detectee."
+            ),
+        ),
+    ]
+
+    active_run_count = monitoring.running_runs + monitoring.queued_runs
+    checks.append(
+        OperationalCheck(
+            key="active_runs",
+            label="Runs actifs",
+            status="critical" if active_run_count > 1 else "healthy",
+            detail=(
+                f"{active_run_count} runs actifs ou en attente detectes."
+                if active_run_count > 1
+                else f"{active_run_count} run actif ou en attente."
+            ),
+        )
+    )
+
+    integrity_queue = next((item for item in runtime.queue_indicators if item.key == "checksums"), None)
+    backlog_value = integrity_queue.value if integrity_queue else 0
+    checks.append(
+        OperationalCheck(
+            key="integrity_backlog",
+            label="Backlog d'integrite",
+            status="warning" if backlog_value > 0 and not runtime.active else "healthy",
+            detail=(
+                f"{backlog_value} fichier(s) en attente d'integrite sans run actif."
+                if backlog_value > 0 and not runtime.active
+                else f"{backlog_value} fichier(s) en attente d'integrite."
+            ),
+        )
+    )
+
+    return checks
+
+
+def _build_operational_incidents(checks: List[OperationalCheck]) -> List[OperationalIncident]:
+    action_map = {
+        "configs_defined": "Creer ou corriger au moins une configuration d'exploration avant nouveau lancement.",
+        "run_failures": "Inspecter les logs crawler/API, corriger la cause puis relancer un run controle.",
+        "crawler_idle": "Verifier le run en cours, les logs runtime et requalifier le run si necessaire.",
+        "active_runs": "Verifier les runs concurrents et requalifier les etats incoherents avant merge ou exploitation.",
+        "integrity_backlog": "Verifier la file d'integrite et relancer ou reprendre le crawler si le backlog n'evolue plus.",
+    }
+    incidents: List[OperationalIncident] = []
+    for check in checks:
+        if check.status == "healthy":
+            continue
+        incidents.append(
+            OperationalIncident(
+                key=check.key,
+                severity=check.status,
+                summary=check.label,
+                detail=check.detail,
+                action=action_map.get(check.key, "Verifier les journaux et la documentation operatoire."),
+            )
+        )
+    return incidents
+
+
+def _aggregate_operational_status(checks: List[OperationalCheck]) -> str:
+    if any(check.status == "critical" for check in checks):
+        return "critical"
+    if any(check.status == "warning" for check in checks):
+        return "warning"
+    return "healthy"
+
+
 def _slice_current_run_log_lines(raw_log_lines: List[str]) -> List[str]:
     last_run_start_index = 0
     for index, line in enumerate(raw_log_lines):
@@ -1617,30 +2109,7 @@ async def get_crawl_overview(limit: int = 10):
 @app.get("/api/system/status", response_model=SystemStatus)
 async def get_system_status():
     try:
-        version = os.getenv("OPENINDEX_APP_VERSION", app.version)
-        commit_hash = os.getenv("OPENINDEX_BUILD_COMMIT", "dev")
-        build_date = os.getenv("OPENINDEX_BUILD_DATE", datetime.now().date().isoformat())
-        timezone_name = os.getenv("OPENINDEX_TIMEZONE") or os.getenv("TZ") or "UTC"
-        repository_url = os.getenv("OPENINDEX_REPOSITORY_URL", "https://github.com/lamacheref/openindex")
-        newer_version_available = os.getenv("OPENINDEX_NEWER_VERSION_AVAILABLE", "false").strip().lower() in {
-            "1",
-            "true",
-            "yes",
-            "on",
-        }
-        newest_version_url = os.getenv("OPENINDEX_NEWEST_VERSION_URL") or repository_url
-
-        return SystemStatus(
-            app_version=version,
-            commit_hash=commit_hash,
-            build_date=build_date,
-            timezone=timezone_name,
-            license_label="Licence",
-            license_owner="Copyright 2026 SMIDEN",
-            repository_url=repository_url,
-            newer_version_available=newer_version_available,
-            newest_version_url=newest_version_url if newer_version_available else None,
-        )
+        return _build_system_status_payload()
     except Exception as e:
         logger.error(f"Erreur get_system_status: {e}")
         raise HTTPException(status_code=500, detail="Erreur lors du chargement du statut système")
@@ -1769,6 +2238,28 @@ async def get_crawler_runtime(log_limit: int = 80):
     except Exception as e:
         logger.error(f"Erreur get_crawler_runtime: {e}")
         raise HTTPException(status_code=500, detail="Erreur lors du chargement du runtime explorateur")
+
+
+@app.get("/api/operations/status", response_model=OperationsStatus)
+async def get_operations_status(log_limit: int = 80):
+    try:
+        monitoring = await get_monitoring_summary()
+        runtime = await get_crawler_runtime(log_limit=log_limit)
+        system_status = _build_system_status_payload()
+        checks = _build_operational_checks(monitoring, runtime)
+        incidents = _build_operational_incidents(checks)
+        return OperationsStatus(
+            status=_aggregate_operational_status(checks),
+            generated_at=datetime.now(timezone.utc).isoformat(),
+            system_status=system_status,
+            monitoring=monitoring,
+            runtime=runtime,
+            checks=checks,
+            incidents=incidents,
+        )
+    except Exception as e:
+        logger.error(f"Erreur get_operations_status: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors du chargement du statut operatoire")
 
 
 @app.websocket("/ws")
