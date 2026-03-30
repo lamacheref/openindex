@@ -36,12 +36,14 @@ Industrialiser OpenIndex pour un usage régulier en environnement SMB volumineux
 - Stabiliser le schéma et la stratégie d’indexation dans PostgreSQL.
 - Exécuter des recrawls complets sur zones de test avec PostgreSQL.
 - Décision `Go` documentée le `2026-03-18`.
+- Lot correctif opérateur clôturé le `2026-03-19` : progression runtime fiable, cohérence UI renforcée, réconciliation des runs `cancelling`, purge WebSocket des clients fermés, abandon explicite du prototype `estimate-{hash}`.
 
 ## Phase J5 (prochaine) — Qualité et observabilité
 
 - Couverture de tests mesurée et suivie.
 - Dashboards de santé et alerting.
 - Processus de release strict (DoD + checklist publication).
+- Reprendre le backlog principal sur recrawl réel, performance PostgreSQL et observabilité, sans rouvrir le lot correctif opérateur clôturé.
 - Préparer la configuration multi-repository et la segmentation des sources de crawl.
 - Faire converger l'UI finale vers une console opératoire active, centrée sur le crawl réel et l'exploitation.
 - Concevoir un explorateur de fichiers double panneau et une page dédiée aux traitements des artefacts.

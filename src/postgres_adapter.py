@@ -115,6 +115,16 @@ class PostgreSQLAdapter:
             )
             conn.commit()
 
+    def _normalize_timestamp_value(self, value: Any) -> Optional[datetime]:
+        if value is None or value == "":
+            return None
+        if isinstance(value, datetime):
+            return value
+        try:
+            return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
     def execute_query(self, query: str, params: Optional[List[Any]] = None) -> List[Any]:
         """Exécute une requête SQL simple et retourne toutes les lignes."""
         with self.get_connection() as conn:
@@ -189,6 +199,60 @@ class PostgreSQLAdapter:
                 conn.rollback()
                 self.logger.error(f"Erreur lors de la sauvegarde du lot: {e}")
                 raise
+
+    def get_files_by_paths(
+        self,
+        paths: List[str],
+        crawl_config_id: Optional[str] = None,
+    ) -> Dict[str, Dict[str, Any]]:
+        """Retourne les métadonnées existantes indexées par chemin."""
+        if not paths:
+            return {}
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            sql = """
+                SELECT path, size, last_modified, checksum, crawl_config_id::text AS crawl_config_id
+                FROM files
+                WHERE path = ANY(%s)
+                  AND is_directory = FALSE
+            """
+            params: List[Any] = [paths]
+            if crawl_config_id:
+                sql += " AND crawl_config_id::text = %s"
+                params.append(crawl_config_id)
+
+            cursor.execute(sql, params)
+            rows = cursor.fetchall()
+            conn.commit()
+            return {row["path"]: dict(row) for row in rows}
+
+    def get_last_completed_crawl_triggered_at(
+        self,
+        crawl_config_id: str,
+        exclude_run_id: Optional[str] = None,
+    ) -> Optional[datetime]:
+        """Retourne la date du dernier run terminé avec succès pour un espace."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            sql = """
+                SELECT triggered_at
+                FROM crawl_runs
+                WHERE config_id::text = %s
+                  AND LOWER(status) = 'completed'
+            """
+            params: List[Any] = [crawl_config_id]
+            if exclude_run_id:
+                sql += " AND id::text <> %s"
+                params.append(exclude_run_id)
+            sql += " ORDER BY triggered_at DESC LIMIT 1"
+
+            cursor.execute(sql, params)
+            row = cursor.fetchone()
+            conn.commit()
+            if not row:
+                return None
+            return row[0]
     
     def calculate_duplicates(self) -> int:
         """
@@ -407,6 +471,202 @@ class PostgreSQLAdapter:
                 conn.rollback()
                 self.logger.error(f"Erreur lors de la sauvegarde des statistiques: {e}")
                 raise
+
+    def save_crawl_run_checkpoint(
+        self,
+        run_id: str,
+        base_path: str,
+        stats: Dict[str, Any],
+        queues: Dict[str, List[Any]],
+    ) -> None:
+        """Persiste un snapshot minimal permettant de reprendre un run pending."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    """
+                    INSERT INTO crawl_run_checkpoints (
+                        run_id, base_path, total_files, total_directories, total_size,
+                        processed_size, large_files, estimated_total_size, phase,
+                        last_activity_at, updated_at
+                    ) VALUES (
+                        %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s,
+                        %s, CURRENT_TIMESTAMP
+                    )
+                    ON CONFLICT (run_id) DO UPDATE SET
+                        base_path = EXCLUDED.base_path,
+                        total_files = EXCLUDED.total_files,
+                        total_directories = EXCLUDED.total_directories,
+                        total_size = EXCLUDED.total_size,
+                        processed_size = EXCLUDED.processed_size,
+                        large_files = EXCLUDED.large_files,
+                        estimated_total_size = EXCLUDED.estimated_total_size,
+                        phase = EXCLUDED.phase,
+                        last_activity_at = EXCLUDED.last_activity_at,
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    [
+                        run_id,
+                        base_path,
+                        stats.get("total_files", 0),
+                        stats.get("total_directories", 0),
+                        stats.get("total_size", 0),
+                        stats.get("processed_size", 0),
+                        stats.get("large_files", 0),
+                        stats.get("estimated_total_size", 0),
+                        stats.get("phase", "crawl"),
+                        stats.get("last_activity_at"),
+                    ],
+                )
+                cursor.execute("DELETE FROM crawl_run_queue_items WHERE run_id::text = %s", [run_id])
+
+                values = []
+                for queue_name, items in queues.items():
+                    for item in items:
+                        if isinstance(item, str):
+                            values.append(
+                                (
+                                    run_id,
+                                    queue_name,
+                                    item,
+                                    None,
+                                    None,
+                                    None,
+                                    queue_name == "directory_queue",
+                                    None,
+                                )
+                            )
+                            continue
+                        values.append(
+                            (
+                                run_id,
+                                queue_name,
+                                item.get("path"),
+                                item.get("name"),
+                                item.get("size"),
+                                self._normalize_timestamp_value(item.get("last_modified")),
+                                bool(item.get("is_directory", False)),
+                                item.get("crawl_config_id"),
+                            )
+                        )
+
+                if values:
+                    execute_values(
+                        cursor,
+                        """
+                        INSERT INTO crawl_run_queue_items (
+                            run_id, queue_name, path, name, size,
+                            last_modified, is_directory, crawl_config_id
+                        ) VALUES %s
+                        """,
+                        values,
+                    )
+
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+
+    def load_crawl_run_checkpoint(self, run_id: str) -> Optional[Dict[str, Any]]:
+        """Charge le dernier snapshot persistant d'un run."""
+        with self.get_connection() as conn:
+            checkpoint_cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            queue_cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            checkpoint_cursor.execute(
+                """
+                SELECT
+                    run_id::text AS run_id,
+                    base_path,
+                    total_files,
+                    total_directories,
+                    total_size,
+                    processed_size,
+                    large_files,
+                    estimated_total_size,
+                    phase,
+                    last_activity_at,
+                    updated_at
+                FROM crawl_run_checkpoints
+                WHERE run_id::text = %s
+                """,
+                [run_id],
+            )
+            checkpoint = checkpoint_cursor.fetchone()
+            if not checkpoint:
+                conn.commit()
+                return None
+
+            queue_cursor.execute(
+                """
+                SELECT
+                    queue_name,
+                    path,
+                    name,
+                    size,
+                    last_modified,
+                    is_directory,
+                    crawl_config_id::text AS crawl_config_id
+                FROM crawl_run_queue_items
+                WHERE run_id::text = %s
+                ORDER BY created_at ASC
+                """,
+                [run_id],
+            )
+            queue_rows = queue_cursor.fetchall()
+            conn.commit()
+
+        queues: Dict[str, List[Any]] = {
+            "directory_queue": [],
+            "directory_result_queue": [],
+            "file_queue": [],
+            "large_file_queue": [],
+        }
+        for row in queue_rows:
+            queue_name = row["queue_name"]
+            if queue_name not in queues:
+                continue
+            if queue_name == "directory_queue":
+                queues[queue_name].append(row["path"])
+                continue
+            queues[queue_name].append(
+                {
+                    "path": row["path"],
+                    "name": row["name"],
+                    "size": row["size"],
+                    "last_modified": row["last_modified"].isoformat() if row["last_modified"] else None,
+                    "is_directory": row["is_directory"],
+                    "crawl_config_id": row["crawl_config_id"],
+                    "created_at": datetime.now(),
+                    "updated_at": datetime.now(),
+                }
+            )
+
+        return {
+            "base_path": checkpoint["base_path"],
+            "stats": {
+                "total_files": checkpoint["total_files"] or 0,
+                "total_directories": checkpoint["total_directories"] or 0,
+                "total_size": checkpoint["total_size"] or 0,
+                "processed_size": checkpoint["processed_size"] or 0,
+                "large_files": checkpoint["large_files"] or 0,
+                "estimated_total_size": checkpoint["estimated_total_size"] or 0,
+                "phase": checkpoint["phase"] or "crawl",
+                "last_activity": checkpoint["last_activity_at"].timestamp() if checkpoint["last_activity_at"] else None,
+            },
+            "queues": queues,
+        }
+
+    def clear_crawl_run_checkpoint(self, run_id: str) -> None:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute("DELETE FROM crawl_run_queue_items WHERE run_id::text = %s", [run_id])
+                cursor.execute("DELETE FROM crawl_run_checkpoints WHERE run_id::text = %s", [run_id])
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
     
     def test_connection(self) -> bool:
         """
@@ -445,7 +705,10 @@ class PostgreSQLAdapter:
                     SET status = 'running'
                     FROM next_run
                     WHERE r.id = next_run.id
-                    RETURNING r.id::text AS run_id, r.config_id::text AS config_id, r.triggered_at::text
+                    RETURNING
+                        r.id::text AS run_id,
+                        r.config_id::text AS config_id,
+                        r.triggered_at::text
                     """
                 )
                 run = cursor.fetchone()
@@ -506,6 +769,31 @@ class PostgreSQLAdapter:
             if not row:
                 return None
             return row[0]
+
+    def mark_crawl_run_pending(self, run_id: str) -> Optional[Dict[str, Any]]:
+        """Replace un run actif ou en file d'attente dans l'état pending."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    """
+                    UPDATE crawl_runs
+                    SET status = 'pending'
+                    WHERE id::text = %s
+                      AND LOWER(status) IN ('queued', 'running', 'in_progress', 'cancelling')
+                    RETURNING id::text, status
+                    """,
+                    [run_id],
+                )
+                row = cursor.fetchone()
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+
+        if not row:
+            return None
+        return {"run_id": row[0], "status": row[1]}
 
     def reset_stale_running_runs(self) -> None:
         with self.get_connection() as conn:

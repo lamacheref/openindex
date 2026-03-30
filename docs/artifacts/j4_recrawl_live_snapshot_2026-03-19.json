@@ -1,0 +1,46 @@
+{
+  "artifact": "j4_recrawl_live_snapshot",
+  "captured_at": "2026-03-19T17:38:35+01:00",
+  "source": {
+    "run_id": "acd1af17-0a75-4bd3-abfc-753e9547bf05",
+    "config_id": "2e445b64-b53d-4259-9085-430fa88727c1",
+    "config_name": "SMIDEN",
+    "start_path": "\\\\172.16.252.34\\Public\\SMIDEN",
+    "log_path": "logs/smb_crawler_postgresql_acd1af17-0a75-4bd3-abfc-753e9547bf05.log",
+    "api_overview_endpoint": "/api/crawls/overview?limit=5"
+  },
+  "run_state": {
+    "status": "running",
+    "triggered_at": "2026-03-19 14:27:42.673594+00"
+  },
+  "observed_window": {
+    "first_progress_at": "2026-03-19 15:08:10",
+    "last_progress_at": "2026-03-19 17:38:35",
+    "elapsed_seconds": 9025.0
+  },
+  "snapshot": {
+    "files_discovered": 148404,
+    "directories_discovered": 20579,
+    "large_files_detected": 201,
+    "discovered_bytes": 228177467797,
+    "processed_bytes": 105710129112,
+    "progress_percent": 46.3,
+    "queue_directories_to_explore": 0,
+    "queue_directories_to_index": 0,
+    "queue_integrity_checks": 139413,
+    "queue_large_files": 0,
+    "errors": 0
+  },
+  "evidence": {
+    "discovery_stabilized": true,
+    "target_equals_discovered_bytes": true,
+    "no_blocking_error_observed": true,
+    "integrity_backlog_remaining": true,
+    "window_checksum_rate_per_second": 1.583,
+    "window_processed_bytes_per_second": 1721708.067
+  },
+  "interpretation": {
+    "j4_result": "preuve exploitable retablie pour la volumetrie reelle et l'absence d'erreur bloquante",
+    "j5_residual": "la completion totale du traitement d'integrite et les revalidations complementaires sont reportees a J5"
+  }
+}

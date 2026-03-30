@@ -94,6 +94,17 @@ def cmd_show(_: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_bump_local(args: argparse.Namespace) -> int:
+    version_path = Path(args.version_file)
+    current = parse_version(read_version_file(version_path))
+    target = bump_version(current, "fix")
+    version_path.write_text(f"{target}\n", encoding="utf-8")
+    if args.stage:
+        subprocess.run(["git", "add", str(version_path)], check=True)
+    print(str(target))
+    return 0
+
+
 def cmd_validate_pr(args: argparse.Namespace) -> int:
     base_version = args.base_version
     target_version = args.target_version
@@ -133,6 +144,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     show_parser = subparsers.add_parser("show", help="Affiche la version courante")
     show_parser.set_defaults(func=cmd_show)
+
+    bump_local_parser = subparsers.add_parser("bump-local", help="Incremente localement la version patch")
+    bump_local_parser.add_argument("--version-file", default="VERSION")
+    bump_local_parser.add_argument("--stage", action="store_true")
+    bump_local_parser.set_defaults(func=cmd_bump_local)
 
     validate_pr_parser = subparsers.add_parser("validate-pr", help="Valide la version d'une PR")
     validate_pr_parser.add_argument("--base-version")

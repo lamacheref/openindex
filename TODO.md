@@ -32,33 +32,33 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
 
 ---
 
-## 2) Exécution J4 (prochaines 2 semaines)
+## 2) Exécution J4 (priorités restantes)
 
-- [ ] **T-04a — Corriger le faux crawl complet PostgreSQL**
-  - Le résultat J4 actif du `2026-03-18` est invalide: le crawler PostgreSQL ne descendait pas récursivement dans les sous-répertoires.
-  - Finaliser le correctif de récursion dans `src/smb_crawler_postgresql.py`.
-  - Rejouer un crawl complet sur `\\172.16.252.34\Public\SMIDEN` et invalider les artefacts précédents trop superficiels.
-  - Produire un artefact final cohérent avec la volumétrie réelle du référentiel.
+- [x] **T-04 — Rétablir une preuve J4 exploitable sur PostgreSQL**
+  - Le `Go` J4 du `2026-03-18` reste inutilisable tant qu'un recrawl complet fiable n'a pas produit de nouvelle preuve versionnée.
+  - Capitaliser le crawl complet en cours sur `\\172.16.252.34\Public\SMIDEN` et vérifier sa finalisation sans erreur bloquante.
+  - Corrigé le `2026-03-19` côté code: les nouveaux runs PostgreSQL peuvent désormais ignorer les fichiers déjà crawlés au même chemin quand `size` et `last_modified` sont inchangés, ou quand `last_modified` n'est pas postérieur au dernier crawl `completed` de l'espace; commit `ae508db`, effet complet après redéploiement du crawler.
+  - Livré le `2026-03-19` via `docs/artifacts/j4_recrawl_live_snapshot_2026-03-19.json`: volumétrie réelle observée, découverte stabilisée, `0` erreur bloquante et rapport J4/Go-No-Go révisés.
+  - La completion totale du traitement d'intégrité n'est plus portée comme bloqueur J4; elle est transférée au cycle J5 avec nouveaux tests dédiés.
 
-- [ ] **T-04 — Initialisation contrôlée J4 sur PostgreSQL en environnement de référence**
-  - Initialiser PostgreSQL sur un dataset représentatif recrawlé.
-  - Exécuter un recrawl complet sur environnement cible avec PostgreSQL (pas de migration SQLite).
-  - Produire un rapport d'initialisation avec PostgreSQL (durée, volume, incidents, rollback readiness).
-
-- [ ] **T-05 — Validation de performance post-bascule**
-  - Rejouer le benchmark PostgreSQL sur endpoints critiques et comparer à la baseline historique SQLite.
+- [x] **T-05 — Validation de performance PostgreSQL sur base recrawlée**
+  - Rejouer le benchmark PostgreSQL sur endpoints critiques après le recrawl complet de référence.
   - Vérifier le respect des seuils P95 annoncés avec PostgreSQL.
-  - Publier les résultats dans `docs/` avec conclusion explicite (OK / NOK) et intégration de PostgreSQL.
+  - Publier les résultats dans `docs/` avec conclusion explicite (OK / NOK) sur la base active PostgreSQL.
+  - Commande exécutée : `docker compose exec api python /app/scripts/benchmark_dual_db.py --base-url http://localhost:8000 --samples 30 --runs 3 --output /tmp/bench_postgresql_active_2026-03-26.json`
+  - Artefacts : `docs/artifacts/bench_postgresql_active_2026-03-26.json`, `docs/bench_postgresql_active_2026-03-26.md`
+  - Conclusion : P95 `/api/stats` ≈ 56 ms / `/api/files` ≈ 66 ms stable sur les trois runs ⇒ OK.
 
-- [ ] **T-06 — Renforcement CI dual DB**
+- [ ] **T-06 — Durcir la CI PostgreSQL de référence**
   - Rendre obligatoire le passage des jobs CI PostgreSQL avant merge.
   - Ajouter la collecte d'artefacts minimaux en cas d'échec (logs API/tests).
   - Documenter le chemin de diagnostic rapide en cas de pipeline rouge.
 
-- [ ] **T-07 — Drill de rollback J4**
+- [x] **T-07 — Drill de rollback J4**
   - Simuler un incident post-migration PostgreSQL.
   - Exécuter le rollback complet avec chronométrage.
   - Capitaliser la procédure réelle dans `docs/operations/EXPLOITATION.md`.
+  - Livré le `2026-03-18` via `docs/artifacts/j4_rollback_drill_2026-03-18.json`; pas de nouveau chantier J4 ouvert tant qu'un nouveau contexte de référence ne l'exige pas.
 
 ---
 
@@ -82,6 +82,7 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
 - [ ] **T-14 — Revoir l'UI pour le pilotage des tests et crawls**
   - Repenser l'interface actuelle, jugée insuffisante pour le suivi opérationnel.
   - Transformer le tableau de bord en poste opérateur actif: espace courant, dernier lancement, état du crawl, KPI temps réel, progression et journal.
+  - Implémenter un protocole de pré-estimation volumétrique avant exploration pour fiabiliser la progression, selon `docs/operations/CRAWL_PRE_ESTIMATION_PROTOCOL.md`.
   - Corriger les finitions demandées dans `docs/definition_ui.md`: nom distinctif d'espace, "non défini" si dernier lancement absent, zone version réduite, suppression du sous-titre inutile, unités en octets, bouton logs déplacé sous la progression et désactivé si le crawler est inactif.
   - Déjà livré le `2026-03-18`: vocabulaire exploration/explorateur, logs réels du worker, progression par volume, queues réelles, actions arrêter/supprimer sur les runs récents et garde-fou un seul run actif par espace.
   - Déporter les explications de conception ou limites techniques hors de l'interface vers `TODO.md` ou la documentation.
@@ -138,3 +139,58 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
 - Priorisation: **fiabilité > migration > confort**.
 - Pas de nouvelle feature produit tant que T-01 à T-07 ne sont pas clôturées.
 - Revue hebdo obligatoire des KPI (pipeline, flakiness, perf, recovery).
+
+---
+
+## Annexe — Priorités opérateur clôturées
+
+- [x] **P-05 — Dettes de stabilisation opérateur**
+  - Corrigé le `2026-03-19`: la lecture principale de progression s'appuie désormais sur le runtime réel du run actif; la dette résiduelle porte surtout sur les cas de refresh incohérent entre blocs.
+  - Corrigé le `2026-03-19`: le bloc `Runs récents` n'affiche plus `Aucun run enregistré` quand un état actif est connu par `monitoring`; un message de désynchronisation explicite prend le relais.
+  - Corrigé le `2026-03-19`: les runs bloqués trop longtemps en `cancelling` sont désormais réconciliés automatiquement vers `cancelled`.
+  - Corrigé le `2026-03-19`: les connexions WebSocket fermées sont purgées proprement avant les envois suivants, ce qui supprime le bruit `Cannot call "send" once a close message has been sent.`.
+  - Clôturé le `2026-03-19`: le prototype `estimate-{hash}` est abandonné explicitement; aucune archive dédiée supplémentaire n'est requise dans le chemin nominal.
+
+- [x] **P-04 — Statut moteur et commandes opérateur explicites**
+  - Garder une barre de progression pour la quantité de données inventoriées.
+  - Ajouter des gommettes de couleur pour l'état moteur: arrêté, estimation, exploration, erreur, terminé.
+  - Basculer le bouton principal de `Lancer` vers `Arrêter` quand une exploration est en cours.
+  - Livré via les commits `1a2407a` et `f8fe00c`.
+
+- [x] **P-03 — Traitement asynchrone sans limite artificielle**
+  - Supprimer les limites de taille des queues de traitement asynchrone.
+  - Vérifier que le backlog de vérification d'intégrité n'est plus artificiellement plafonné.
+  - Livré dans le crawler PostgreSQL; effet complet appliqué aux nouveaux runs après redéploiement du conteneur.
+
+- [x] **P-02 — Indicateurs de progression lisibles et fiables**
+  - Exploiter les retours actuels du moteur pour des indicateurs de progression fiables.
+  - Présenter ces indicateurs sur une seule ligne, lisibles d'un coup d'oeil.
+  - Réserver les queues au diagnostic secondaire.
+  - Bug identifié le `2026-03-19`: l'API lisait un fichier fixe `smb_crawler_postgresql.log` alors que le crawler produit des logs par run `smb_crawler_postgresql_<run_id>.log`; conséquence directe: journal explorateur vide et indicateurs runtime à `0` malgré un run `running`.
+  - Clôturé le `2026-03-19`: le journal runtime réel et les indicateurs principaux de progression sont rétablis pour l'exploitation; les dettes résiduelles sont regroupées en `P-05`.
+  - Avancement utile livré: l'UI permet désormais de modifier une configuration d'espace existante, y compris de remplacer le mot de passe sans recréer l'espace; le secret courant n'est pas réaffiché et reste conservé si le champ mot de passe est laissé vide.
+
+- [x] **P-01 — Pré-estimation volumétrique avant exploration**
+  - Revoir le protocole moteur pour obtenir une estimation la plus fidèle possible du volume total avant exploration.
+  - Hypothèse rejetée en exploitation: l'approche `worker Docker éphémère + montage CIFS + du -sb` n'est pas viable dans son état actuel pour un budget opérateur raisonnable; elle ne doit plus être considérée comme cible par défaut.
+  - Décision appliquée dans le code: les nouveaux runs partent directement en `queued`; le pilotage opérateur repose sur les métriques runtime et le journal réel.
+  - Décision de schéma: les colonnes `estimated_total_size` et `estimate_*` sont retirées de `crawl_runs` sur la base de test; on repart sur une structure minimale cohérente avec le flux réel.
+  - Dette documentaire: archiver l'historique du prototype `estimate-{hash}` dans une note dédiée si l'on veut conserver la trace d'exploitation, mais ne plus le laisser polluer le chemin nominal.
+  - Clôturé le `2026-03-19`: le pilotage runtime en production répond désormais au besoin opérateur; il n'y a plus de raison de poursuivre la pré-estimation volumétrique avant exploration.
+
+- [x] **P-00c — Fuseau horaire homogène et configurable**
+  - Aligner les conteneurs Docker sur un fuseau horaire explicite.
+  - Rendre le fuseau d'affichage configurable dans l'interface via l'engrenage.
+  - Afficher les dates de build et d'exécution dans le fuseau choisi.
+  - Livré via le commit `1a2407a`.
+
+- [x] **P-00b — Réconciliation des runs zombies**
+  - Ajouter une logique défensive pour reclassifier les runs stale laissés `running` par le moteur.
+  - Exposer un état opérateur clair quand le moteur n'émet plus mais que la base n'est pas cohérente.
+  - Livré via les commits `1a2407a` et `f8fe00c`.
+
+- [x] **P-00 — Finalisation fiable des runs d'exploration**
+  - Corriger la chaîne de fin de run pour qu'un crawl terminé ou timeouté écrive toujours un statut final explicite en base.
+  - Ajouter un signal et une trace `run terminé` / `run en échec` côté moteur.
+  - Empêcher qu'un run reste `running` en base sans activité réelle du moteur.
+  - Livré via les commits `1a2407a` et `f8fe00c`.

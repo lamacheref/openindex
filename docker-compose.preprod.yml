@@ -3,16 +3,16 @@
 services:
   postgres:
     image: postgres:17-alpine
-    container_name: openindex-postgres
+    container_name: openindex-postgres-preprod
     restart: unless-stopped
     environment:
       TZ: ${OPENINDEX_TIMEZONE:-Europe/Paris}
       POSTGRES_DB: ${POSTGRES_DB:-openindex}
       POSTGRES_USER: ${POSTGRES_USER:-openindex_user}
-      POSTGRES_PASSWORD: openindex_secure_password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-openindex_secure_password}
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data_preprod:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
@@ -26,21 +26,14 @@ services:
       start_period: 20s
 
   api:
-    build:
-      context: .
-      dockerfile: Dockerfile.api
-      args:
-        OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.3.2}
-        OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-dev}
-        OPENINDEX_BUILD_DATE: ${OPENINDEX_BUILD_DATE:-unknown}
-    image: openindex-api:local
-    container_name: openindex-api
+    image: ${OPENINDEX_API_IMAGE:-ghcr.io/lamacheref/openindex-api:latest}
+    container_name: openindex-api-preprod
     restart: unless-stopped
     environment:
       TZ: ${OPENINDEX_TIMEZONE:-Europe/Paris}
       OPENINDEX_TIMEZONE: ${OPENINDEX_TIMEZONE:-Europe/Paris}
-      OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.3.2}
-      OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-dev}
+      OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.3.25}
+      OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-preprod}
       OPENINDEX_BUILD_DATE: ${OPENINDEX_BUILD_DATE:-unknown}
       OPENINDEX_DB_BACKEND: postgresql
       OPENINDEX_CRAWLER_LOG_PATH: /app/logs/smb_crawler_postgresql.log
@@ -61,21 +54,14 @@ services:
       - openindex-network
 
   crawler:
-    build:
-      context: .
-      dockerfile: Dockerfile.crawler
-      args:
-        OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.3.2}
-        OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-dev}
-        OPENINDEX_BUILD_DATE: ${OPENINDEX_BUILD_DATE:-unknown}
-    image: openindex-crawler:local
-    container_name: openindex-crawler
+    image: ${OPENINDEX_CRAWLER_IMAGE:-ghcr.io/lamacheref/openindex-crawler:latest}
+    container_name: openindex-crawler-preprod
     restart: unless-stopped
     environment:
       TZ: ${OPENINDEX_TIMEZONE:-Europe/Paris}
       OPENINDEX_TIMEZONE: ${OPENINDEX_TIMEZONE:-Europe/Paris}
-      OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.3.2}
-      OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-dev}
+      OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.3.25}
+      OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-preprod}
       OPENINDEX_BUILD_DATE: ${OPENINDEX_BUILD_DATE:-unknown}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -93,21 +79,14 @@ services:
       - openindex-network
 
   ui:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
-      args:
-        OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.3.2}
-        OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-dev}
-        OPENINDEX_BUILD_DATE: ${OPENINDEX_BUILD_DATE:-unknown}
-    image: openindex-ui:local
-    container_name: openindex-ui
+    image: ${OPENINDEX_UI_IMAGE:-ghcr.io/lamacheref/openindex-ui:latest}
+    container_name: openindex-ui-preprod
     restart: unless-stopped
     environment:
       TZ: ${OPENINDEX_TIMEZONE:-Europe/Paris}
       OPENINDEX_TIMEZONE: ${OPENINDEX_TIMEZONE:-Europe/Paris}
-      OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.3.2}
-      OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-dev}
+      OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.3.25}
+      OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-preprod}
       OPENINDEX_BUILD_DATE: ${OPENINDEX_BUILD_DATE:-unknown}
     ports:
       - "${OPENINDEX_UI_PORT:-3000}:3000"
@@ -118,7 +97,7 @@ services:
       - openindex-network
 
 volumes:
-  postgres_data:
+  postgres_data_preprod:
     driver: local
 
 networks:

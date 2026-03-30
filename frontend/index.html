@@ -143,19 +143,18 @@
 
                 <section class="card p-5">
                     <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">Dernier lancement</p>
-                    <p class="mt-3 text-sm font-semibold" x-text="latestRunLabel"></p>
+                    <p class="mt-3 text-sm font-semibold" x-text="latestRunDisplayLabel"></p>
                     <p class="mt-1 text-xs text-slate-500" x-text="latestRunDateLabel"></p>
                 </section>
 
-                <section class="card p-5">
-                    <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">État de l'exploration</p>
-                    <div class="mt-3 flex items-center justify-between">
+                <section class="card p-5 transition-colors" :class="engineStatusCardClass">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.22em]" :class="engineStatusCardLabelClass">État de l'exploration</p>
+                    <div class="mt-3">
                         <span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium"
-                              :class="crawlIsActive ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'">
-                            <span class="h-2.5 w-2.5 rounded-full" :class="crawlIsActive ? 'bg-emerald-500' : 'bg-slate-400'"></span>
-                            <span x-text="crawlIsActive ? 'Actif' : 'Inactif'"></span>
+                              :class="engineStatusBadgeClass">
+                            <span class="h-2.5 w-2.5 rounded-full" :class="engineStatusDotClass"></span>
+                            <span x-text="engineStatusLabel"></span>
                         </span>
-                        <span class="text-xs text-slate-500" x-text="wsConnected ? 'WebSocket actif' : 'WebSocket hors ligne'"></span>
                     </div>
                 </section>
 
@@ -198,7 +197,7 @@
                        target="_blank"
                        rel="noreferrer"
                        x-text="`Version ${systemStatus.app_version} (${systemStatus.commit_hash})`"></a>
-                    <p class="mt-1 text-[11px] text-slate-500" x-text="`Build: ${systemStatus.build_date}`"></p>
+                    <p class="mt-1 text-[11px] text-slate-500" x-text="`Build: ${formatDate(systemStatus.build_date)} (${displayTimezone})`"></p>
                     <a class="mt-1 block text-xs text-slate-500 hover:text-slate-700" href="#" x-text="systemStatus.license_label"></a>
                     <p class="mt-1 text-[11px] text-slate-500" x-text="systemStatus.license_owner"></p>
                 </div>
@@ -227,19 +226,27 @@
                     <section class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
                         <div class="card p-5">
                             <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Total fichiers</p>
-                            <p class="mt-3 text-3xl font-semibold" x-text="stats.total_files?.toLocaleString() || '0'"></p>
+                            <p class="mt-3 font-semibold"
+                               class="text-3xl"
+                               x-text="stats.total_files?.toLocaleString() || '0'"></p>
                         </div>
                         <div class="card p-5">
-                            <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Total répertoires</p>
-                            <p class="mt-3 text-3xl font-semibold" x-text="stats.total_directories?.toLocaleString() || '0'"></p>
+                            <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Total dossiers</p>
+                            <p class="mt-3 font-semibold"
+                               class="text-3xl"
+                               x-text="stats.total_directories?.toLocaleString() || '0'"></p>
                         </div>
                         <div class="card p-5">
                             <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Doublons</p>
-                            <p class="mt-3 text-3xl font-semibold" x-text="stats.duplicate_files?.toLocaleString() || '0'"></p>
+                            <p class="mt-3 font-semibold"
+                               class="text-3xl"
+                               x-text="stats.duplicate_files?.toLocaleString() || '0'"></p>
                         </div>
                         <div class="card p-5">
                             <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Volume indexé</p>
-                            <p class="mt-3 text-3xl font-semibold" x-text="formatBytes(stats.total_size || 0)"></p>
+                            <p class="mt-3 font-semibold"
+                               class="text-3xl"
+                               x-text="formatBytes(stats.total_size || 0)"></p>
                         </div>
                     </section>
 
@@ -247,73 +254,97 @@
                         <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                             <div>
                                 <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Avancement de l'exploration</p>
-                                <h3 class="mt-2 text-xl font-semibold">Bloc opératoire actif</h3>
+                                <div class="mt-2 flex flex-wrap items-center gap-3">
+                                    <h3 class="text-xl font-semibold">Pilotage de l'exploration</h3>
+                                </div>
                             </div>
                             <div class="flex flex-wrap gap-3">
-                                <button @click="activeSpaceConfigId ? startCrawl(activeSpaceConfigId) : null"
-                                        :disabled="!activeSpaceConfigId"
-                                        class="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-slate-300">
-                                    <i class="fas fa-play mr-2"></i>Lancer
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="mt-6">
-                            <div class="flex items-center justify-between text-sm">
-                                <span class="text-slate-600">Progression actuelle</span>
-                                <span class="font-semibold text-teal-800" x-text="`${effectiveProgressPercent}%`"></span>
-                            </div>
-                            <div class="mt-2 h-4 overflow-hidden rounded-full bg-slate-200">
-                                <div class="h-4 rounded-full bg-gradient-to-r from-teal-700 to-emerald-500 transition-all duration-500"
-                                     :style="`width: ${effectiveProgressPercent}%`"></div>
-                            </div>
-                            <p class="mt-3 text-sm text-slate-600" x-text="`Dernier run: ${crawlOverview.monitoring.latest_run_status || 'Aucun run'} • ${crawlOverview.monitoring.latest_run_config_name || '-'}`"></p>
-                            <p class="mt-1 text-sm text-slate-600" x-text="volumeProgressLabel"></p>
-                            <p class="mt-1 text-sm text-slate-600" x-show="liveImplementationStatus" x-text="liveImplementationStatus"></p>
-                            <div class="mt-4">
                                 <button @click="showCrawlerLogs = !showCrawlerLogs"
-                                        :disabled="!crawlIsActive"
-                                        class="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-white">
-                                    <i class="fas fa-align-left mr-2"></i>
-                                    <span x-text="showCrawlerLogs ? 'Masquer les logs' : 'Voir les logs'"></span>
+                                        :disabled="!engineHasRunningRun"
+                                        class="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
+                                    Voir les logs
+                                </button>
+                                <button @click="pauseActiveRun()"
+                                        x-show="engineHasRunningRun"
+                                        :disabled="!canPendingRun(activeRun?.status)"
+                                        class="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
+                                    <i class="fas fa-pause mr-2"></i>En attente
+                                </button>
+                                <button @click="engineHasRunningRun ? stopActiveRun() : (activeSpaceConfigId ? startCrawl(activeSpaceConfigId) : null)"
+                                        :disabled="engineHasRunningRun ? !activeRunId : !activeSpaceConfigId"
+                                        class="rounded-2xl px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-300"
+                                        :class="engineHasRunningRun ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'">
+                                    <i :class="engineHasRunningRun ? 'fas fa-stop mr-2' : 'fas fa-play mr-2'"></i>
+                                    <span x-text="engineHasRunningRun ? 'Arrêter' : 'Lancer'"></span>
                                 </button>
                             </div>
                         </div>
 
-                        <div x-show="crawlIsActive" class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-                            <template x-for="queue in queueIndicators" :key="queue.label">
-                                <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                                    <p class="text-xs uppercase tracking-[0.2em] text-slate-400" x-text="queue.label"></p>
-                                    <p class="mt-2 text-2xl font-semibold" x-text="queue.value"></p>
-                                    <p class="mt-1 text-xs text-slate-500" x-text="queue.detail"></p>
+                        <div class="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                            <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Signal runtime</p>
+                            <p class="mt-3 text-base font-semibold text-slate-900" x-text="volumeProgressLabel"></p>
+                        </div>
+
+                        <div x-show="engineHasRunningRun" class="mt-6">
+                            <div class="mb-3">
+                                <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Indicateurs de progression</p>
+                            </div>
+                            <div class="flex flex-nowrap gap-3 overflow-x-auto pb-1">
+                            <template x-for="indicator in progressIndicators" :key="indicator.label">
+                                <div class="min-w-[12rem] flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                    <p class="text-xs uppercase tracking-[0.2em] text-slate-400" x-text="indicator.label"></p>
+                                    <p class="mt-1 text-base font-semibold text-slate-900" x-text="indicator.value"></p>
+                                    <p class="mt-1 text-[11px] text-slate-500" x-text="indicator.detail"></p>
                                 </div>
                             </template>
+                            </div>
+                            <details class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                                <summary class="cursor-pointer text-sm font-semibold text-slate-700">Voir le détail des queues de traitement</summary>
+                                <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                                    <template x-for="queue in queueIndicators" :key="queue.label">
+                                        <div class="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                                            <p class="text-xs uppercase tracking-[0.2em] text-slate-400" x-text="queue.label"></p>
+                                            <p class="mt-2 text-2xl font-semibold" x-text="queue.value"></p>
+                                            <p class="mt-1 text-xs text-slate-500" x-text="queue.detail"></p>
+                                        </div>
+                                    </template>
+                                </div>
+                            </details>
+                            <div x-show="showCrawlerLogs" class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                                <p class="text-sm font-semibold text-slate-700">Journal de l'explorateur</p>
+                                <div class="mt-4">
+                                    <textarea class="h-[40vh] w-full rounded-2xl border border-slate-200 bg-slate-950 p-4 font-mono text-sm text-emerald-200"
+                                              readonly
+                                              x-text="operationalLogText"></textarea>
+                                </div>
+                            </div>
                         </div>
-                        <div x-show="!crawlIsActive" class="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm text-slate-500">
-                            Aucune queue active. Lance une exploration pour suivre les files de traitement en temps réel.
-                        </div>
-
-                        <div x-show="showCrawlerLogs" class="mt-6 fade-in">
-                            <label class="mb-2 block text-sm font-medium text-slate-700">Journal de l'explorateur</label>
-                            <textarea class="h-[40vh] w-full rounded-2xl border border-slate-200 bg-slate-950 p-4 font-mono text-sm text-emerald-200"
-                                      readonly
-                                      x-text="operationalLogText"></textarea>
+                        <div x-show="!engineHasRunningRun" class="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                            Aucune exploration active. Lance une exploration pour suivre les indicateurs de progression en temps réel.
                         </div>
                     </section>
 
                     <section class="grid grid-cols-1 gap-5 xl:grid-cols-2">
                         <div class="card p-6">
-                            <div class="mb-4 flex items-center justify-between">
-                                <h3 class="text-lg font-semibold">Runs récents</h3>
-                                <span class="text-xs text-slate-500">Source: /api/crawls/overview</span>
+                            <div class="mb-4 flex items-center justify-between gap-3">
+                                <button @click="showRecentExplorations = !showRecentExplorations"
+                                        class="flex min-w-0 flex-1 items-center justify-between gap-3 text-left">
+                                    <h3 class="text-lg font-semibold">Explorations récentes</h3>
+                                    <i class="fas fa-chevron-down text-sm text-slate-400 transition-transform"
+                                       :class="showRecentExplorations ? 'rotate-180' : ''"></i>
+                                </button>
                             </div>
+                            <div x-show="showRecentExplorations">
                             <div x-show="loadingOverview" class="py-8 text-center">
                                 <div class="loading"></div>
                             </div>
-                            <div x-show="!loadingOverview && crawlOverview.recent_runs.length === 0" class="text-sm text-slate-500">
+                            <div x-show="showRecentRunsSyncHint" class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-800">
+                                Un run actif est connu par le monitoring, mais la liste des runs récents n'est pas encore synchronisée.
+                            </div>
+                            <div x-show="showNoRecentRunsMessage" class="text-sm text-slate-500">
                                 Aucun run enregistré.
                             </div>
-                            <div x-show="!loadingOverview && crawlOverview.recent_runs.length > 0" class="overflow-x-auto">
+                            <div x-show="showRecentRunsTable" class="overflow-x-auto">
                                 <table class="table-modern">
                                     <thead>
                                         <tr>
@@ -338,6 +369,11 @@
                                                 <td class="text-sm text-slate-600" x-text="formatDate(run.triggered_at)"></td>
                                                 <td class="text-right">
                                                     <div class="flex justify-end gap-2">
+                                                        <button @click="pendingRun(run.run_id)"
+                                                                :disabled="!canPendingRun(run.status)"
+                                                                class="rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
+                                                            En attente
+                                                        </button>
                                                         <button @click="stopRun(run.run_id)"
                                                                 :disabled="!canStopRun(run.status)"
                                                                 class="rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
@@ -355,13 +391,23 @@
                                     </tbody>
                                 </table>
                             </div>
+                            </div>
                         </div>
 
                         <div class="card p-6">
-                            <div class="mb-4 flex items-center justify-between">
-                                <h3 class="text-lg font-semibold">Configuration active</h3>
-                                <button @click="openConfiguration('crawler')" class="text-sm text-teal-700 hover:text-teal-900">Gérer</button>
+                            <div class="mb-4 flex items-center justify-between gap-3">
+                                <button @click="showActiveConfiguration = !showActiveConfiguration"
+                                        class="flex min-w-0 flex-1 items-center justify-between gap-3 text-left">
+                                    <h3 class="text-lg font-semibold">Configuration active</h3>
+                                    <i class="fas fa-chevron-down text-sm text-slate-400 transition-transform"
+                                       :class="showActiveConfiguration ? 'rotate-180' : ''"></i>
+                                </button>
+                                <button @click="openConfiguration('crawler')"
+                                        class="rounded-xl border border-teal-200 bg-teal-50 px-3 py-1.5 text-sm font-semibold text-teal-800 hover:bg-teal-100">
+                                    Gérer
+                                </button>
                             </div>
+                            <div x-show="showActiveConfiguration">
                             <div x-show="selectedConfig" class="space-y-4">
                                 <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                                     <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Nom</p>
@@ -378,6 +424,7 @@
                             </div>
                             <div x-show="!selectedConfig" class="text-sm text-slate-500">
                                 Sélectionne une configuration pour préparer le prochain run.
+                            </div>
                             </div>
                         </div>
                     </section>
@@ -494,8 +541,16 @@
 
                 <div x-show="configSection === 'crawler'" class="fade-in mt-6 grid grid-cols-1 gap-5 xl:grid-cols-2">
                     <div class="card p-6">
-                        <h3 class="text-xl font-semibold">Configurer un espace</h3>
-                        <form @submit.prevent="createCrawlConfig()" class="mt-5 space-y-4">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <h3 class="text-xl font-semibold" x-text="editingCrawlId ? 'Modifier un espace' : 'Configurer un espace'"></h3>
+                                <p class="mt-1 text-sm text-slate-500" x-text="editingCrawlId ? 'Mettre à jour un espace existant sans recréer sa configuration.' : 'Créer un nouvel espace d’exploration.'"></p>
+                            </div>
+                            <button x-show="editingCrawlId" @click="resetCrawlForm()" type="button" class="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                                Nouveau
+                            </button>
+                        </div>
+                        <form @submit.prevent="editingCrawlId ? updateCrawlConfig() : createCrawlConfig()" class="mt-5 space-y-4">
                             <div>
                                 <label class="mb-1 block text-sm font-medium text-slate-700">Nom distinctif</label>
                                 <input type="text" x-model="newCrawl.name" required class="w-full rounded-xl border border-slate-300 px-3 py-2">
@@ -510,11 +565,12 @@
                             </div>
                             <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
                                 <input type="text" x-model="newCrawl.connection.username" placeholder="Utilisateur" required class="rounded-xl border border-slate-300 px-3 py-2">
-                                <input type="password" x-model="newCrawl.connection.password" placeholder="Mot de passe" required class="rounded-xl border border-slate-300 px-3 py-2">
+                                <input type="password" x-model="newCrawl.connection.password" :placeholder="editingCrawlId ? 'Nouveau mot de passe' : 'Mot de passe'" :required="!editingCrawlId" class="rounded-xl border border-slate-300 px-3 py-2">
                                 <input type="text" x-model="newCrawl.connection.domain" placeholder="Domaine" class="rounded-xl border border-slate-300 px-3 py-2">
                             </div>
+                            <p x-show="editingCrawlId" class="text-xs text-slate-500">Laisser le mot de passe vide pour conserver le secret actuel.</p>
                             <button type="submit" class="rounded-2xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">
-                                <i class="fas fa-plus mr-2"></i>Créer la configuration
+                                <i :class="editingCrawlId ? 'fas fa-pen mr-2' : 'fas fa-plus mr-2'"></i><span x-text="editingCrawlId ? 'Enregistrer les modifications' : 'Créer la configuration'"></span>
                             </button>
                         </form>
                     </div>
@@ -529,7 +585,10 @@
                                             <p class="font-semibold" x-text="config.name"></p>
                                             <p class="mt-1 text-xs text-slate-500" x-text="config.start_path"></p>
                                         </div>
-                                        <button @click="startCrawl(config.id)" class="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Lancer</button>
+                                        <div class="flex gap-2">
+                                            <button @click="editCrawlConfig(config)" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">Modifier</button>
+                                            <button @click="startCrawl(config.id)" class="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Lancer</button>
+                                        </div>
                                     </div>
                                 </div>
                             </template>
@@ -564,6 +623,15 @@
                         <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                             <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Rôle</p>
                             <p class="mt-2 text-base font-semibold" x-text="currentUser.role_label"></p>
+                        </div>
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <label class="text-xs uppercase tracking-[0.22em] text-slate-400">Fuseau horaire d'affichage</label>
+                            <select x-model="displayTimezone" @change="saveDisplayTimezone()" class="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
+                                <template x-for="timezone in timezoneOptions" :key="timezone">
+                                    <option :value="timezone" x-text="timezone"></option>
+                                </template>
+                            </select>
+                            <p class="mt-2 text-sm text-slate-600" x-text="`Fuseau serveur/conteneurs: ${systemStatus.timezone || 'UTC'}`"></p>
                         </div>
                     </div>
                 </div>
@@ -617,7 +685,7 @@
             <div class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <p class="text-xs uppercase tracking-[0.22em] text-slate-400">État courant</p>
-                    <p class="mt-2 text-base font-semibold" x-text="crawlIsActive ? 'Explorateur actif' : 'Explorateur inactif'"></p>
+                    <p class="mt-2 text-base font-semibold" x-text="engineHasRunningRun ? engineStatusLabel : 'Explorateur inactif'"></p>
                     <p class="mt-2 text-sm text-slate-600" x-text="latestRunLabel"></p>
                 </div>
                 <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -632,22 +700,20 @@
             </div>
 
             <div class="mt-6 flex flex-wrap gap-3">
-                <button @click="selectedConfigId ? startCrawl(selectedConfigId) : null"
-                        :disabled="!selectedConfigId"
-                        class="rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-slate-300">
-                    <i class="fas fa-play mr-2"></i>Lancer
+                <button @click="engineHasRunningRun ? stopActiveRun() : (selectedConfigId ? startCrawl(selectedConfigId) : null)"
+                        :disabled="engineHasRunningRun ? !activeRunId : !selectedConfigId"
+                        class="rounded-2xl px-4 py-2.5 text-sm font-semibold text-white disabled:bg-slate-300"
+                        :class="engineHasRunningRun ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'">
+                    <i :class="engineHasRunningRun ? 'fas fa-stop mr-2' : 'fas fa-play mr-2'"></i>
+                    <span x-text="engineHasRunningRun ? 'Arrêter' : 'Lancer'"></span>
                 </button>
                 <button @click="selectedConfigId ? startCrawl(selectedConfigId) : null"
-                        :disabled="!selectedConfigId"
+                        :disabled="!selectedConfigId || engineHasRunningRun"
                         class="rounded-2xl border border-teal-300 bg-teal-50 px-4 py-2.5 text-sm font-semibold text-teal-800 hover:bg-teal-100 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
                     <i class="fas fa-bolt mr-2"></i>Forcer une exploration
                 </button>
-                <button disabled
-                        class="cursor-not-allowed rounded-2xl border border-slate-200 bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-400">
-                    <i class="fas fa-stop mr-2"></i>Arrêter
-                </button>
             </div>
-            <p class="mt-4 text-sm text-slate-500">L’arrêt de l'exploration nécessite encore un endpoint backend dédié. Le lancement et le forçage utilisent déjà la configuration active.</p>
+            <p class="mt-4 text-sm text-slate-500">Le pilotage agit sur le run actif de l’espace courant. Le forçage reste désactivé tant qu’une exploration est déjà en cours.</p>
         </div>
     </div>
 
@@ -715,22 +781,43 @@
                     app_version: '0.3.0',
                     commit_hash: 'dev',
                     build_date: '-',
+                    timezone: 'UTC',
                     license_label: 'Licence',
                     license_owner: 'Copyright 2026 SMIDEN',
                     repository_url: 'https://github.com/lamacheref/openindex',
                     newer_version_available: false,
                     newest_version_url: null
                 },
+                displayTimezone: 'Europe/Paris',
+                timezoneOptions: ['Europe/Paris', 'UTC'],
                 crawlerRuntime: {
                     active: false,
+                    idle: false,
                     latest_status: 'Aucun run',
                     latest_config_name: '-',
-                    progress_percent: 0,
+                    progress_percent: null,
+                    processed_bytes: 0,
+                    discovered_bytes: 0,
+                    discovered_files: 0,
+                    discovered_directories: 0,
+                    large_files_detected: 0,
+                    large_files_bytes: 0,
+                    progress_hint: '',
+                    last_activity_at: null,
+                    progress_indicators: [],
                     queue_indicators: [],
                     log_lines: [],
                     log_source: 'logs/smb_crawler_postgresql.log'
                 },
+                animatedProcessedBytes: 0,
+                animatedDiscoveredBytes: 0,
+                clockNow: Date.now(),
+                clockTimerId: null,
+                volumeAnimationFrameId: null,
+                showRecentExplorations: false,
+                showActiveConfiguration: false,
                 operationalLogs: [],
+                editingCrawlId: '',
                 newCrawl: {
                     name: '',
                     domain_zone: '',
@@ -743,6 +830,8 @@
                 },
 
                 async init() {
+                    this.displayTimezone = localStorage.getItem('openindex.displayTimezone') || 'Europe/Paris';
+                    this.startRealtimeClock();
                     await this.loadSpaces();
                     await this.loadStats();
                     await this.loadCrawlConfigs();
@@ -768,6 +857,24 @@
 
                 closeConfiguration() {
                     this.showConfigOverlay = false;
+                },
+
+                resetCrawlForm() {
+                    this.editingCrawlId = '';
+                    this.newCrawl = {
+                        name: '',
+                        domain_zone: '',
+                        start_path: '',
+                        connection: {
+                            username: '',
+                            password: '',
+                            domain: ''
+                        }
+                    };
+                },
+
+                saveDisplayTimezone() {
+                    localStorage.setItem('openindex.displayTimezone', this.displayTimezone);
                 },
 
                 async loadStats() {
@@ -860,6 +967,9 @@
                             throw new Error('Erreur API system status');
                         }
                         this.systemStatus = await response.json();
+                        if (!localStorage.getItem('openindex.displayTimezone')) {
+                            this.displayTimezone = this.systemStatus.timezone || 'Europe/Paris';
+                        }
                         this.refreshNotifications();
                     } catch (error) {
                         console.error('Erreur status système:', error);
@@ -873,7 +983,12 @@
                         if (!response.ok) {
                             throw new Error('Erreur API explorateur runtime');
                         }
-                        this.crawlerRuntime = await response.json();
+                        const runtime = await response.json();
+                        this.crawlerRuntime = runtime;
+                        this.animateVolumeCounters(
+                            runtime.processed_bytes ?? 0,
+                            runtime.discovered_bytes ?? 0
+                        );
                     } catch (error) {
                         console.error('Erreur runtime explorateur:', error);
                         this.addLogEntry(`Erreur runtime explorateur: ${error.message}`);
@@ -906,20 +1021,59 @@
                         this.implementationStatus = `Configuration créée: ${created.name}`;
                         this.selectedConfigId = created.id;
                         this.addLogEntry(`Configuration créée: ${created.name}`);
-                        this.newCrawl = {
-                            name: '',
-                            domain_zone: '',
-                            start_path: '',
-                            connection: {
-                                username: '',
-                                password: '',
-                                domain: ''
-                            }
-                        };
+                        this.resetCrawlForm();
                         await this.refreshOperations();
                     } catch (error) {
                         this.implementationStatus = `Erreur: ${error.message}`;
                         this.addLogEntry(`Erreur création config: ${error.message}`);
+                    }
+                },
+
+                editCrawlConfig(config) {
+                    this.editingCrawlId = config.id;
+                    this.newCrawl = {
+                        name: config.name || '',
+                        domain_zone: config.domain_zone || '',
+                        start_path: config.start_path || '',
+                        connection: {
+                            username: config.connection_username || '',
+                            password: '',
+                            domain: config.connection_domain || ''
+                        }
+                    };
+                },
+
+                async updateCrawlConfig() {
+                    try {
+                        const payload = {
+                            name: this.newCrawl.name,
+                            domain_zone: this.newCrawl.domain_zone,
+                            start_path: this.newCrawl.start_path,
+                            include_paths: [],
+                            exclude_paths: [],
+                            connection: {
+                                username: this.newCrawl.connection.username,
+                                password: this.newCrawl.connection.password || '',
+                                domain: this.newCrawl.connection.domain || null
+                            }
+                        };
+                        const response = await fetch(`/api/crawl-configs/${this.editingCrawlId}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        if (!response.ok) {
+                            throw new Error('Mise à jour impossible');
+                        }
+                        const updated = await response.json();
+                        this.implementationStatus = `Configuration mise à jour: ${updated.name}`;
+                        this.selectedConfigId = updated.id;
+                        this.addLogEntry(`Configuration mise à jour: ${updated.name}`);
+                        this.resetCrawlForm();
+                        await this.refreshOperations();
+                    } catch (error) {
+                        this.implementationStatus = `Erreur: ${error.message}`;
+                        this.addLogEntry(`Erreur mise à jour config: ${error.message}`);
                     }
                 },
 
@@ -957,6 +1111,19 @@
                     }
                 },
 
+                async pendingRun(runId) {
+                    try {
+                        const response = await fetch(`/api/crawls/${runId}/pending`, { method: 'POST' });
+                        if (!response.ok) {
+                            const details = await response.json();
+                            throw new Error(details.detail || 'Mise en attente impossible');
+                        }
+                        await this.refreshOperations();
+                    } catch (error) {
+                        this.addLogEntry(`Erreur mise en attente exploration: ${error.message}`);
+                    }
+                },
+
                 async deleteRun(runId) {
                     try {
                         const response = await fetch(`/api/crawls/${runId}`, { method: 'DELETE' });
@@ -968,6 +1135,24 @@
                     } catch (error) {
                         this.addLogEntry(`Erreur suppression run: ${error.message}`);
                     }
+                },
+
+                async stopActiveRun() {
+                    if (!this.activeRunId) {
+                        this.addLogEntry("Aucun run actif à arrêter.");
+                        return;
+                    }
+                    await this.stopRun(this.activeRunId);
+                    this.showCrawlPilot = false;
+                },
+
+                async pauseActiveRun() {
+                    if (!this.activeRunId) {
+                        this.addLogEntry("Aucun run actif à mettre en attente.");
+                        return;
+                    }
+                    await this.pendingRun(this.activeRunId);
+                    this.showCrawlPilot = false;
                 },
 
                 async loadDbExplain() {
@@ -1022,6 +1207,60 @@
                     };
                 },
 
+                startRealtimeClock() {
+                    if (this.clockTimerId) {
+                        clearInterval(this.clockTimerId);
+                    }
+                    this.clockNow = Date.now();
+                    this.clockTimerId = setInterval(() => {
+                        this.clockNow = Date.now();
+                    }, 1000);
+                },
+
+                animateVolumeCounters(nextProcessedBytes, nextDiscoveredBytes) {
+                    if (this.volumeAnimationFrameId) {
+                        cancelAnimationFrame(this.volumeAnimationFrameId);
+                    }
+
+                    const startProcessedBytes = this.animatedProcessedBytes ?? 0;
+                    const startDiscoveredBytes = this.animatedDiscoveredBytes ?? 0;
+                    const targetProcessedBytes = Math.max(0, nextProcessedBytes || 0);
+                    const targetDiscoveredBytes = Math.max(0, nextDiscoveredBytes || 0);
+
+                    if (
+                        startProcessedBytes === targetProcessedBytes &&
+                        startDiscoveredBytes === targetDiscoveredBytes
+                    ) {
+                        return;
+                    }
+
+                    const startedAt = performance.now();
+                    const duration = 700;
+
+                    const step = (now) => {
+                        const progress = Math.min((now - startedAt) / duration, 1);
+                        const eased = 1 - Math.pow(1 - progress, 3);
+
+                        this.animatedProcessedBytes = Math.round(
+                            startProcessedBytes + ((targetProcessedBytes - startProcessedBytes) * eased)
+                        );
+                        this.animatedDiscoveredBytes = Math.round(
+                            startDiscoveredBytes + ((targetDiscoveredBytes - startDiscoveredBytes) * eased)
+                        );
+
+                        if (progress < 1) {
+                            this.volumeAnimationFrameId = requestAnimationFrame(step);
+                            return;
+                        }
+
+                        this.animatedProcessedBytes = targetProcessedBytes;
+                        this.animatedDiscoveredBytes = targetDiscoveredBytes;
+                        this.volumeAnimationFrameId = null;
+                    };
+
+                    this.volumeAnimationFrameId = requestAnimationFrame(step);
+                },
+
                 async refreshOperations() {
                     await Promise.all([
                         this.loadStats(),
@@ -1064,32 +1303,59 @@
                     return ['queued', 'pending', 'running', 'in_progress'].includes((status || '').toLowerCase());
                 },
 
+                canPendingRun(status) {
+                    return ['queued', 'running', 'in_progress', 'cancelling'].includes((status || '').toLowerCase());
+                },
+
                 canDeleteRun(status) {
                     return !['queued', 'pending', 'running', 'in_progress', 'cancelling'].includes((status || '').toLowerCase());
                 },
 
                 formatBytes(bytes) {
-                    if (!bytes) return '0 octet';
-                    if (bytes < 1024) {
-                        return `${new Intl.NumberFormat('fr-FR').format(bytes)} octets`;
+                    if (!bytes) return '0 o';
+                    if (bytes < 1000) {
+                        return `${new Intl.NumberFormat('fr-FR').format(bytes)} o`;
                     }
-                    const units = ['ko', 'Mo', 'Go', 'To'];
-                    let value = bytes / 1024;
-                    let unitIndex = 0;
-                    while (value >= 1024 && unitIndex < units.length - 1) {
-                        value /= 1024;
+                    const units = ['ko', 'Mo', 'Go', 'To', 'Po'];
+                    let value = bytes;
+                    let unitIndex = -1;
+                    while (value >= 1000 && unitIndex < units.length - 1) {
+                        value /= 1000;
                         unitIndex += 1;
                     }
-                    return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(value)} ${units[unitIndex]}`;
+                    return `${new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(value)} ${units[unitIndex]}`;
                 },
 
                 formatDate(dateString) {
                     if (!dateString || dateString === '-') return 'non défini';
-                    return new Date(dateString).toLocaleString('fr-FR');
+                    return new Date(dateString).toLocaleString('fr-FR', { timeZone: this.displayTimezone });
+                },
+
+                formatElapsedDuration(dateString) {
+                    if (!dateString || dateString === '-') return '00h00m00s';
+                    const launchedAt = new Date(dateString).getTime();
+                    if (Number.isNaN(launchedAt)) return '00h00m00s';
+                    const elapsedSeconds = Math.max(0, Math.floor((this.clockNow - launchedAt) / 1000));
+                    const hours = Math.floor(elapsedSeconds / 3600).toString().padStart(2, '0');
+                    const minutes = Math.floor((elapsedSeconds % 3600) / 60).toString().padStart(2, '0');
+                    const seconds = Math.floor(elapsedSeconds % 60).toString().padStart(2, '0');
+                    return `${hours}h${minutes}m${seconds}s`;
+                },
+
+                isActiveRunStatus(status) {
+                    return ['queued', 'pending', 'running', 'in_progress', 'cancelling'].includes((status || '').toLowerCase());
                 },
 
                 get crawlIsActive() {
-                    return this.crawlerRuntime.active || (this.crawlOverview.monitoring.running_runs || 0) > 0;
+                    return this.crawlerRuntime.active;
+                },
+
+                get engineHasRunningRun() {
+                    return (this.crawlOverview.monitoring.running_runs || 0) > 0;
+                },
+
+                get engineIsIdle() {
+                    return !!this.crawlerRuntime.idle;
                 },
 
                 get selectedConfig() {
@@ -1114,9 +1380,16 @@
                     return [];
                 },
 
+                get progressIndicators() {
+                    if (this.crawlerRuntime.progress_indicators && this.crawlerRuntime.progress_indicators.length > 0) {
+                        return this.crawlerRuntime.progress_indicators;
+                    }
+                    return [];
+                },
+
                 get operationalLogText() {
                     if (this.crawlerRuntime.log_lines && this.crawlerRuntime.log_lines.length > 0) {
-                        return this.crawlerRuntime.log_lines.join('\n');
+                        return [...this.crawlerRuntime.log_lines].reverse().join('\n');
                     }
                     return '[aucun log explorateur]';
                 },
@@ -1146,6 +1419,139 @@
                     return this.crawlOverview.monitoring.latest_run_config_name || 'non défini';
                 },
 
+                get latestRunDisplayLabel() {
+                    const label = this.latestRunLabel;
+                    if (label === 'non défini') {
+                        return label;
+                    }
+                    if (!this.isActiveRunStatus(this.crawlOverview.monitoring.latest_run_status)) {
+                        return label;
+                    }
+                    return `${label} - ${this.formatElapsedDuration(this.crawlOverview.monitoring.latest_run_triggered_at)}`;
+                },
+
+                get activeRun() {
+                    return this.crawlOverview.recent_runs.find((run) => this.canStopRun(run.status)) || null;
+                },
+
+                get activeRunId() {
+                    return this.activeRun?.run_id || '';
+                },
+
+                get hasRecentRunsData() {
+                    return (this.crawlOverview.recent_runs?.length || 0) > 0;
+                },
+
+                get hasActiveRunSignal() {
+                    return this.isActiveRunStatus(this.crawlOverview.monitoring.latest_run_status)
+                        || this.engineHasRunningRun
+                        || this.crawlIsActive
+                        || this.engineIsIdle;
+                },
+
+                get showRecentRunsSyncHint() {
+                    return !this.loadingOverview && !this.hasRecentRunsData && this.hasActiveRunSignal;
+                },
+
+                get showNoRecentRunsMessage() {
+                    return !this.loadingOverview && !this.hasRecentRunsData && !this.hasActiveRunSignal;
+                },
+
+                get showRecentRunsTable() {
+                    return !this.loadingOverview && this.hasRecentRunsData;
+                },
+
+                get engineStatusLabel() {
+                    const normalized = (this.crawlOverview.monitoring.latest_run_status || '').toLowerCase();
+                    if (this.engineIsIdle) {
+                        return 'Idle';
+                    }
+                    if (this.crawlIsActive) {
+                        return 'Exploration active';
+                    }
+                    if (normalized === 'failed') {
+                        return 'Erreur';
+                    }
+                    if (['queued', 'pending'].includes(normalized)) {
+                        return 'En file';
+                    }
+                    if (normalized === 'completed') {
+                        return 'Terminé';
+                    }
+                    if (normalized === 'cancelled') {
+                        return 'Arrêté';
+                    }
+                    return 'Arrêté';
+                },
+
+                get engineStatusBadgeClass() {
+                    const normalized = (this.crawlOverview.monitoring.latest_run_status || '').toLowerCase();
+                    if (this.engineIsIdle) {
+                        return 'bg-slate-100 text-slate-700';
+                    }
+                    if (this.crawlIsActive) {
+                        return 'bg-emerald-100 text-emerald-800';
+                    }
+                    if (normalized === 'failed') {
+                        return 'bg-red-100 text-red-800';
+                    }
+                    if (['queued', 'pending'].includes(normalized)) {
+                        return 'bg-blue-100 text-blue-800';
+                    }
+                    return 'bg-slate-100 text-slate-700';
+                },
+
+                get engineStatusCardClass() {
+                    const normalized = (this.crawlOverview.monitoring.latest_run_status || '').toLowerCase();
+                    if (this.engineIsIdle) {
+                        return 'border-slate-200 bg-slate-50';
+                    }
+                    if (this.crawlIsActive) {
+                        return 'border-emerald-200 bg-emerald-50';
+                    }
+                    if (normalized === 'failed') {
+                        return 'border-red-200 bg-red-50';
+                    }
+                    if (['queued', 'pending'].includes(normalized)) {
+                        return 'border-blue-200 bg-blue-50';
+                    }
+                    return 'border-slate-200 bg-slate-50';
+                },
+
+                get engineStatusCardLabelClass() {
+                    const normalized = (this.crawlOverview.monitoring.latest_run_status || '').toLowerCase();
+                    if (this.engineIsIdle) {
+                        return 'text-slate-500';
+                    }
+                    if (this.crawlIsActive) {
+                        return 'text-emerald-700';
+                    }
+                    if (normalized === 'failed') {
+                        return 'text-red-700';
+                    }
+                    if (['queued', 'pending'].includes(normalized)) {
+                        return 'text-blue-700';
+                    }
+                    return 'text-slate-500';
+                },
+
+                get engineStatusDotClass() {
+                    const normalized = (this.crawlOverview.monitoring.latest_run_status || '').toLowerCase();
+                    if (this.engineIsIdle) {
+                        return 'bg-slate-400';
+                    }
+                    if (this.crawlIsActive) {
+                        return 'bg-emerald-500';
+                    }
+                    if (normalized === 'failed') {
+                        return 'bg-red-500';
+                    }
+                    if (['queued', 'pending'].includes(normalized)) {
+                        return 'bg-blue-500';
+                    }
+                    return 'bg-slate-400';
+                },
+
                 get effectiveProgressPercent() {
                     if (this.crawlIsActive) {
                         return this.crawlerRuntime.progress_percent ?? 0;
@@ -1154,8 +1560,11 @@
                 },
 
                 get volumeProgressLabel() {
-                    const processed = this.crawlerRuntime.processed_bytes ?? 0;
-                    const discovered = this.crawlerRuntime.discovered_bytes ?? 0;
+                    const processed = this.animatedProcessedBytes ?? 0;
+                    const discovered = this.animatedDiscoveredBytes ?? 0;
+                    if (this.engineIsIdle && this.crawlerRuntime.last_activity_at) {
+                        return `Dernier signal moteur: ${this.formatDate(this.crawlerRuntime.last_activity_at)}`;
+                    }
                     if (this.crawlIsActive && discovered > 0) {
                         return `${this.formatBytes(processed)} explorés sur ${this.formatBytes(discovered)} découverts`;
                     }

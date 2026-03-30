@@ -139,6 +139,20 @@ class DummyDB:
         self.crawl_configs.append(item)
         return item
 
+    def update_crawl_config(self, config_id, payload):
+        for item in self.crawl_configs:
+            if item["id"] != config_id:
+                continue
+            item["name"] = payload.name
+            item["domain_zone"] = payload.domain_zone
+            item["start_path"] = payload.start_path
+            item["include_paths"] = payload.include_paths
+            item["exclude_paths"] = payload.exclude_paths
+            item["connection_username"] = payload.connection.username
+            item["connection_domain"] = payload.connection.domain
+            return item
+        return None
+
     def start_crawl(self, config_id):
         if any(run["config_id"] == config_id and run["status"] in {"queued", "running", "pending", "in_progress", "cancelling"} for run in self.crawl_runs):
             raise ValueError("Une exploration est deja active pour cette configuration (queued).")
@@ -164,6 +178,16 @@ class DummyDB:
             return {"run_id": run_id, "status": run["status"]}
         return None
 
+    def mark_run_pending(self, run_id):
+        for run in self.crawl_runs:
+            if run["run_id"] != run_id:
+                continue
+            if run["status"] in {"queued", "running", "in_progress", "cancelling"}:
+                run["status"] = "pending"
+                return {"run_id": run_id, "status": run["status"]}
+            return None
+        return None
+
     def delete_run(self, run_id):
         for index, run in enumerate(self.crawl_runs):
             if run["run_id"] != run_id:
@@ -174,13 +198,29 @@ class DummyDB:
             return True
         return False
 
+    def fail_active_runs(self):
+        updated = 0
+        for run in self.crawl_runs:
+            if run["status"] in {"running", "in_progress", "cancelling"}:
+                run["status"] = "failed"
+                updated += 1
+        return updated
+
+    def cancel_stale_cancelling_runs(self):
+        updated = 0
+        for run in self.crawl_runs:
+            if run["status"] == "cancelling":
+                run["status"] = "cancelled"
+                updated += 1
+        return updated
+
     def get_monitoring_summary(self):
         latest = self.crawl_runs[-1] if self.crawl_runs else None
         return {
             "total_configs": len(self.crawl_configs),
             "total_runs": len(self.crawl_runs),
             "queued_runs": sum(1 for run in self.crawl_runs if run["status"] == "queued"),
-            "running_runs": 0,
+            "running_runs": sum(1 for run in self.crawl_runs if run["status"] in {"running", "in_progress"}),
             "completed_runs": sum(1 for run in self.crawl_runs if run["status"] == "completed"),
             "failed_runs": sum(1 for run in self.crawl_runs if run["status"] == "failed"),
             "latest_run_status": latest["status"] if latest else "Aucun run",
@@ -237,6 +277,20 @@ def test_health_endpoint(client):
     response = client("GET", "/health")
     assert response.status_code == 200
     assert response.json()["status"] == "healthy"
+
+
+def test_extract_runtime_metrics_handles_runtime_progress_line():
+    metrics = api_main._extract_runtime_metrics(
+        [
+            "2026-03-19 13:00:00 - smb_crawler_postgresql - INFO - 📊 Progression: 120 fichiers, 15 dossiers, 2 gros fichiers | Queues: Dossiers à explorer=3, Dossiers à indexer=4, Vérification d'intégrité=5, Gros fichiers en attente=1 | Volume cible=11051758928 octets, Volume traité=2048 octets, Volume découvert=4096 octets, Progression volume=0.02%"
+        ]
+    )
+
+    assert metrics["discovered_files"] == 120
+    assert metrics["discovered_directories"] == 15
+    assert metrics["target_bytes"] == 11051758928
+    assert metrics["queue_dirs"] == 3
+    assert metrics["processed_bytes"] == 2048
 
 
 def test_get_files_endpoint(client):
@@ -433,6 +487,48 @@ def test_create_and_list_crawl_configs(client):
     assert listed[0]['domain_zone'] == 'EMEA'
 
 
+def test_update_crawl_config(client):
+    created = client(
+        "POST",
+        "/api/crawl-configs",
+        json={
+            "name": "Crawl Finance",
+            "domain_zone": "EMEA",
+            "start_path": "\\\\srv\\finance",
+            "include_paths": [],
+            "exclude_paths": [],
+            "connection": {
+                "username": "svc_finance",
+                "password": "secret",
+                "domain": "CORP",
+            },
+        },
+    ).json()
+
+    response = client(
+        "PUT",
+        f"/api/crawl-configs/{created['id']}",
+        json={
+            "name": "Crawl Finance Prod",
+            "domain_zone": "FR",
+            "start_path": "\\\\srv\\finance-prod",
+            "include_paths": [],
+            "exclude_paths": [],
+            "connection": {
+                "username": "svc_finance_prod",
+                "password": "",
+                "domain": "CORP",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["name"] == "Crawl Finance Prod"
+    assert payload["start_path"] == "\\\\srv\\finance-prod"
+    assert payload["connection_username"] == "svc_finance_prod"
+
+
 def test_start_crawl_requires_existing_config(client):
 
     missing = client("POST", "/api/crawls/start", json={"config_id": "missing"})
@@ -491,6 +587,30 @@ def test_stop_and_delete_run_endpoints(client):
     deleted = client("DELETE", f"/api/crawls/{started['run_id']}")
     assert deleted.status_code == 200
     assert deleted.json()["status"] == "deleted"
+
+
+def test_mark_run_pending_endpoint(client):
+    created = client(
+        "POST",
+        "/api/crawl-configs",
+        json={
+            "name": "Crawl Pending",
+            "domain_zone": "FR",
+            "start_path": "\\\\srv\\pending",
+            "include_paths": [],
+            "exclude_paths": [],
+            "connection": {
+                "username": "svc_pending",
+                "password": "secret",
+                "domain": "CORP",
+            },
+        },
+    ).json()
+
+    started = client("POST", "/api/crawls/start", json={"config_id": created["id"]}).json()
+    pending = client("POST", f"/api/crawls/{started['run_id']}/pending")
+    assert pending.status_code == 200
+    assert pending.json()["status"] == "pending"
 
 
 def test_get_crawl_overview_returns_real_operational_data(client):
@@ -568,3 +688,57 @@ def test_get_crawler_runtime_endpoint(client, monkeypatch, tmp_path):
     assert payload["latest_config_name"] == "Crawl Runtime"
     assert len(payload["queue_indicators"]) == 4
     assert payload["log_lines"] == ["line 2", "line 3"]
+    integrity_queue = next(item for item in payload["queue_indicators"] if item["key"] == "checksums")
+    integrity_progress = next(item for item in payload["progress_indicators"] if item["key"] == "integrity_backlog")
+    assert "it/s" in integrity_queue["detail"]
+    assert "it/s" in integrity_progress["detail"]
+
+
+def test_monitoring_reconciles_stale_cancelling_run_to_cancelled(monkeypatch):
+    db = DummyDB()
+    db.crawl_configs.append(
+        {
+            "id": "cfg-1",
+            "name": "Crawl Cancel",
+            "domain_zone": "FR",
+            "start_path": "\\\\srv\\cancel",
+            "include_paths": [],
+            "exclude_paths": [],
+            "connection_username": "svc_cancel",
+            "connection_domain": "CORP",
+            "created_at": "2026-03-10T12:00:00+00:00",
+        }
+    )
+    db.crawl_runs.append(
+        {
+            "run_id": "run-1",
+            "config_id": "cfg-1",
+            "status": "cancelling",
+            "triggered_at": "2026-03-10T12:05:00+00:00",
+        }
+    )
+
+    monkeypatch.setattr(api_main, "get_db_adapter", lambda: db)
+    monkeypatch.setattr(api_main, "STALE_RUN_TIMEOUT_SECONDS", 1)
+
+    response = run_request("GET", "/api/monitoring")
+    assert response.status_code == 200
+    assert response.json()["latest_run_status"] == "cancelled"
+
+
+def test_connection_manager_removes_closed_websocket():
+    class ClosedWebSocket:
+        async def send_text(self, _message):
+            raise RuntimeError('Cannot call "send" once a close message has been sent.')
+
+    async def _run():
+        local_manager = api_main.ConnectionManager()
+        websocket = ClosedWebSocket()
+        local_manager.active_connections.append(websocket)
+
+        sent = await local_manager.send_personal_message("payload", websocket)
+
+        assert sent is False
+        assert websocket not in local_manager.active_connections
+
+    asyncio.run(_run())

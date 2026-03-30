@@ -13,10 +13,9 @@ import logging
 import os
 import re
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
-from uuid import uuid4
 try:
     from src.versioning import get_current_version
 except ModuleNotFoundError:  # pragma: no cover
@@ -113,6 +112,21 @@ class CrawlConfigCreate(BaseModel):
     connection: CrawlConnectionConfig
 
 
+class CrawlConnectionUpdate(BaseModel):
+    username: str
+    password: Optional[str] = None
+    domain: Optional[str] = None
+
+
+class CrawlConfigUpdate(BaseModel):
+    name: str
+    domain_zone: str
+    start_path: str
+    include_paths: List[str] = Field(default_factory=list)
+    exclude_paths: List[str] = Field(default_factory=list)
+    connection: CrawlConnectionUpdate
+
+
 class CrawlConfigPublic(BaseModel):
     id: str
     name: str
@@ -174,6 +188,7 @@ class SystemStatus(BaseModel):
     app_version: str
     commit_hash: str
     build_date: str
+    timezone: str
     license_label: str
     license_owner: str
     repository_url: str
@@ -188,16 +203,36 @@ class QueueIndicator(BaseModel):
     detail: str
 
 
+class ProgressIndicator(BaseModel):
+    key: str
+    label: str
+    value: str
+    detail: str
+
+
 class CrawlerRuntime(BaseModel):
     active: bool
+    idle: bool = False
     latest_status: str
     latest_config_name: str
-    progress_percent: float
+    progress_percent: Optional[float] = None
     processed_bytes: int = 0
     discovered_bytes: int = 0
+    discovered_files: int = 0
+    discovered_directories: int = 0
+    large_files_detected: int = 0
+    large_files_bytes: int = 0
+    progress_hint: str = ""
+    last_activity_at: Optional[str] = None
+    progress_indicators: List[ProgressIndicator]
     queue_indicators: List[QueueIndicator]
     log_lines: List[str]
     log_source: str
+
+
+STALE_RUN_TIMEOUT_SECONDS = int(os.getenv("OPENINDEX_CRAWLER_STALE_TIMEOUT_SECONDS", "1200"))
+ACTIVE_RUN_STATUSES = {"queued", "pending", "running", "in_progress", "cancelling"}
+RUNNING_RUN_STATUSES = {"running", "in_progress"}
 
 
 def extract_space_prefix(path: str) -> Optional[str]:
@@ -382,6 +417,37 @@ class PostgreSQLAdapter:
             """,
             "CREATE INDEX IF NOT EXISTS idx_crawl_runs_triggered_at ON crawl_runs(triggered_at)",
             """
+            CREATE TABLE IF NOT EXISTS crawl_run_checkpoints (
+                run_id UUID PRIMARY KEY REFERENCES crawl_runs(id) ON DELETE CASCADE,
+                base_path TEXT NOT NULL,
+                total_files INTEGER NOT NULL DEFAULT 0,
+                total_directories INTEGER NOT NULL DEFAULT 0,
+                total_size BIGINT NOT NULL DEFAULT 0,
+                processed_size BIGINT NOT NULL DEFAULT 0,
+                large_files INTEGER NOT NULL DEFAULT 0,
+                estimated_total_size BIGINT NOT NULL DEFAULT 0,
+                phase TEXT NOT NULL DEFAULT 'crawl',
+                last_activity_at TIMESTAMP WITH TIME ZONE,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS crawl_run_queue_items (
+                id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                run_id UUID NOT NULL REFERENCES crawl_runs(id) ON DELETE CASCADE,
+                queue_name TEXT NOT NULL,
+                path TEXT NOT NULL,
+                name TEXT,
+                size BIGINT,
+                last_modified TIMESTAMP WITH TIME ZONE,
+                is_directory BOOLEAN NOT NULL DEFAULT FALSE,
+                crawl_config_id UUID REFERENCES crawl_configs(id) ON DELETE SET NULL,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+            """,
+            "CREATE INDEX IF NOT EXISTS idx_crawl_run_queue_items_run_id ON crawl_run_queue_items(run_id)",
+            "CREATE INDEX IF NOT EXISTS idx_crawl_run_queue_items_run_queue ON crawl_run_queue_items(run_id, queue_name)",
+            """
             ALTER TABLE files
             ADD COLUMN IF NOT EXISTS crawl_config_id UUID REFERENCES crawl_configs(id) ON DELETE SET NULL
             """,
@@ -479,6 +545,85 @@ class PostgreSQLAdapter:
             "created_at": row[8],
         }
 
+    def update_crawl_config(self, config_id: str, payload: CrawlConfigUpdate) -> Optional[Dict[str, Any]]:
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                if payload.connection.password:
+                    cursor.execute(
+                        """
+                        UPDATE crawl_configs
+                        SET name = %s,
+                            domain_zone = %s,
+                            start_path = %s,
+                            include_paths = %s,
+                            exclude_paths = %s,
+                            connection_username = %s,
+                            connection_password = %s,
+                            connection_domain = %s
+                        WHERE id::text = %s
+                        RETURNING id::text, name, domain_zone, start_path,
+                                  include_paths, exclude_paths,
+                                  connection_username, connection_domain,
+                                  created_at::text
+                        """,
+                        [
+                            payload.name,
+                            payload.domain_zone,
+                            payload.start_path,
+                            payload.include_paths,
+                            payload.exclude_paths,
+                            payload.connection.username,
+                            payload.connection.password,
+                            payload.connection.domain,
+                            config_id,
+                        ],
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        UPDATE crawl_configs
+                        SET name = %s,
+                            domain_zone = %s,
+                            start_path = %s,
+                            include_paths = %s,
+                            exclude_paths = %s,
+                            connection_username = %s,
+                            connection_domain = %s
+                        WHERE id::text = %s
+                        RETURNING id::text, name, domain_zone, start_path,
+                                  include_paths, exclude_paths,
+                                  connection_username, connection_domain,
+                                  created_at::text
+                        """,
+                        [
+                            payload.name,
+                            payload.domain_zone,
+                            payload.start_path,
+                            payload.include_paths,
+                            payload.exclude_paths,
+                            payload.connection.username,
+                            payload.connection.domain,
+                            config_id,
+                        ],
+                    )
+                row = cursor.fetchone()
+            conn.commit()
+
+        if not row:
+            return None
+
+        return {
+            "id": row[0],
+            "name": row[1],
+            "domain_zone": row[2],
+            "start_path": row[3],
+            "include_paths": row[4] or [],
+            "exclude_paths": row[5] or [],
+            "connection_username": row[6],
+            "connection_domain": row[7],
+            "created_at": row[8],
+        }
+
     def start_crawl(self, config_id: str) -> Optional[Dict[str, Any]]:
         existing_run = self.execute_query(
             """
@@ -519,6 +664,43 @@ class PostgreSQLAdapter:
             "triggered_at": row[3],
         }
 
+    def get_crawl_run_details(self, run_id: str) -> Optional[Dict[str, Any]]:
+        rows = self.execute_query(
+            """
+            SELECT
+                r.id::text,
+                r.config_id::text,
+                r.status,
+                r.triggered_at::text,
+                c.name,
+                c.domain_zone,
+                c.start_path,
+                c.connection_username,
+                c.connection_password,
+                c.connection_domain
+            FROM crawl_runs r
+            JOIN crawl_configs c ON c.id = r.config_id
+            WHERE r.id::text = %s
+            LIMIT 1
+            """,
+            [run_id],
+        )
+        if not rows:
+            return None
+        row = rows[0]
+        return {
+            "run_id": row[0],
+            "config_id": row[1],
+            "status": row[2],
+            "triggered_at": row[3],
+            "name": row[4],
+            "domain_zone": row[5],
+            "start_path": row[6],
+            "connection_username": row[7],
+            "connection_password": row[8],
+            "connection_domain": row[9],
+        }
+
     def request_stop_run(self, run_id: str) -> Optional[Dict[str, Any]]:
         with self.get_connection() as conn:
             with conn.cursor() as cursor:
@@ -531,6 +713,26 @@ class PostgreSQLAdapter:
                         ELSE status
                     END
                     WHERE id::text = %s
+                    RETURNING id::text, status
+                    """,
+                    [run_id],
+                )
+                row = cursor.fetchone()
+            conn.commit()
+
+        if not row:
+            return None
+        return {"run_id": row[0], "status": row[1]}
+
+    def mark_run_pending(self, run_id: str) -> Optional[Dict[str, Any]]:
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE crawl_runs
+                    SET status = 'pending'
+                    WHERE id::text = %s
+                      AND LOWER(status) IN ('queued', 'running', 'in_progress', 'cancelling')
                     RETURNING id::text, status
                     """,
                     [run_id],
@@ -557,6 +759,34 @@ class PostgreSQLAdapter:
                 row = cursor.fetchone()
             conn.commit()
         return bool(row)
+
+    def fail_active_runs(self) -> int:
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE crawl_runs
+                    SET status = 'failed'
+                    WHERE LOWER(status) IN ('running', 'in_progress', 'cancelling')
+                    """
+                )
+                updated = cursor.rowcount or 0
+            conn.commit()
+        return updated
+
+    def cancel_stale_cancelling_runs(self) -> int:
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE crawl_runs
+                    SET status = 'cancelled'
+                    WHERE LOWER(status) = 'cancelling'
+                    """
+                )
+                updated = cursor.rowcount or 0
+            conn.commit()
+        return updated
 
     def get_monitoring_summary(self) -> Dict[str, Any]:
         total_configs = self.execute_query("SELECT COUNT(*) FROM crawl_configs")[0][0] or 0
@@ -591,7 +821,10 @@ class PostgreSQLAdapter:
             + status_counts.get("success", 0)
         )
         failed_runs = status_counts.get("failed", 0) + status_counts.get("error", 0)
-        running_runs = status_counts.get("running", 0) + status_counts.get("in_progress", 0)
+        running_runs = (
+            status_counts.get("running", 0)
+            + status_counts.get("in_progress", 0)
+        )
         queued_runs = status_counts.get("queued", 0) + status_counts.get("pending", 0)
 
         progress_percent = 0.0
@@ -698,18 +931,24 @@ class ConnectionManager:
         logger.info(f"Client connecté. Total: {len(self.active_connections)}")
 
     def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
         logger.info(f"Client déconnecté. Total: {len(self.active_connections)}")
 
     async def send_personal_message(self, message: str, websocket: WebSocket):
-        await websocket.send_text(message)
+        try:
+            await websocket.send_text(message)
+            return True
+        except Exception:
+            self.disconnect(websocket)
+            return False
 
     async def broadcast(self, message: str):
-        for connection in self.active_connections:
+        for connection in list(self.active_connections):
             try:
                 await connection.send_text(message)
             except Exception:
-                self.active_connections.remove(connection)
+                self.disconnect(connection)
 
 
 manager = ConnectionManager()
@@ -742,12 +981,6 @@ EXPLAIN_QUERIES = {
         FROM files
     """,
 }
-
-CRAWL_CONFIGS: List[Dict[str, Any]] = []
-CRAWL_RUNS: List[Dict[str, Any]] = []
-
-
-
 
 @app.get("/health")
 async def health_check():
@@ -929,30 +1162,81 @@ def ensure_crawl_storage_ready(db: Any) -> None:
         db.ensure_crawl_tables()
 
 
-def _tail_log_lines(log_path: Path, limit: int = 80) -> List[str]:
+def _read_log_lines(log_path: Path) -> List[str]:
     if not log_path.exists() or not log_path.is_file():
         return []
 
     try:
         with log_path.open("r", encoding="utf-8", errors="replace") as handle:
-            lines = handle.readlines()
-        return [line.rstrip("\n") for line in lines[-limit:]]
+            return [line.rstrip("\n") for line in handle.readlines()]
     except OSError:
         return []
 
 
+def _build_run_log_path(base_log_path: Path, run_id: str) -> Path:
+    return base_log_path.with_name(f"{base_log_path.stem}_{run_id}{base_log_path.suffix}")
+
+
+def _resolve_runtime_log_path(db: Any) -> Path:
+    base_log_path = Path(os.getenv("OPENINDEX_CRAWLER_LOG_PATH", "logs/smb_crawler_postgresql.log"))
+    recent_runs = []
+    if hasattr(db, "list_recent_crawl_runs"):
+        recent_runs = db.list_recent_crawl_runs(limit=20)
+
+    for run in recent_runs:
+        run_id = run.get("run_id")
+        status = (run.get("status") or "").lower()
+        if not run_id or status not in ACTIVE_RUN_STATUSES:
+            continue
+        candidate_path = _build_run_log_path(base_log_path, run_id)
+        if candidate_path.exists() and candidate_path.is_file():
+            return candidate_path
+
+    for run in recent_runs:
+        run_id = run.get("run_id")
+        if not run_id:
+            continue
+        candidate_path = _build_run_log_path(base_log_path, run_id)
+        if candidate_path.exists() and candidate_path.is_file():
+            return candidate_path
+
+    return base_log_path
+
+
+def _tail_log_lines(log_path: Path, limit: int = 80) -> List[str]:
+    lines = _read_log_lines(log_path)
+    return [_normalize_runtime_log_line(line) for line in lines[-limit:]]
+
+
+def _normalize_runtime_log_line(line: str) -> str:
+    if "Queues:" not in line:
+        return line
+    return (
+        line.replace(" répertoires, ", " dossiers, ")
+        .replace("Queues: Dossiers=", "Queues: Dossiers à explorer=")
+        .replace(", Fichiers=", ", Dossiers à indexer=")
+        .replace(", Somme de contrôle=", ", Vérification d'intégrité=")
+        .replace(", Gros fichiers=", ", Gros fichiers en attente=")
+    )
+
+
 PROGRESS_RE = re.compile(
     r"Progression:\s*(?P<files>\d+)\s*fichiers,\s*"
-    r"(?P<dirs>\d+)\s*répertoires.*?"
-    r"Queues:\s*Dossiers=(?P<queue_dirs>\d+),\s*"
-    r"Fichiers=(?P<queue_files>\d+),\s*"
-    r"Somme de contrôle=(?P<queue_checksums>\d+),\s*"
-    r"Gros fichiers=(?P<queue_large>\d+)\s*\|\s*"
+    r"(?P<dirs>\d+)\s*(?:répertoires|dossiers),\s*"
+    r"(?P<large_files_seen>\d+)\s*gros fichiers\s*\|\s*"
+    r"Queues:\s*(?:Dossiers|Dossiers à explorer)=(?P<queue_dirs>\d+),\s*"
+    r"(?:Fichiers|Dossiers à indexer)=(?P<queue_files>\d+),\s*"
+    r"(?:Somme de contrôle|Fichiers à checksumer|Vérification d'intégrité)=(?P<queue_checksums>\d+),\s*"
+    r"(?:Gros fichiers|Gros fichiers en attente)=(?P<queue_large>\d+)\s*\|\s*"
+    r"Volume cible=(?P<target_bytes>\d+)\s*octets,\s*"
     r"Volume traité=(?P<processed_bytes>\d+)\s*octets,\s*"
     r"Volume découvert=(?P<discovered_bytes>\d+)\s*octets,\s*"
     r"Progression volume=(?P<progress_percent>\d+(?:\.\d+)?)%",
     re.IGNORECASE,
 )
+
+LOG_TIMESTAMP_RE = re.compile(r"^(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})")
+LARGE_FILE_RE = re.compile(r"Gros fichier détecté: .*?\((?P<size>[\d,]+) bytes\)")
 
 
 def _extract_progress_percent(log_lines: List[str]) -> float:
@@ -998,6 +1282,201 @@ def _extract_volume_snapshot(log_lines: List[str]) -> Dict[str, int]:
     }
 
 
+def _extract_runtime_metrics(log_lines: List[str]) -> Dict[str, Any]:
+    for line in reversed(log_lines):
+        match = PROGRESS_RE.search(line)
+        if not match:
+            continue
+        queue_dirs = int(match.group("queue_dirs"))
+        queue_files = int(match.group("queue_files"))
+        queue_checksums = int(match.group("queue_checksums"))
+        queue_large = int(match.group("queue_large"))
+        discovered_bytes = int(match.group("discovered_bytes"))
+        processed_bytes = int(match.group("processed_bytes"))
+        target_bytes = int(match.group("target_bytes"))
+        return {
+            "discovered_files": int(match.group("files")),
+            "discovered_directories": int(match.group("dirs")),
+            "large_files_detected": int(match.group("large_files_seen")),
+            "processed_bytes": processed_bytes,
+            "discovered_bytes": discovered_bytes,
+            "target_bytes": target_bytes,
+            "queue_dirs": queue_dirs,
+            "queue_files": queue_files,
+            "queue_checksums": queue_checksums,
+            "queue_large": queue_large,
+            "progress_percent": float(match.group("progress_percent")),
+            "progress_hint": "Le volume cible est stabilisé. La progression reflète maintenant le traitement restant.",
+        }
+    return {
+        "discovered_files": 0,
+        "discovered_directories": 0,
+        "large_files_detected": 0,
+        "large_files_bytes": 0,
+        "processed_bytes": 0,
+        "discovered_bytes": 0,
+        "target_bytes": 0,
+        "queue_dirs": 0,
+        "queue_files": 0,
+        "queue_checksums": 0,
+        "queue_large": 0,
+        "progress_percent": None,
+        "progress_hint": "Aucune exploration active.",
+        "last_activity_at": None,
+    }
+
+
+def _format_volume_compact(bytes_value: int) -> str:
+    if bytes_value <= 0:
+        return "0 o"
+    if bytes_value < 1000:
+        return f"{bytes_value} o"
+
+    units = ["ko", "Mo", "Go", "To", "Po"]
+    value = float(bytes_value)
+    unit_index = -1
+
+    while value >= 1000 and unit_index < len(units) - 1:
+        value /= 1000
+        unit_index += 1
+
+    return f"{value:.3f} {units[unit_index]}"
+
+
+def _parse_db_timestamp(value: Optional[str]) -> Optional[datetime]:
+    if not value or value == "-":
+        return None
+    normalized = value.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _compute_rate(value: int, started_at: Optional[datetime]) -> float:
+    if value <= 0 or started_at is None:
+        return 0.0
+    elapsed_seconds = max((datetime.now(timezone.utc) - started_at).total_seconds(), 1.0)
+    return value / elapsed_seconds
+
+
+def _format_rate(value_per_second: float, suffix: str = "it/s") -> str:
+    if value_per_second <= 0:
+        return f"0 {suffix}"
+    return f"{value_per_second:.2f} {suffix}"
+
+
+def _compute_integrity_processed_items(
+    runtime_metrics: Dict[str, int],
+    queue_snapshot: Dict[str, int],
+    large_file_metrics: Dict[str, int],
+) -> int:
+    normal_files_discovered = max(
+        runtime_metrics["discovered_files"] - max(large_file_metrics["count"], runtime_metrics["large_files_detected"]),
+        0,
+    )
+    return max(normal_files_discovered - queue_snapshot["checksums"], 0)
+
+
+def _extract_last_progress_timestamp(log_lines: List[str]) -> Optional[datetime]:
+    for line in reversed(log_lines):
+        if not PROGRESS_RE.search(line):
+            continue
+        match = LOG_TIMESTAMP_RE.match(line)
+        if not match:
+            continue
+        try:
+            return datetime.strptime(match.group("ts"), "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            return None
+    return None
+
+
+def _resolve_reconciliation_reference(
+    raw_log_lines: List[str],
+    latest_run_triggered_at: Optional[str],
+) -> Optional[datetime]:
+    last_activity = _extract_last_progress_timestamp(raw_log_lines)
+    if last_activity is not None:
+        return last_activity
+
+    triggered_at = _parse_db_timestamp(latest_run_triggered_at)
+    if triggered_at is None:
+        return None
+
+    return triggered_at.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _reconcile_stale_running_runs(db, raw_log_lines: List[str]) -> Dict[str, Any]:
+    monitoring = db.get_monitoring_summary()
+    latest_status = (monitoring.get("latest_run_status") or "").strip().lower()
+    if latest_status not in ACTIVE_RUN_STATUSES:
+        return monitoring
+
+    reference_time = _resolve_reconciliation_reference(
+        raw_log_lines,
+        monitoring.get("latest_run_triggered_at"),
+    )
+    if reference_time is None:
+        return monitoring
+
+    stale_seconds = (datetime.utcnow() - reference_time).total_seconds()
+    if stale_seconds <= STALE_RUN_TIMEOUT_SECONDS:
+        return monitoring
+
+    updated = 0
+    if latest_status == "cancelling" and hasattr(db, "cancel_stale_cancelling_runs"):
+        updated = db.cancel_stale_cancelling_runs()
+        if updated:
+            logger.warning(
+                "Run(s) marques en cancelled apres %.1f s bloques en cancelling.",
+                stale_seconds,
+            )
+            return db.get_monitoring_summary()
+    elif latest_status in RUNNING_RUN_STATUSES and hasattr(db, "fail_active_runs"):
+        updated = db.fail_active_runs()
+        if updated:
+            logger.warning(
+                "Run(s) marques en echec apres %.1f s sans signal moteur recent.",
+                stale_seconds,
+            )
+            return db.get_monitoring_summary()
+
+    return monitoring
+
+
+def _extract_large_file_metrics(raw_log_lines: List[str]) -> Dict[str, int]:
+    last_run_start_index = 0
+    for index, line in enumerate(raw_log_lines):
+        if "Démarrage du crawl SMB avec PostgreSQL" in line:
+            last_run_start_index = index
+
+    count = 0
+    total_bytes = 0
+    for line in raw_log_lines[last_run_start_index:]:
+        match = LARGE_FILE_RE.search(line)
+        if not match:
+            continue
+        count += 1
+        total_bytes += int(match.group("size").replace(",", ""))
+
+    return {
+        "count": count,
+        "bytes": total_bytes,
+    }
+
+
+def _slice_current_run_log_lines(raw_log_lines: List[str]) -> List[str]:
+    last_run_start_index = 0
+    for index, line in enumerate(raw_log_lines):
+        if "Démarrage du crawl SMB avec PostgreSQL" in line:
+            last_run_start_index = index
+    return raw_log_lines[last_run_start_index:]
+
+
 @app.get("/api/crawl-configs", response_model=List[CrawlConfigPublic])
 async def list_crawl_configs():
     try:
@@ -1019,6 +1498,22 @@ async def create_crawl_config(payload: CrawlConfigCreate):
     except Exception as e:
         logger.error(f"Erreur create_crawl_config: {e}")
         raise HTTPException(status_code=500, detail="Erreur lors de la création de la configuration d'exploration")
+
+
+@app.put("/api/crawl-configs/{config_id}", response_model=CrawlConfigPublic)
+async def update_crawl_config(config_id: str, payload: CrawlConfigUpdate):
+    try:
+        db = get_db_adapter()
+        ensure_crawl_storage_ready(db)
+        config = db.update_crawl_config(config_id, payload)
+        if not config:
+            raise HTTPException(status_code=404, detail="Configuration d'exploration introuvable")
+        return CrawlConfigPublic(**config)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur update_crawl_config: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la mise à jour de la configuration d'exploration")
 
 
 @app.post("/api/crawls/start", response_model=CrawlRun)
@@ -1055,6 +1550,22 @@ async def stop_crawl_run(run_id: str):
         raise HTTPException(status_code=500, detail="Erreur lors de l'arrêt de l'exploration")
 
 
+@app.post("/api/crawls/{run_id}/pending", response_model=CrawlRunActionResult)
+async def mark_crawl_run_pending(run_id: str):
+    try:
+        db = get_db_adapter()
+        ensure_crawl_storage_ready(db)
+        result = db.mark_run_pending(run_id)
+        if not result:
+            raise HTTPException(status_code=409, detail="Mise en attente impossible pour ce run")
+        return CrawlRunActionResult(**result)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur mark_crawl_run_pending: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la mise en attente du run")
+
+
 @app.delete("/api/crawls/{run_id}", response_model=CrawlRunActionResult)
 async def delete_crawl_run(run_id: str):
     try:
@@ -1075,7 +1586,8 @@ async def get_monitoring_summary():
     try:
         db = get_db_adapter()
         ensure_crawl_storage_ready(db)
-        summary = db.get_monitoring_summary()
+        raw_log_lines = _read_log_lines(_resolve_runtime_log_path(db))
+        summary = _reconcile_stale_running_runs(db, raw_log_lines)
         return MonitoringSummary(**summary)
     except Exception as e:
         logger.error(f"Erreur get_monitoring_summary: {e}")
@@ -1087,6 +1599,10 @@ async def get_crawl_overview(limit: int = 10):
     try:
         db = get_db_adapter()
         ensure_crawl_storage_ready(db)
+        _reconcile_stale_running_runs(
+            db,
+            _read_log_lines(_resolve_runtime_log_path(db)),
+        )
         overview = db.get_crawl_overview(limit=limit)
         return CrawlOverview(
             monitoring=MonitoringSummary(**overview["monitoring"]),
@@ -1104,6 +1620,7 @@ async def get_system_status():
         version = os.getenv("OPENINDEX_APP_VERSION", app.version)
         commit_hash = os.getenv("OPENINDEX_BUILD_COMMIT", "dev")
         build_date = os.getenv("OPENINDEX_BUILD_DATE", datetime.now().date().isoformat())
+        timezone_name = os.getenv("OPENINDEX_TIMEZONE") or os.getenv("TZ") or "UTC"
         repository_url = os.getenv("OPENINDEX_REPOSITORY_URL", "https://github.com/lamacheref/openindex")
         newer_version_available = os.getenv("OPENINDEX_NEWER_VERSION_AVAILABLE", "false").strip().lower() in {
             "1",
@@ -1117,6 +1634,7 @@ async def get_system_status():
             app_version=version,
             commit_hash=commit_hash,
             build_date=build_date,
+            timezone=timezone_name,
             license_label="Licence",
             license_owner="Copyright 2026 SMIDEN",
             repository_url=repository_url,
@@ -1133,47 +1651,117 @@ async def get_crawler_runtime(log_limit: int = 80):
     try:
         db = get_db_adapter()
         ensure_crawl_storage_ready(db)
-        monitoring = db.get_monitoring_summary()
-        log_path = Path(os.getenv("OPENINDEX_CRAWLER_LOG_PATH", "logs/smb_crawler_postgresql.log"))
-        log_lines = _tail_log_lines(log_path, limit=log_limit)
-        runtime_progress = _extract_progress_percent(log_lines)
+        log_path = _resolve_runtime_log_path(db)
+        raw_log_lines = _read_log_lines(log_path)
+        current_run_log_lines = _slice_current_run_log_lines(raw_log_lines)
+        monitoring = _reconcile_stale_running_runs(db, current_run_log_lines)
+        log_lines = [_normalize_runtime_log_line(line) for line in current_run_log_lines[-log_limit:]]
+        runtime_metrics = _extract_runtime_metrics(log_lines)
+        large_file_metrics = _extract_large_file_metrics(current_run_log_lines)
         queue_snapshot = _extract_queue_snapshot(log_lines)
-        volume_snapshot = _extract_volume_snapshot(log_lines)
+        last_activity = _extract_last_progress_timestamp(current_run_log_lines)
+        has_running_run = monitoring["running_runs"] > 0
+        started_at = _parse_db_timestamp(monitoring.get("latest_run_triggered_at"))
+        idle = False
+        if has_running_run and last_activity is not None:
+            idle = (datetime.utcnow() - last_activity).total_seconds() > 300
+        elif has_running_run and not log_lines:
+            idle = True
+
+        files_rate = _compute_rate(runtime_metrics["discovered_files"], started_at) if has_running_run else 0.0
+        directories_rate = _compute_rate(runtime_metrics["discovered_directories"], started_at) if has_running_run else 0.0
+        processed_volume_rate = _compute_rate(runtime_metrics["processed_bytes"], started_at) if has_running_run else 0.0
+        integrity_processed_items = _compute_integrity_processed_items(
+            runtime_metrics,
+            queue_snapshot,
+            large_file_metrics,
+        )
+        integrity_rate = _compute_rate(integrity_processed_items, started_at) if has_running_run else 0.0
 
         queue_indicators = [
             QueueIndicator(
                 key="directories",
-                label="Dossiers",
+                label="Dossiers à explorer",
                 value=queue_snapshot["directories"],
-                detail="Répertoires à explorer",
+                detail="Dossiers à explorer",
             ),
             QueueIndicator(
                 key="files",
-                label="Fichiers",
+                label="Dossiers à indexer",
                 value=queue_snapshot["files"],
-                detail="Éléments en attente d'écriture",
+                detail="Dossiers déjà découverts, en attente d'écriture",
             ),
             QueueIndicator(
                 key="checksums",
-                label="Somme de contrôle",
+                label="Vérification d'intégrité",
                 value=queue_snapshot["checksums"],
-                detail="Fichiers en attente de calcul",
+                detail=f"Fichiers normaux en attente ({_format_rate(integrity_rate)})",
             ),
             QueueIndicator(
                 key="large_files",
-                label="Gros fichiers",
+                label="Gros fichiers en attente",
                 value=queue_snapshot["large_files"],
                 detail="Fichiers lourds en attente de calcul",
             ),
         ]
 
+        progress_indicators = [
+            ProgressIndicator(
+                key="discovered_files",
+                label="Fichiers",
+                value=f"{runtime_metrics['discovered_files']:,}".replace(",", " "),
+                detail=f"Fichiers traités ({_format_rate(files_rate)})",
+            ),
+            ProgressIndicator(
+                key="discovered_directories",
+                label="Dossiers",
+                value=f"{runtime_metrics['discovered_directories']:,}".replace(",", " "),
+                detail=f"Dossiers parcourus ({_format_rate(directories_rate)})",
+            ),
+            ProgressIndicator(
+                key="processed_volume",
+                label="Volume traité",
+                value=_format_volume_compact(runtime_metrics["processed_bytes"]),
+                detail=f"Volume vérifié ({_format_volume_compact(int(processed_volume_rate))}/s)",
+            ),
+            ProgressIndicator(
+                key="integrity_backlog",
+                label="Vérification d'intégrité",
+                value=f"{queue_snapshot['checksums']:,}".replace(",", " "),
+                detail=f"Débit actuel ({_format_rate(integrity_rate)})",
+            ),
+            ProgressIndicator(
+                key="large_files_detected",
+                label="Gros fichiers",
+                value=f"{(large_file_metrics['count'] or runtime_metrics['large_files_detected']):,}".replace(",", " "),
+                detail=(
+                    f"fichiers ({_format_volume_compact(large_file_metrics['bytes'])} soit "
+                    f"{((large_file_metrics['bytes'] / runtime_metrics['discovered_bytes']) * 100):.2f} % du total)"
+                    if runtime_metrics["discovered_bytes"] > 0
+                    else "fichiers (0 o soit 0.00 % du total)"
+                ),
+            ),
+        ]
+
         return CrawlerRuntime(
-            active=monitoring["running_runs"] > 0,
+            active=has_running_run and not idle,
+            idle=idle,
             latest_status=monitoring["latest_run_status"],
             latest_config_name=monitoring["latest_run_config_name"],
-            progress_percent=runtime_progress if monitoring["running_runs"] > 0 else monitoring["progress_percent"],
-            processed_bytes=volume_snapshot["processed_bytes"],
-            discovered_bytes=volume_snapshot["discovered_bytes"],
+            progress_percent=runtime_metrics["progress_percent"] if monitoring["running_runs"] > 0 else monitoring["progress_percent"],
+            processed_bytes=runtime_metrics["processed_bytes"],
+            discovered_bytes=runtime_metrics["discovered_bytes"],
+            discovered_files=runtime_metrics["discovered_files"],
+            discovered_directories=runtime_metrics["discovered_directories"],
+            large_files_detected=large_file_metrics["count"] or runtime_metrics["large_files_detected"],
+            large_files_bytes=large_file_metrics["bytes"],
+            progress_hint=(
+                "Aucun signal moteur récent. Le run paraît idle et doit être vérifié."
+                if idle
+                else runtime_metrics["progress_hint"]
+            ),
+            last_activity_at=last_activity.isoformat() if last_activity else None,
+            progress_indicators=progress_indicators,
             queue_indicators=queue_indicators,
             log_lines=log_lines,
             log_source=str(log_path),
@@ -1192,12 +1780,14 @@ async def websocket_endpoint(websocket: WebSocket):
             try:
                 db = get_db_adapter()
                 stats = db.get_statistics()
-                await manager.send_personal_message(
+                sent = await manager.send_personal_message(
                     WebSocketMessage(type="stats_update", data=stats, timestamp=datetime.now()).json(),
                     websocket,
                 )
+                if not sent:
+                    break
                 if hasattr(db, "get_monitoring_summary"):
-                    await manager.send_personal_message(
+                    sent = await manager.send_personal_message(
                         WebSocketMessage(
                             type="monitoring_update",
                             data=db.get_monitoring_summary(),
@@ -1205,9 +1795,13 @@ async def websocket_endpoint(websocket: WebSocket):
                         ).json(),
                         websocket,
                     )
+                    if not sent:
+                        break
             except Exception as e:
                 logger.error(f"Erreur WebSocket stats: {e}")
     except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    finally:
         manager.disconnect(websocket)
 
 
