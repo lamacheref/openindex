@@ -253,17 +253,12 @@
                     <section class="card p-6">
                         <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                             <div>
-                                <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Avancement de l'exploration</p>
+                                <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Progression actuelle</p>
                                 <div class="mt-2 flex flex-wrap items-center gap-3">
                                     <h3 class="text-xl font-semibold">Pilotage de l'exploration</h3>
                                 </div>
                             </div>
                             <div class="flex flex-wrap gap-3">
-                                <button @click="showCrawlerLogs = !showCrawlerLogs"
-                                        :disabled="!engineHasRunningRun"
-                                        class="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
-                                    Voir les logs
-                                </button>
                                 <button @click="pauseActiveRun()"
                                         x-show="engineHasRunningRun"
                                         :disabled="!canPendingRun(activeRun?.status)"
@@ -281,8 +276,17 @@
                         </div>
 
                         <div class="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                            <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Signal runtime</p>
-                            <p class="mt-3 text-base font-semibold text-slate-900" x-text="volumeProgressLabel"></p>
+                            <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                                <div>
+                                    <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Signal runtime</p>
+                                    <p class="mt-3 text-base font-semibold text-slate-900" x-text="volumeProgressLabel"></p>
+                                </div>
+                                <button @click="showCrawlerLogs = !showCrawlerLogs"
+                                        :disabled="!engineHasRunningRun"
+                                        class="self-start rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
+                                    Voir les logs
+                                </button>
+                            </div>
                         </div>
 
                         <div x-show="engineHasRunningRun" class="mt-6">
@@ -444,6 +448,18 @@
                             </div>
                         </div>
                     </div>
+                    <div class="mt-4 card p-4">
+                        <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Légende</p>
+                        <div class="mt-3 flex flex-wrap gap-2">
+                            <template x-for="legend in explorerLegend" :key="legend.label">
+                                <span class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium"
+                                      :class="legend.className">
+                                    <span class="h-2.5 w-2.5 rounded-full bg-current opacity-60"></span>
+                                    <span x-text="legend.label"></span>
+                                </span>
+                            </template>
+                        </div>
+                    </div>
                     <div class="mt-6 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_20rem_minmax(0,1fr)]">
                         <div class="card min-h-[34rem] p-6">
                             <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -489,10 +505,19 @@
                                         <button @click="selectExplorerItem('source', item)"
                                                 @dblclick="item.is_directory ? openExplorerItem('source', item) : openPreview(item)"
                                                 class="grid w-full grid-cols-[minmax(0,1fr)_7rem_11rem] gap-3 border-t border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50"
-                                                :class="fileExplorer.source.selectedPath === item.path ? 'bg-teal-50' : 'bg-white'">
+                                                :class="explorerRowClass('source', item)">
                                             <span class="flex min-w-0 items-center gap-3">
                                                 <i class="fas" :class="item.is_directory ? 'fa-folder text-amber-500' : fileIconClass(item.path)"></i>
-                                                <span class="truncate text-sm font-medium text-slate-800" x-text="item.name"></span>
+                                                <span class="min-w-0">
+                                                    <span class="truncate text-sm font-medium text-slate-800" x-text="item.name"></span>
+                                                    <span class="mt-1 flex flex-wrap gap-1" x-show="!item.is_directory && fileStateBadges(item).length > 0">
+                                                        <template x-for="badge in fileStateBadges(item)" :key="badge.key">
+                                                            <span class="rounded-full px-2 py-0.5 text-[11px] font-medium"
+                                                                  :class="badge.className"
+                                                                  x-text="badge.label"></span>
+                                                        </template>
+                                                    </span>
+                                                </span>
                                             </span>
                                             <span class="text-sm text-slate-500" x-text="item.is_directory ? '-' : formatBytes(item.size || 0)"></span>
                                             <span class="text-sm text-slate-500" x-text="formatDate(item.last_modified)"></span>
@@ -533,6 +558,10 @@
                                         <input type="checkbox" x-model="archiveLeaveLink" :disabled="archiveMode !== 'move'">
                                         <span>Laisser un lien dans le partage source</span>
                                     </label>
+                                    <label class="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                                        <input type="checkbox" x-model="archiveOverwrite">
+                                        <span>Écraser le fichier cible s’il existe déjà</span>
+                                    </label>
                                     <button @click="openSelectedPreview()"
                                             :disabled="!selectedSourceFile"
                                             class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
@@ -553,7 +582,7 @@
                                     </template>
                                 </div>
                                 <div x-show="archiveStatus" class="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600" x-text="archiveStatus"></div>
-                                <p class="mt-4 text-xs text-slate-500">Le mode “Copier” conserve l’original. En mode “Déplacer”, un raccourci `.url` peut être laissé côté source vers le fichier archivé.</p>
+                                <p class="mt-4 text-xs text-slate-500">Le mode “Copier” conserve l’original. En mode “Déplacer”, un raccourci `.url` peut être laissé côté source vers le fichier archivé. L’écrasement de la cible reste désactivé par défaut.</p>
                             </div>
                             <div class="card p-5">
                                 <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Aperçus pris en charge</p>
@@ -622,10 +651,19 @@
                                         <button @click="selectExplorerItem('archive', item)"
                                                 @dblclick="item.is_directory ? openExplorerItem('archive', item) : openPreview(item)"
                                                 class="grid w-full grid-cols-[minmax(0,1fr)_7rem_11rem] gap-3 border-t border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50"
-                                                :class="fileExplorer.archive.selectedPath === item.path ? 'bg-teal-50' : 'bg-white'">
+                                                :class="explorerRowClass('archive', item)">
                                             <span class="flex min-w-0 items-center gap-3">
                                                 <i class="fas" :class="item.is_directory ? 'fa-folder text-amber-500' : fileIconClass(item.path)"></i>
-                                                <span class="truncate text-sm font-medium text-slate-800" x-text="item.name"></span>
+                                                <span class="min-w-0">
+                                                    <span class="truncate text-sm font-medium text-slate-800" x-text="item.name"></span>
+                                                    <span class="mt-1 flex flex-wrap gap-1" x-show="!item.is_directory && fileStateBadges(item).length > 0">
+                                                        <template x-for="badge in fileStateBadges(item)" :key="badge.key">
+                                                            <span class="rounded-full px-2 py-0.5 text-[11px] font-medium"
+                                                                  :class="badge.className"
+                                                                  x-text="badge.label"></span>
+                                                        </template>
+                                                    </span>
+                                                </span>
                                             </span>
                                             <span class="text-sm text-slate-500" x-text="item.is_directory ? '-' : formatBytes(item.size || 0)"></span>
                                             <span class="text-sm text-slate-500" x-text="formatDate(item.last_modified)"></span>
@@ -1038,6 +1076,7 @@
                 editingCrawlId: '',
                 archiveMode: 'copy',
                 archiveLeaveLink: false,
+                archiveOverwrite: false,
                 archiveBusy: false,
                 archiveStatus: '',
                 fileExplorer: {
@@ -1563,6 +1602,55 @@
                     return 'fa-file text-slate-500';
                 },
 
+                fileStateBadges(item) {
+                    if (!item || item.is_directory) return [];
+                    const badges = [];
+                    if ((item.size || 0) > 100 * 1024 * 1024) {
+                        badges.push({ key: 'large', label: 'Gros fichier', className: 'bg-rose-100 text-rose-700' });
+                    }
+                    if (this.fileAgeInDays(item.created_at) > 365) {
+                        badges.push({ key: 'old-created', label: 'Ancien', className: 'bg-emerald-100 text-emerald-700' });
+                    }
+                    if (this.fileAgeInDays(item.last_modified) > 365) {
+                        badges.push({ key: 'unused', label: 'Inutilisé', className: 'bg-slate-200 text-slate-700' });
+                    }
+                    if ((item.duplicate_count || 0) > 0 || item.has_duplicates) {
+                        badges.push({ key: 'duplicates', label: `Doublons (${item.duplicate_count || 1})`, className: 'bg-sky-100 text-sky-700' });
+                    }
+                    return badges;
+                },
+
+                fileAgeInDays(dateString) {
+                    if (!dateString) return 0;
+                    const timestamp = new Date(dateString).getTime();
+                    if (Number.isNaN(timestamp)) return 0;
+                    return Math.floor((Date.now() - timestamp) / (1000 * 60 * 60 * 24));
+                },
+
+                filePrimaryState(item) {
+                    if (!item || item.is_directory) return '';
+                    if ((item.size || 0) > 100 * 1024 * 1024) return 'large';
+                    if (this.fileAgeInDays(item.created_at) > 365) return 'old-created';
+                    if (this.fileAgeInDays(item.last_modified) > 365) return 'unused';
+                    if ((item.duplicate_count || 0) > 0 || item.has_duplicates) return 'duplicates';
+                    return '';
+                },
+
+                explorerRowClass(panelName, item) {
+                    const classes = [];
+                    const state = this.filePrimaryState(item);
+                    if (state === 'large') classes.push('bg-rose-50');
+                    else if (state === 'old-created') classes.push('bg-emerald-50');
+                    else if (state === 'unused') classes.push('bg-slate-100');
+                    else if (state === 'duplicates') classes.push('bg-sky-50');
+                    else classes.push('bg-white');
+
+                    if (this.fileExplorer[panelName].selectedPath === item.path) {
+                        classes.push('border-l-4', 'border-l-teal-500');
+                    }
+                    return classes.join(' ');
+                },
+
                 previewKindForPath(path) {
                     const extension = (path.split('.').pop() || '').toLowerCase();
                     if (['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'svg'].includes(extension)) return 'image';
@@ -1613,7 +1701,7 @@
                                 source_path: this.selectedSourceFile.path,
                                 target_directory_path: this.fileExplorer.archive.currentPath,
                                 mode: this.archiveMode,
-                                overwrite: false,
+                                overwrite: this.archiveOverwrite,
                                 leave_link: this.archiveMode === 'move' && this.archiveLeaveLink
                             })
                         });
@@ -2060,6 +2148,15 @@
 
                 get archiveExplorerSpaces() {
                     return this.spaces.filter((space) => space.path_prefix !== this.activeSpace);
+                },
+
+                get explorerLegend() {
+                    return [
+                        { label: 'Gros fichiers > 100 Mo', className: 'border-rose-200 bg-rose-50 text-rose-700' },
+                        { label: 'Anciens > 365 jours depuis création', className: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
+                        { label: 'Inutilisés > 365 jours depuis modification', className: 'border-slate-300 bg-slate-100 text-slate-700' },
+                        { label: 'Présence de doublons', className: 'border-sky-200 bg-sky-50 text-sky-700' },
+                    ];
                 },
 
                 get selectedSourceFile() {

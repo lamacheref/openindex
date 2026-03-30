@@ -116,7 +116,9 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
   - Couverture technique déjà livrée :
     endpoints `/api/explorer/items`, `/api/file-content` et `/api/archive/file`, plus tests API/structure frontend associés.
   - Dette restante court terme :
-    rendu bureautique complet (Word / Excel / PowerPoint / LibreOffice) dans le lightbox, stratégie explicite pour laisser un lien côté partage source après archivage, gestion des conflits de destination et mode overwrite piloté.
+    rendu bureautique complet (Word / Excel / PowerPoint / LibreOffice) dans le lightbox.
+  - Compléments livrés le `2026-03-30` :
+    vérification SHA-256 post-copie avant suppression source, option de laisser un lien côté source et mode overwrite piloté pour les conflits de destination.
   - Dette restante moyen terme :
     navigation SMB live hors index, opérations de masse, menu contextuel type Explorateur Windows/Dolphin et meilleur traitement des erreurs SMB côté UI.
 

@@ -97,8 +97,11 @@ class ExplorerItem(BaseModel):
     is_directory: bool
     size: Optional[int] = None
     last_modified: Optional[datetime] = None
+    created_at: Optional[datetime] = None
     extension: Optional[str] = None
     crawl_config_id: Optional[str] = None
+    has_duplicates: bool = False
+    duplicate_count: int = 0
 
 
 class ArchiveFileRequest(BaseModel):
@@ -1416,7 +1419,24 @@ async def get_explorer_items(
 
         rows = db.execute_query(
             f"""
-            SELECT path, name, size, last_modified, is_directory, crawl_config_id::text
+            SELECT
+                path,
+                name,
+                size,
+                last_modified,
+                is_directory,
+                crawl_config_id::text,
+                created_at,
+                CASE
+                    WHEN checksum IS NULL OR is_directory = TRUE THEN 0
+                    ELSE (
+                        SELECT COUNT(*)
+                        FROM files AS duplicates
+                        WHERE duplicates.checksum = files.checksum
+                          AND duplicates.path <> files.path
+                          AND duplicates.is_directory = FALSE
+                    )
+                END AS duplicate_count
             FROM files
             WHERE {where_clause}
             ORDER BY is_directory DESC, name ASC
@@ -1448,8 +1468,11 @@ async def get_explorer_items(
                 is_directory=is_directory,
                 size=None if is_directory else row[2],
                 last_modified=row[3],
+                created_at=row[6],
                 extension=None if is_directory else _smb_extension(child_path),
                 crawl_config_id=row[5],
+                has_duplicates=bool((row[7] or 0) > 0),
+                duplicate_count=int(row[7] or 0),
             )
 
         return sorted(
