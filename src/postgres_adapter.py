@@ -802,7 +802,14 @@ class PostgreSQLAdapter:
                 """
                 UPDATE crawl_runs
                 SET status = 'failed'
-                WHERE LOWER(status) IN ('running', 'in_progress', 'cancelling')
+                WHERE LOWER(status) IN ('running', 'in_progress')
+                """
+            )
+            cursor.execute(
+                """
+                UPDATE crawl_runs
+                SET status = 'cancelled'
+                WHERE LOWER(status) = 'cancelling'
                 """
             )
             conn.commit()

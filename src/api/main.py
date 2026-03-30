@@ -11,11 +11,14 @@ from typing import List, Optional, Dict, Any
 import asyncio
 import hashlib
 import html
+import http.client
 import io
+import json
 import logging
 import mimetypes
 import os
 import re
+import socket
 import shutil
 import zipfile
 from contextlib import contextmanager
@@ -311,6 +314,20 @@ class OperationsStatus(BaseModel):
 STALE_RUN_TIMEOUT_SECONDS = int(os.getenv("OPENINDEX_CRAWLER_STALE_TIMEOUT_SECONDS", "1200"))
 ACTIVE_RUN_STATUSES = {"queued", "pending", "running", "in_progress", "cancelling"}
 RUNNING_RUN_STATUSES = {"running", "in_progress"}
+DOCKER_SOCKET_PATH = os.getenv("OPENINDEX_DOCKER_SOCKET_PATH", "/var/run/docker.sock")
+CRAWLER_CONTAINER_NAME = os.getenv("OPENINDEX_CRAWLER_CONTAINER_NAME", "openindex-crawler-preprod")
+CRAWLER_FORCE_KILL_DELAY_SECONDS = int(os.getenv("OPENINDEX_CRAWLER_FORCE_KILL_DELAY_SECONDS", "15"))
+
+
+class UnixSocketHTTPConnection(http.client.HTTPConnection):
+    def __init__(self, socket_path: str, timeout: float = 10.0):
+        super().__init__("localhost", timeout=timeout)
+        self.socket_path = socket_path
+
+    def connect(self):
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.settimeout(self.timeout)
+        self.sock.connect(self.socket_path)
 
 
 def extract_space_prefix(path: str) -> Optional[str]:
@@ -936,7 +953,7 @@ class PostgreSQLAdapter:
                     """
                     UPDATE crawl_runs
                     SET status = 'failed'
-                    WHERE LOWER(status) IN ('running', 'in_progress', 'cancelling')
+                    WHERE LOWER(status) IN ('running', 'in_progress')
                     """
                 )
                 updated = cursor.rowcount or 0
@@ -1976,6 +1993,76 @@ def _compute_rate(value: int, started_at: Optional[datetime]) -> float:
     return value / elapsed_seconds
 
 
+def _docker_api_request(method: str, path: str) -> Dict[str, Any]:
+    connection = UnixSocketHTTPConnection(DOCKER_SOCKET_PATH, timeout=10.0)
+    try:
+        connection.request(method, path)
+        response = connection.getresponse()
+        payload = response.read()
+    finally:
+        connection.close()
+
+    body: Any = None
+    if payload:
+        try:
+            body = json.loads(payload.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            body = payload.decode("utf-8", errors="replace")
+
+    return {
+        "status": response.status,
+        "reason": response.reason,
+        "body": body,
+    }
+
+
+def _force_kill_crawler_container() -> bool:
+    if not DOCKER_SOCKET_PATH or not Path(DOCKER_SOCKET_PATH).exists():
+        logger.warning("Socket Docker introuvable, kill du crawler impossible: %s", DOCKER_SOCKET_PATH)
+        return False
+
+    inspect_response = _docker_api_request("GET", f"/containers/{CRAWLER_CONTAINER_NAME}/json")
+    if inspect_response["status"] == 404:
+        logger.warning("Conteneur crawler introuvable: %s", CRAWLER_CONTAINER_NAME)
+        return False
+    if inspect_response["status"] >= 400:
+        logger.error("Inspection Docker impossible pour %s: %s", CRAWLER_CONTAINER_NAME, inspect_response)
+        return False
+
+    state = (inspect_response["body"] or {}).get("State") or {}
+    if not state.get("Running", False):
+        logger.info("Le conteneur crawler %s est deja arrete", CRAWLER_CONTAINER_NAME)
+        return True
+
+    kill_response = _docker_api_request("POST", f"/containers/{CRAWLER_CONTAINER_NAME}/kill")
+    if kill_response["status"] >= 400:
+        logger.error("Kill Docker impossible pour %s: %s", CRAWLER_CONTAINER_NAME, kill_response)
+        return False
+
+    logger.warning("Conteneur crawler %s tue par l'API apres annulation bloquee", CRAWLER_CONTAINER_NAME)
+    return True
+
+
+async def _force_stop_cancelling_run_after_delay(run_id: str, delay_seconds: int) -> None:
+    await asyncio.sleep(max(delay_seconds, 1))
+    try:
+        db = get_db_adapter()
+        ensure_crawl_storage_ready(db)
+        status = (db.get_crawl_run_status(run_id) or "").lower()
+        if status != "cancelling":
+            return
+
+        logger.warning(
+            "Run %s toujours en cancelling apres %ss, tentative de kill du crawler",
+            run_id,
+            delay_seconds,
+        )
+        if _force_kill_crawler_container():
+            db.update_crawl_run_status(run_id, "cancelled")
+    except Exception as exc:
+        logger.error("Echec du watchdog d'annulation pour le run %s: %s", run_id, exc)
+
+
 def _format_rate(value_per_second: float, suffix: str = "it/s") -> str:
     if value_per_second <= 0:
         return f"0 {suffix}"
@@ -2286,6 +2373,13 @@ async def stop_crawl_run(run_id: str):
         result = db.request_stop_run(run_id)
         if not result:
             raise HTTPException(status_code=404, detail="Run d'exploration introuvable")
+        if (result.get("status") or "").lower() == "cancelling":
+            asyncio.create_task(
+                _force_stop_cancelling_run_after_delay(
+                    run_id,
+                    CRAWLER_FORCE_KILL_DELAY_SECONDS,
+                )
+            )
         return CrawlRunActionResult(**result)
     except HTTPException:
         raise
