@@ -57,6 +57,29 @@ class DummyDB:
 
         if params and "crawl_config_id::text" in query:
             config_id = params[0]
+            if "duplicate_count" in query:
+                return [
+                    (
+                        "\\\\srv\\share\\docs",
+                        "docs",
+                        None,
+                        None,
+                        True,
+                        config_id,
+                        "2024-01-01T10:00:00Z",
+                        0,
+                    ),
+                    (
+                        "\\\\srv\\share\\docs\\readme.md",
+                        "readme.md",
+                        128,
+                        "2026-02-27T10:00:00Z",
+                        False,
+                        config_id,
+                        "2024-02-27T10:00:00Z",
+                        2,
+                    ),
+                ]
             return self.files_by_config.get(config_id, [])
 
         # /api/files
@@ -339,6 +362,36 @@ def test_get_spaces_endpoint(client):
     payload = response.json()
     assert payload[0]["path_prefix"] == "/share"
     assert payload[0]["file_count"] == 2
+
+
+def test_get_explorer_items_endpoint_exposes_highlighting_metadata(client):
+    db = api_main.get_db_adapter()
+    config = db.create_crawl_config(
+        api_main.CrawlConfigCreate(
+            name="Share",
+            domain_zone="FR",
+            start_path="\\\\srv\\share",
+            include_paths=[],
+            exclude_paths=[],
+            connection=api_main.CrawlConnectionConfig(
+                username="svc_share",
+                password="secret",
+                domain=None,
+            ),
+        )
+    )
+
+    response = client(
+        "GET",
+        "/api/explorer/items",
+        params={"root": config["start_path"], "current_path": "\\\\srv\\share\\docs"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload[0]["is_directory"] is False
+    assert payload[0]["duplicate_count"] == 2
+    assert payload[0]["has_duplicates"] is True
+    assert payload[0]["created_at"] == "2024-02-27T10:00:00Z"
 
 
 def test_space_scoping_uses_config_link_instead_of_path_guessing(client):
@@ -1060,3 +1113,134 @@ def test_archive_file_refuses_delete_when_checksum_verification_fails(client, mo
     assert response.status_code == 409
     assert "Verification SHA-256 echouee" in response.json()["detail"]
     assert removed == ["\\\\srv\\archive\\2026\\budget.xlsx"]
+
+
+def test_archive_file_refuses_existing_target_without_overwrite(client, monkeypatch):
+    db = api_main.get_db_adapter()
+    db.create_crawl_config(
+        api_main.CrawlConfigCreate(
+            name="SOURCE",
+            domain_zone="FR",
+            start_path="\\\\srv\\source",
+            include_paths=[],
+            exclude_paths=[],
+            connection=api_main.CrawlConnectionConfig(username="svc_source", password="secret", domain=None),
+        )
+    )
+    db.create_crawl_config(
+        api_main.CrawlConfigCreate(
+            name="ARCHIVE",
+            domain_zone="FR",
+            start_path="\\\\srv\\archive",
+            include_paths=[],
+            exclude_paths=[],
+            connection=api_main.CrawlConnectionConfig(username="svc_archive", password="secret", domain=None),
+        )
+    )
+
+    class FakeSMBClient:
+        def ClientConfig(self, **kwargs):
+            self.config = kwargs
+
+        def stat(self, path):
+            return object()
+
+        def mkdir(self, path):
+            return None
+
+        def open_file(self, path, mode="rb"):
+            raise AssertionError("open_file ne doit pas etre appele si la cible existe sans overwrite")
+
+        def remove(self, path):
+            raise AssertionError("remove ne doit pas etre appele si la cible existe sans overwrite")
+
+    monkeypatch.setattr(api_main, "smbclient", FakeSMBClient())
+
+    response = client(
+        "POST",
+        "/api/archive/file",
+        json={
+            "source_path": "\\\\srv\\source\\docs\\budget.xlsx",
+            "target_directory_path": "\\\\srv\\archive\\2026",
+            "mode": "copy",
+            "overwrite": False,
+            "leave_link": False,
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Le fichier cible existe déjà"
+
+
+def test_archive_file_allows_overwrite_when_requested(client, monkeypatch):
+    db = api_main.get_db_adapter()
+    db.create_crawl_config(
+        api_main.CrawlConfigCreate(
+            name="SOURCE",
+            domain_zone="FR",
+            start_path="\\\\srv\\source",
+            include_paths=[],
+            exclude_paths=[],
+            connection=api_main.CrawlConnectionConfig(username="svc_source", password="secret", domain=None),
+        )
+    )
+    db.create_crawl_config(
+        api_main.CrawlConfigCreate(
+            name="ARCHIVE",
+            domain_zone="FR",
+            start_path="\\\\srv\\archive",
+            include_paths=[],
+            exclude_paths=[],
+            connection=api_main.CrawlConnectionConfig(username="svc_archive", password="secret", domain=None),
+        )
+    )
+
+    writes = {}
+
+    class WritableBuffer(io.BytesIO):
+        def __init__(self, path):
+            super().__init__()
+            self.path = path
+
+        def close(self):
+            writes[self.path] = self.getvalue()
+            super().close()
+
+    class FakeSMBClient:
+        def ClientConfig(self, **kwargs):
+            self.config = kwargs
+
+        def stat(self, path):
+            return object()
+
+        def mkdir(self, path):
+            return None
+
+        def open_file(self, path, mode="rb"):
+            if mode == "rb" and path == "\\\\srv\\source\\docs\\budget.xlsx":
+                return io.BytesIO(b"archive-me")
+            if mode == "rb" and path == "\\\\srv\\archive\\2026\\budget.xlsx":
+                return io.BytesIO(b"archive-me")
+            return WritableBuffer(path)
+
+        def remove(self, path):
+            raise AssertionError("remove ne doit pas etre appele en mode copy")
+
+    monkeypatch.setattr(api_main, "smbclient", FakeSMBClient())
+
+    response = client(
+        "POST",
+        "/api/archive/file",
+        json={
+            "source_path": "\\\\srv\\source\\docs\\budget.xlsx",
+            "target_directory_path": "\\\\srv\\archive\\2026",
+            "mode": "copy",
+            "overwrite": True,
+            "leave_link": False,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["target_path"] == "\\\\srv\\archive\\2026\\budget.xlsx"
+    assert response.json()["checksum_verified"] is True
+    assert writes["\\\\srv\\archive\\2026\\budget.xlsx"] == b"archive-me"

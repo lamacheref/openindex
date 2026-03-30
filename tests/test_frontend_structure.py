@@ -79,7 +79,7 @@ def test_configuration_access_and_sections_exist():
 def test_dashboard_has_active_crawl_block_and_log_toggle():
     html = read_frontend_html()
 
-    assert "Avancement de l'exploration" in html
+    assert "Progression actuelle" in html
     assert "Voir les logs" in html
     assert "showCrawlerLogs" in html
     assert "Journal de l'explorateur" in html
