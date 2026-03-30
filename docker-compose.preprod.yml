@@ -79,7 +79,6 @@ services:
         condition: service_healthy
     volumes:
       - ./logs:/app/logs
-      - ./config:/app/config:ro
     networks:
       - openindex-network
 

@@ -9,21 +9,31 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import asyncio
+import hashlib
+import html
+import io
 import logging
 import mimetypes
 import os
 import re
 import shutil
+import zipfile
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import quote
+from xml.etree import ElementTree
 
 try:
     import smbclient
 except ModuleNotFoundError:  # pragma: no cover
     smbclient = None
+
+try:
+    import openpyxl
+except ModuleNotFoundError:  # pragma: no cover
+    openpyxl = None
 try:
     from src.versioning import get_current_version
 except ModuleNotFoundError:  # pragma: no cover
@@ -96,6 +106,7 @@ class ArchiveFileRequest(BaseModel):
     target_directory_path: str
     mode: str = Field(pattern="^(copy|move)$")
     overwrite: bool = False
+    leave_link: bool = False
 
 
 class ArchiveFileResult(BaseModel):
@@ -103,6 +114,9 @@ class ArchiveFileResult(BaseModel):
     target_path: str
     mode: str
     source_deleted: bool
+    link_path: Optional[str] = None
+    checksum_verified: bool = False
+    checksum: Optional[str] = None
 
 
 class CrawlStats(BaseModel):
@@ -400,6 +414,22 @@ class PostgreSQLAdapter:
                     "duplicate_files": row[3] or 0,
                     "crawl_duration": None,
                 }
+
+    def get_indexed_file_checksum(self, file_path: str) -> Optional[str]:
+        rows = self.execute_query(
+            """
+            SELECT checksum
+            FROM files
+            WHERE path = %s
+              AND is_directory = FALSE
+            ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+            LIMIT 1
+            """,
+            [file_path],
+        )
+        if not rows:
+            return None
+        return rows[0][0]
 
     def get_spaces(self) -> List[Dict[str, Any]]:
         self.ensure_crawl_tables()
@@ -1117,6 +1147,147 @@ def _guess_media_type(path: str) -> str:
     return guessed or "application/octet-stream"
 
 
+def _unc_to_file_url(path: str) -> str:
+    normalized = _normalize_smb_path(path).lstrip("\\")
+    return "file://" + normalized.replace("\\", "/")
+
+
+def _render_html_document(title: str, body: str) -> str:
+    safe_title = html.escape(title)
+    return f"""<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{safe_title}</title>
+  <style>
+    body {{ font-family: ui-sans-serif, system-ui, sans-serif; background: #f8fafc; color: #0f172a; margin: 0; }}
+    .page {{ max-width: 1100px; margin: 0 auto; padding: 24px; }}
+    .card {{ background: white; border: 1px solid #e2e8f0; border-radius: 18px; padding: 24px; box-shadow: 0 10px 30px rgba(15,23,42,.06); }}
+    h1, h2, h3 {{ margin: 0 0 16px 0; }}
+    p, li {{ line-height: 1.55; }}
+    table {{ width: 100%; border-collapse: collapse; font-size: 14px; }}
+    th, td {{ border: 1px solid #e2e8f0; padding: 8px 10px; text-align: left; vertical-align: top; }}
+    th {{ background: #f8fafc; }}
+    .muted {{ color: #64748b; font-size: 14px; }}
+    .sheet {{ margin-top: 24px; }}
+    .pre {{ white-space: pre-wrap; }}
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="card">
+      {body}
+    </div>
+  </div>
+</body>
+</html>"""
+
+
+def _xml_text_nodes(xml_bytes: bytes, tags: set[str]) -> List[str]:
+    root = ElementTree.fromstring(xml_bytes)
+    values: List[str] = []
+    for element in root.iter():
+        local_name = element.tag.split("}", 1)[-1]
+        if local_name in tags:
+            text = "".join(element.itertext()).strip()
+            if text:
+                values.append(text)
+    return values
+
+
+def _preview_docx(raw_bytes: bytes, title: str) -> str:
+    with zipfile.ZipFile(io.BytesIO(raw_bytes)) as archive:
+        paragraphs = _xml_text_nodes(archive.read("word/document.xml"), {"p"})
+    body = "".join(f"<p>{html.escape(paragraph)}</p>" for paragraph in paragraphs[:400]) or "<p class='muted'>Aucun contenu textuel détecté.</p>"
+    return _render_html_document(title, f"<h1>{html.escape(title)}</h1>{body}")
+
+
+def _preview_odt(raw_bytes: bytes, title: str) -> str:
+    with zipfile.ZipFile(io.BytesIO(raw_bytes)) as archive:
+        paragraphs = _xml_text_nodes(archive.read("content.xml"), {"p", "h"})
+    body = "".join(f"<p>{html.escape(paragraph)}</p>" for paragraph in paragraphs[:400]) or "<p class='muted'>Aucun contenu textuel détecté.</p>"
+    return _render_html_document(title, f"<h1>{html.escape(title)}</h1>{body}")
+
+
+def _preview_pptx(raw_bytes: bytes, title: str) -> str:
+    with zipfile.ZipFile(io.BytesIO(raw_bytes)) as archive:
+        slide_names = sorted(name for name in archive.namelist() if name.startswith("ppt/slides/slide") and name.endswith(".xml"))
+        slides_html: List[str] = []
+        for index, slide_name in enumerate(slide_names[:80], start=1):
+            texts = _xml_text_nodes(archive.read(slide_name), {"t"})
+            slide_body = "".join(f"<p>{html.escape(text)}</p>" for text in texts) or "<p class='muted'>Slide sans texte détecté.</p>"
+            slides_html.append(f"<section class='sheet'><h2>Slide {index}</h2>{slide_body}</section>")
+    body = "".join(slides_html) or "<p class='muted'>Aucun texte détecté dans la présentation.</p>"
+    return _render_html_document(title, f"<h1>{html.escape(title)}</h1>{body}")
+
+
+def _preview_odp(raw_bytes: bytes, title: str) -> str:
+    with zipfile.ZipFile(io.BytesIO(raw_bytes)) as archive:
+        texts = _xml_text_nodes(archive.read("content.xml"), {"p", "h"})
+    slides_html = []
+    chunk_size = 12
+    for index in range(0, len(texts[:240]), chunk_size):
+        block = texts[index:index + chunk_size]
+        slide_body = "".join(f"<p>{html.escape(text)}</p>" for text in block)
+        slides_html.append(f"<section class='sheet'><h2>Slide {len(slides_html) + 1}</h2>{slide_body}</section>")
+    body = "".join(slides_html) or "<p class='muted'>Aucun texte détecté dans la présentation.</p>"
+    return _render_html_document(title, f"<h1>{html.escape(title)}</h1>{body}")
+
+
+def _preview_xlsx(raw_bytes: bytes, title: str) -> str:
+    if openpyxl is None:
+        raise ValueError("openpyxl indisponible")
+    workbook = openpyxl.load_workbook(io.BytesIO(raw_bytes), read_only=True, data_only=True)
+    sheets_html: List[str] = []
+    for worksheet in workbook.worksheets[:8]:
+        rows_html: List[str] = []
+        for row in worksheet.iter_rows(min_row=1, max_row=40, values_only=True):
+            cells = "".join(f"<td>{html.escape('' if value is None else str(value))}</td>" for value in row[:12])
+            rows_html.append(f"<tr>{cells}</tr>")
+        table_html = "<table>" + "".join(rows_html) + "</table>" if rows_html else "<p class='muted'>Feuille vide.</p>"
+        sheets_html.append(f"<section class='sheet'><h2>{html.escape(worksheet.title)}</h2>{table_html}</section>")
+    body = "".join(sheets_html) or "<p class='muted'>Aucune feuille exploitable.</p>"
+    return _render_html_document(title, f"<h1>{html.escape(title)}</h1>{body}")
+
+
+def _preview_ods(raw_bytes: bytes, title: str) -> str:
+    with zipfile.ZipFile(io.BytesIO(raw_bytes)) as archive:
+        root = ElementTree.fromstring(archive.read("content.xml"))
+    tables_html: List[str] = []
+    for table in [element for element in root.iter() if element.tag.split("}", 1)[-1] == "table"][:8]:
+        name = table.attrib.get("{urn:oasis:names:tc:opendocument:xmlns:table:1.0}name", "Feuille")
+        rows_html: List[str] = []
+        for row in [element for element in table if element.tag.split('}', 1)[-1] == "table-row"][:40]:
+            cells = []
+            for cell in [element for element in row if element.tag.split('}', 1)[-1] == "table-cell"][:12]:
+                text = " ".join(part.strip() for part in cell.itertext() if part.strip())
+                cells.append(f"<td>{html.escape(text)}</td>")
+            rows_html.append(f"<tr>{''.join(cells)}</tr>")
+        table_html = "<table>" + "".join(rows_html) + "</table>" if rows_html else "<p class='muted'>Feuille vide.</p>"
+        tables_html.append(f"<section class='sheet'><h2>{html.escape(name)}</h2>{table_html}</section>")
+    body = "".join(tables_html) or "<p class='muted'>Aucune feuille exploitable.</p>"
+    return _render_html_document(title, f"<h1>{html.escape(title)}</h1>{body}")
+
+
+def _generate_office_preview_html(path: str, raw_bytes: bytes) -> str:
+    extension = (_smb_extension(path) or "").lower()
+    title = _smb_name(path)
+    if extension in {".docx", ".doc"}:
+        return _preview_docx(raw_bytes, title)
+    if extension == ".odt":
+        return _preview_odt(raw_bytes, title)
+    if extension in {".xlsx", ".xls"}:
+        return _preview_xlsx(raw_bytes, title)
+    if extension == ".ods":
+        return _preview_ods(raw_bytes, title)
+    if extension in {".pptx", ".ppt"}:
+        return _preview_pptx(raw_bytes, title)
+    if extension == ".odp":
+        return _preview_odp(raw_bytes, title)
+    raise ValueError("Format bureautique non pris en charge")
+
+
 def _configure_smb_session(config: Dict[str, Any]) -> None:
     _require_smbclient()
     smbclient.ClientConfig(
@@ -1145,6 +1316,17 @@ def _ensure_parent_directories(target_directory_path: str) -> None:
             smbclient.mkdir(current)
         except OSError:
             continue
+
+
+def _compute_smb_sha256(file_path: str) -> str:
+    digest = hashlib.sha256()
+    with smbclient.open_file(_normalize_smb_path(file_path), mode="rb") as handle:
+        while True:
+            chunk = handle.read(1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 # Gestionnaire WebSocket pour le monitoring
@@ -1307,13 +1489,37 @@ async def get_file_content(path: str, download: bool = False):
         raise HTTPException(status_code=500, detail="Erreur lors de la lecture du fichier SMB")
 
 
+@app.get("/api/file-preview")
+async def get_file_preview(path: str):
+    try:
+        normalized_path = _normalize_smb_path(path)
+        config = _get_config_for_path_or_404(normalized_path)
+        _configure_smb_session(config)
+        with smbclient.open_file(normalized_path, mode="rb") as handle:
+            payload = handle.read()
+        html_document = _generate_office_preview_html(normalized_path, payload)
+        return HTMLResponse(content=html_document)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur get_file_preview: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la génération de l'aperçu bureautique")
+
+
 @app.post("/api/archive/file", response_model=ArchiveFileResult)
 async def archive_file(payload: ArchiveFileRequest):
     try:
+        db = get_db_adapter()
         normalized_source_path = _normalize_smb_path(payload.source_path)
         normalized_target_directory = _normalize_smb_path(payload.target_directory_path)
         source_config = _get_config_for_path_or_404(normalized_source_path)
         target_config = _get_config_for_path_or_404(normalized_target_directory)
+        source_checksum = db.get_indexed_file_checksum(normalized_source_path) if hasattr(db, "get_indexed_file_checksum") else None
+        if not source_checksum:
+            raise HTTPException(
+                status_code=409,
+                detail="Checksum source introuvable en base. Le fichier doit d'abord etre indexe et checksumme avant archivage.",
+            )
         _configure_smb_session(source_config)
         _configure_smb_session(target_config)
 
@@ -1330,16 +1536,39 @@ async def archive_file(payload: ArchiveFileRequest):
             with smbclient.open_file(target_path, mode="wb") as target_handle:
                 shutil.copyfileobj(source_handle, target_handle, length=1024 * 1024)
 
+        archived_checksum = _compute_smb_sha256(target_path)
+        if archived_checksum.lower() != source_checksum.lower():
+            try:
+                smbclient.remove(target_path)
+            except OSError:
+                logger.warning("Impossible de supprimer la copie archivee apres echec de verification: %s", target_path)
+            raise HTTPException(
+                status_code=409,
+                detail="Verification SHA-256 echouee apres copie. La source est conservee et l'archive est rejetee.",
+            )
+
         source_deleted = False
+        link_path = None
         if payload.mode == "move":
             smbclient.remove(normalized_source_path)
             source_deleted = True
+            if payload.leave_link:
+                link_path = f"{normalized_source_path}.url"
+                with smbclient.open_file(link_path, mode="w") as link_handle:
+                    link_handle.write(
+                        "[InternetShortcut]\n"
+                        f"URL={_unc_to_file_url(target_path)}\n"
+                        "IconIndex=0\n"
+                    )
 
         return ArchiveFileResult(
             source_path=normalized_source_path,
             target_path=target_path,
             mode=payload.mode,
             source_deleted=source_deleted,
+            link_path=link_path,
+            checksum_verified=True,
+            checksum=archived_checksum,
         )
     except HTTPException:
         raise
