@@ -1,5 +1,15 @@
 # Changelog OpenIndex avec PostgreSQL
 
+## 2026-03-26 — Durcissement de la gate PostgreSQL et lancement du socle J5
+
+- Durcissement du job `api-tests-postgresql` dans `.github/workflows/docker-stack.yml` : échec explicite si PostgreSQL n'est pas disponible, plus de voie de contournement "skip".
+- Ajout d'une collecte systématique des diagnostics CI PostgreSQL (`postgres-connectivity.json`, `pytest.log`, `pytest-junit.xml`, logs service PostgreSQL, contexte runner).
+- Mutualisation du parcours de référence via `scripts/run_release_gate.sh` pour exécuter les tests API, smoke, feature-flag DB et non-régression frontend.
+- Documentation du check de merge et du diagnostic rapide dans `docs/operations/CI_POSTGRESQL_GATE.md`.
+- Ouverture du chantier J5 avec les documents `docs/operations/J5_SLI_SLO.md`, `docs/operations/J5_RELEASE_GATE.md` et `docs/operations/J5_OBSERVABILITY_BASELINE.md`.
+- Ajout d'une vue opératoire consolidée `GET /api/operations/status` pour exposer l'état santé, les checks et les incidents minimaux.
+- Standardisation minimale des logs API via format horodaté et variable `OPENINDEX_LOG_LEVEL`.
+
 ## 2026-03-19 — Clôture du lot correctif opérateur et reprise du backlog principal
 
 - Clôture documentaire du lot `P-00` à `P-05` dans `TODO.md` et déplacement en annexe pour remettre le backlog principal J4/J5 en tête.

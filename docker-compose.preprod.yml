@@ -1,4 +1,9 @@
-# version: '3.8'
+# Stack preproduction.
+# Usage attendu:
+#   docker compose --env-file .env.preprod -f docker-compose.preprod.yml pull
+#   docker compose --env-file .env.preprod -f docker-compose.preprod.yml up -d
+# Auth GHCR:
+#   effectuer un docker login ghcr.io avant le pull si les packages sont privés
 
 services:
   postgres:

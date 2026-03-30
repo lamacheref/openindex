@@ -4,31 +4,44 @@
 
 set -euo pipefail
 
+DEPLOY_TARGET="${OPENINDEX_DEPLOY_TARGET:-default}"
+if [[ "${2:-}" == "--preprod" ]] || [[ "${1:-}" == "--preprod" ]]; then
+  DEPLOY_TARGET="preprod"
+fi
+
+if [[ "$DEPLOY_TARGET" == "preprod" ]]; then
+  COMPOSE_FILE_PATH="docker-compose.preprod.yml"
+  ENV_FILE_PATH=".env.preprod"
+else
+  COMPOSE_FILE_PATH="docker-compose.yml"
+  ENV_FILE_PATH=".env"
+fi
+
 if command -v docker-compose >/dev/null 2>&1; then
-  COMPOSE_CMD="docker-compose"
+  COMPOSE_CMD=(docker-compose -f "$COMPOSE_FILE_PATH" --env-file "$ENV_FILE_PATH")
 elif docker compose version >/dev/null 2>&1; then
-  COMPOSE_CMD="docker compose"
+  COMPOSE_CMD=(docker compose -f "$COMPOSE_FILE_PATH" --env-file "$ENV_FILE_PATH")
 else
   echo "❌ Docker Compose n'est pas disponible (docker-compose ou docker compose)."
   exit 1
 fi
 
 load_env() {
-  if [ -f .env ]; then
+  if [ -f "$ENV_FILE_PATH" ]; then
     set -a
-    # shellcheck disable=SC1091
-    source .env
+    # shellcheck disable=SC1090
+    source "$ENV_FILE_PATH"
     set +a
   fi
 }
 
 ensure_env() {
-  if [ ! -f .env ]; then
-    echo "📝 Création de .env depuis .env.example..."
+  if [ ! -f "$ENV_FILE_PATH" ]; then
+    echo "📝 Création de $ENV_FILE_PATH depuis .env.example..."
     if [ -f .env.example ]; then
-      cp .env.example .env
+      cp .env.example "$ENV_FILE_PATH"
     else
-      cat > .env <<EOT
+      cat > "$ENV_FILE_PATH" <<EOT
 OPENINDEX_API_IMAGE=ghcr.io/lamacheref/openindex-api:latest
 OPENINDEX_CRAWLER_IMAGE=ghcr.io/lamacheref/openindex-crawler:latest
 OPENINDEX_UI_IMAGE=ghcr.io/lamacheref/openindex-ui:latest
@@ -43,7 +56,7 @@ GHCR_USERNAME=
 GHCR_TOKEN=
 EOT
     fi
-    echo "✅ .env créé. Vérifiez les images GHCR et les identifiants DB avant déploiement."
+    echo "✅ $ENV_FILE_PATH créé. Vérifiez les images GHCR et les identifiants DB avant déploiement."
   fi
   load_env
 }
@@ -79,20 +92,20 @@ EOT
 pull_images() {
   ensure_env
   ensure_ghcr_auth
-  echo "📦 Pull des images GHCR (api + crawler + ui + postgres)..."
-  $COMPOSE_CMD pull
+  echo "📦 Pull des images GHCR via $COMPOSE_FILE_PATH..."
+  "${COMPOSE_CMD[@]}" pull
 }
 
 up() {
   ensure_env
   ensure_ghcr_auth
-  echo "🚀 Déploiement complet de la stack (postgres + api + crawler + ui)..."
-  $COMPOSE_CMD up -d
+  echo "🚀 Déploiement complet via $COMPOSE_FILE_PATH..."
+  "${COMPOSE_CMD[@]}" up -d
 }
 
 down() {
   echo "🛑 Arrêt des services..."
-  $COMPOSE_CMD down
+  "${COMPOSE_CMD[@]}" down
 }
 
 restart() {
@@ -102,14 +115,19 @@ restart() {
 }
 
 status() {
-  $COMPOSE_CMD ps
+  "${COMPOSE_CMD[@]}" ps
 }
 
 logs() {
-  $COMPOSE_CMD logs -f "${1:-}"
+  "${COMPOSE_CMD[@]}" logs -f "${1:-}"
 }
 
-case "${1:-help}" in
+COMMAND="${1:-help}"
+if [[ "$COMMAND" == "--preprod" ]]; then
+  COMMAND="help"
+fi
+
+case "$COMMAND" in
   pull) pull_images ;;
   up) up ;;
   down) down ;;
@@ -118,9 +136,12 @@ case "${1:-help}" in
   logs) logs "${2:-}" ;;
   help|-h|--help)
     cat <<EOT
-Usage: ./deploy.sh [pull|up|down|restart|status|logs [service]|help]
+Usage: ./deploy.sh [pull|up|down|restart|status|logs [service]|help] [--preprod]
 Services: postgres, api, crawler, ui
-Note GHCR: re-login forcé si GHCR_USERNAME/GHCR_TOKEN sont définis dans .env.
+Target: $DEPLOY_TARGET
+Compose: $COMPOSE_FILE_PATH
+Env file: $ENV_FILE_PATH
+Note GHCR: re-login forcé si GHCR_USERNAME/GHCR_TOKEN sont définis dans $ENV_FILE_PATH.
 EOT
     ;;
   *)
