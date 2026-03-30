@@ -130,6 +130,14 @@ class DummyDB:
                 }
         return None
 
+    def get_indexed_file_checksum(self, file_path):
+        normalized = file_path.replace("/", "\\")
+        if normalized == "\\\\srv\\source\\docs\\budget.xlsx":
+            return "41d9004d230e506cf4224fc2f98dc4e95a9a1d25a1806ad08046e00685b4d354"
+        if normalized == "\\\\srv\\share\\docs\\readme.pdf":
+            return "dummy"
+        return None
+
 
     def list_crawl_configs(self):
         return list(self.crawl_configs)
@@ -854,6 +862,47 @@ def test_file_content_endpoint_streams_data(client, monkeypatch):
     assert response.headers["content-type"] == "application/pdf"
 
 
+def test_file_preview_endpoint_renders_docx_html(client, monkeypatch):
+    db = api_main.get_db_adapter()
+    db.create_crawl_config(
+        api_main.CrawlConfigCreate(
+            name="SMIDEN",
+            domain_zone="FR",
+            start_path="\\\\srv\\share",
+            include_paths=[],
+            exclude_paths=[],
+            connection=api_main.CrawlConnectionConfig(username="svc", password="secret", domain="CORP"),
+        )
+    )
+
+    docx_buffer = io.BytesIO()
+    with api_main.zipfile.ZipFile(docx_buffer, "w") as archive:
+        archive.writestr(
+            "word/document.xml",
+            (
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+                "<w:body><w:p><w:r><w:t>Bonjour OpenIndex</w:t></w:r></w:p></w:body></w:document>"
+            ),
+        )
+
+    class FakeSMBClient:
+        def ClientConfig(self, **kwargs):
+            self.config = kwargs
+
+        def open_file(self, path, mode="rb"):
+            assert path == "\\\\srv\\share\\docs\\preview.docx"
+            return io.BytesIO(docx_buffer.getvalue())
+
+    monkeypatch.setattr(api_main, "smbclient", FakeSMBClient())
+
+    response = client("GET", "/api/file-preview", params={"path": "\\\\srv\\share\\docs\\preview.docx"})
+
+    assert response.status_code == 200
+    assert "Bonjour OpenIndex" in response.text
+    assert response.headers["content-type"].startswith("text/html")
+
+
 def test_archive_file_endpoint_moves_file_between_spaces(client, monkeypatch):
     db = api_main.get_db_adapter()
     db.create_crawl_config(
@@ -889,6 +938,15 @@ def test_archive_file_endpoint_moves_file_between_spaces(client, monkeypatch):
             writes[self.path] = self.getvalue()
             super().close()
 
+    class TextWritableBuffer(io.StringIO):
+        def __init__(self, path):
+            super().__init__()
+            self.path = path
+
+        def close(self):
+            writes[self.path] = self.getvalue().encode("utf-8")
+            super().close()
+
     class FakeSMBClient:
         def ClientConfig(self, **kwargs):
             self.config = kwargs
@@ -902,6 +960,8 @@ def test_archive_file_endpoint_moves_file_between_spaces(client, monkeypatch):
         def open_file(self, path, mode="rb"):
             if mode == "rb":
                 return io.BytesIO(b"archive-me")
+            if mode == "w":
+                return TextWritableBuffer(path)
             return WritableBuffer(path)
 
         def remove(self, path):
@@ -917,6 +977,7 @@ def test_archive_file_endpoint_moves_file_between_spaces(client, monkeypatch):
             "target_directory_path": "\\\\srv\\archive\\2026",
             "mode": "move",
             "overwrite": False,
+            "leave_link": True,
         },
     )
 
@@ -924,5 +985,78 @@ def test_archive_file_endpoint_moves_file_between_spaces(client, monkeypatch):
     payload = response.json()
     assert payload["target_path"] == "\\\\srv\\archive\\2026\\budget.xlsx"
     assert payload["source_deleted"] is True
+    assert payload["link_path"] == "\\\\srv\\source\\docs\\budget.xlsx.url"
+    assert payload["checksum_verified"] is True
+    assert payload["checksum"] == "41d9004d230e506cf4224fc2f98dc4e95a9a1d25a1806ad08046e00685b4d354"
     assert writes["\\\\srv\\archive\\2026\\budget.xlsx"] == b"archive-me"
+    assert b"file://srv/archive/2026/budget.xlsx" in writes["\\\\srv\\source\\docs\\budget.xlsx.url"]
     assert removed == ["\\\\srv\\source\\docs\\budget.xlsx"]
+
+
+def test_archive_file_refuses_delete_when_checksum_verification_fails(client, monkeypatch):
+    db = api_main.get_db_adapter()
+    db.create_crawl_config(
+        api_main.CrawlConfigCreate(
+            name="SOURCE",
+            domain_zone="FR",
+            start_path="\\\\srv\\source",
+            include_paths=[],
+            exclude_paths=[],
+            connection=api_main.CrawlConnectionConfig(username="svc_source", password="secret", domain=None),
+        )
+    )
+    db.create_crawl_config(
+        api_main.CrawlConfigCreate(
+            name="ARCHIVE",
+            domain_zone="FR",
+            start_path="\\\\srv\\archive",
+            include_paths=[],
+            exclude_paths=[],
+            connection=api_main.CrawlConnectionConfig(username="svc_archive", password="secret", domain=None),
+        )
+    )
+
+    removed = []
+
+    class WritableBuffer(io.BytesIO):
+        def __init__(self, path):
+            super().__init__()
+            self.path = path
+
+    class FakeSMBClient:
+        def ClientConfig(self, **kwargs):
+            self.config = kwargs
+
+        def stat(self, path):
+            raise OSError("missing")
+
+        def mkdir(self, path):
+            return None
+
+        def open_file(self, path, mode="rb"):
+            if mode == "rb" and path == "\\\\srv\\source\\docs\\budget.xlsx":
+                return io.BytesIO(b"archive-me")
+            if mode == "rb" and path == "\\\\srv\\archive\\2026\\budget.xlsx":
+                return io.BytesIO(b"tampered-copy")
+            return WritableBuffer(path)
+
+        def remove(self, path):
+            removed.append(path)
+
+    monkeypatch.setattr(api_main, "smbclient", FakeSMBClient())
+
+    response = client(
+        "POST",
+        "/api/archive/file",
+        json={
+            "source_path": "\\\\srv\\source\\docs\\budget.xlsx",
+            "target_directory_path": "\\\\srv\\archive\\2026",
+            "mode": "move",
+            "overwrite": False,
+            "leave_link": False,
+        },
+    )
+
+    assert response.status_code == 409
+    assert "Verification SHA-256 echouee" in response.json()["detail"]
+    assert removed == ["\\\\srv\\archive\\2026\\budget.xlsx"]

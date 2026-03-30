@@ -109,8 +109,16 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
   - Prévoir navigation arborescente, sélection, transfert inter-panneaux et actions contextuelles.
   - Déterminer les endpoints API nécessaires pour une navigation hiérarchique et des opérations de déplacement/copie pilotées.
   - Prévoir le mode d'entrée dans le menu en cohérence avec les arbitrages de shell validés dans `docs/definition_ui.md`.
-  - Premier socle livré le `2026-03-30` dans `frontend/index.html` et `src/api/main.py` : double panneau SMB indexé, sélection, archivage fichier par copie/déplacement entre espaces configurés, lightbox PDF/images/vidéos et reconnaissance des formats bureautiques.
-  - Dette restante : rendu bureautique complet (Word / Excel / PowerPoint / LibreOffice) dans le lightbox et stratégie explicite pour laisser un lien côté partage source après archivage.
+  - Premier socle livré le `2026-03-30` dans `frontend/index.html` et `src/api/main.py` :
+    double panneau SMB indexé, panneau source lié à l'espace actif, panneau archivage lié à un second espace configuré, navigation par répertoire, remontée au parent, sélection et rafraîchissement.
+  - Actions déjà disponibles :
+    archivage fichier par copie ou déplacement entre espaces configurés, endpoint de lecture de fichier SMB, lightbox PDF/images/vidéos et reconnaissance des formats bureautiques.
+  - Couverture technique déjà livrée :
+    endpoints `/api/explorer/items`, `/api/file-content` et `/api/archive/file`, plus tests API/structure frontend associés.
+  - Dette restante court terme :
+    rendu bureautique complet (Word / Excel / PowerPoint / LibreOffice) dans le lightbox, stratégie explicite pour laisser un lien côté partage source après archivage, gestion des conflits de destination et mode overwrite piloté.
+  - Dette restante moyen terme :
+    navigation SMB live hors index, opérations de masse, menu contextuel type Explorateur Windows/Dolphin et meilleur traitement des erreurs SMB côté UI.
 
 - [ ] **T-16 — Concevoir la page de traitements des artefacts**
   - Définir les catégories d'artefacts traitables: temporaires Office, doublons, fichiers système, archives obsolètes.

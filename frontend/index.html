@@ -528,6 +528,11 @@
                                         <i class="fas fa-box-archive mr-2"></i>
                                         <span x-text="archiveMode === 'move' ? 'Déplacer vers archives' : 'Copier vers archives'"></span>
                                     </button>
+                                    <label class="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+                                           :class="archiveMode !== 'move' ? 'opacity-50' : ''">
+                                        <input type="checkbox" x-model="archiveLeaveLink" :disabled="archiveMode !== 'move'">
+                                        <span>Laisser un lien dans le partage source</span>
+                                    </label>
                                     <button @click="openSelectedPreview()"
                                             :disabled="!selectedSourceFile"
                                             class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
@@ -548,7 +553,7 @@
                                     </template>
                                 </div>
                                 <div x-show="archiveStatus" class="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600" x-text="archiveStatus"></div>
-                                <p class="mt-4 text-xs text-slate-500">Le mode “Copier” conserve l’original dans le partage source. Le remplacement par un lien SMB reste à concevoir côté serveur.</p>
+                                <p class="mt-4 text-xs text-slate-500">Le mode “Copier” conserve l’original. En mode “Déplacer”, un raccourci `.url` peut être laissé côté source vers le fichier archivé.</p>
                             </div>
                             <div class="card p-5">
                                 <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Aperçus pris en charge</p>
@@ -920,20 +925,8 @@
                 <div x-show="previewModal.kind === 'pdf'" class="rounded-3xl bg-slate-100 p-2">
                     <iframe :src="previewInlineUrl" class="h-[75vh] w-full rounded-2xl bg-white"></iframe>
                 </div>
-                <div x-show="previewModal.kind === 'office'" class="rounded-3xl border border-slate-200 bg-slate-50 p-8">
-                    <div class="mx-auto max-w-2xl text-center">
-                        <div class="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-white text-3xl text-slate-600 shadow-sm">
-                            <i class="fas fa-file-lines"></i>
-                        </div>
-                        <h3 class="mt-5 text-xl font-semibold text-slate-900">Prévisualisation bureautique</h3>
-                        <p class="mt-3 text-sm text-slate-600">Le lightbox reconnaît les formats Word, Excel, PowerPoint et LibreOffice. Le flux fichier est prêt, mais le rendu HTML/Office nécessite encore un convertisseur serveur dédié.</p>
-                        <div class="mt-5 flex flex-wrap justify-center gap-2 text-xs text-slate-600">
-                            <span class="rounded-full bg-white px-3 py-1.5">DOC / DOCX</span>
-                            <span class="rounded-full bg-white px-3 py-1.5">XLS / XLSX</span>
-                            <span class="rounded-full bg-white px-3 py-1.5">PPT / PPTX</span>
-                            <span class="rounded-full bg-white px-3 py-1.5">ODT / ODS / ODP</span>
-                        </div>
-                    </div>
+                <div x-show="previewModal.kind === 'office'" class="rounded-3xl bg-slate-100 p-2">
+                    <iframe :src="previewOfficeUrl" class="h-[75vh] w-full rounded-2xl bg-white"></iframe>
                 </div>
                 <div x-show="previewModal.kind === 'unsupported'" class="rounded-3xl border border-slate-200 bg-slate-50 p-8 text-center">
                     <p class="text-sm text-slate-600">Aperçu non disponible pour ce type de fichier. Le téléchargement direct reste possible.</p>
@@ -1044,6 +1037,7 @@
                 operationalLogs: [],
                 editingCrawlId: '',
                 archiveMode: 'copy',
+                archiveLeaveLink: false,
                 archiveBusy: false,
                 archiveStatus: '',
                 fileExplorer: {
@@ -1070,7 +1064,8 @@
                     open: false,
                     path: '',
                     name: '',
-                    kind: 'unsupported'
+                    kind: 'unsupported',
+                    previewError: ''
                 },
                 newCrawl: {
                     name: '',
@@ -1597,7 +1592,8 @@
                         open: true,
                         path: item.path,
                         name: item.name,
-                        kind: this.previewKindForPath(item.path)
+                        kind: this.previewKindForPath(item.path),
+                        previewError: ''
                     };
                 },
 
@@ -1617,7 +1613,8 @@
                                 source_path: this.selectedSourceFile.path,
                                 target_directory_path: this.fileExplorer.archive.currentPath,
                                 mode: this.archiveMode,
-                                overwrite: false
+                                overwrite: false,
+                                leave_link: this.archiveMode === 'move' && this.archiveLeaveLink
                             })
                         });
                         const payload = await response.json();
@@ -1627,6 +1624,12 @@
                         this.archiveStatus = this.archiveMode === 'move'
                             ? `Fichier déplacé vers ${payload.target_path}`
                             : `Fichier copié vers ${payload.target_path}`;
+                        if (payload.checksum_verified && payload.checksum) {
+                            this.archiveStatus += ` (SHA-256 vérifié: ${payload.checksum})`;
+                        }
+                        if (payload.link_path) {
+                            this.archiveStatus += ` (lien laissé: ${payload.link_path})`;
+                        }
                         this.fileExplorer.source.selectedPath = '';
                         await this.refreshExplorerPanels();
                     } catch (error) {
@@ -2082,6 +2085,11 @@
                 get previewDownloadUrl() {
                     if (!this.previewModal.path) return '#';
                     return `/api/file-content?path=${encodeURIComponent(this.previewModal.path)}&download=true`;
+                },
+
+                get previewOfficeUrl() {
+                    if (!this.previewModal.path) return '';
+                    return `/api/file-preview?path=${encodeURIComponent(this.previewModal.path)}`;
                 },
 
                 getSpaceDisplayName(space) {
