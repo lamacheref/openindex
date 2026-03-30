@@ -36,15 +36,18 @@ load_env() {
 }
 
 ensure_env() {
+  local current_version
+  current_version="$(cat VERSION 2>/dev/null || echo "0.3.29")"
   if [ ! -f "$ENV_FILE_PATH" ]; then
     echo "📝 Création de $ENV_FILE_PATH depuis .env.example..."
     if [ -f .env.example ]; then
       cp .env.example "$ENV_FILE_PATH"
     else
       cat > "$ENV_FILE_PATH" <<EOT
-OPENINDEX_API_IMAGE=ghcr.io/lamacheref/openindex-api:latest
-OPENINDEX_CRAWLER_IMAGE=ghcr.io/lamacheref/openindex-crawler:latest
-OPENINDEX_UI_IMAGE=ghcr.io/lamacheref/openindex-ui:latest
+OPENINDEX_API_IMAGE=ghcr.io/lamacheref/openindex-api:${current_version}
+OPENINDEX_CRAWLER_IMAGE=ghcr.io/lamacheref/openindex-crawler:${current_version}
+OPENINDEX_UI_IMAGE=ghcr.io/lamacheref/openindex-ui:${current_version}
+OPENINDEX_APP_VERSION=${current_version}
 POSTGRES_DB=openindex
 POSTGRES_USER=openindex_user
 POSTGRES_PASSWORD=openindex_secure_password

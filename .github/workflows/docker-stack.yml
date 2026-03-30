@@ -48,7 +48,7 @@ jobs:
     if: github.event_name == 'pull_request'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -71,7 +71,7 @@ jobs:
       build_commit: ${{ steps.version.outputs.build_commit }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Compute build metadata
         id: version
@@ -106,7 +106,7 @@ jobs:
       CI_ARTIFACTS_DIR: ci-artifacts/postgresql
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -246,31 +246,91 @@ jobs:
       ui: ${{ steps.filter.outputs.ui }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Detect changed paths
         id: filter
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
-            api:
-              - 'Dockerfile.api'
-              - 'src/api/**'
-              - 'src/postgres_adapter.py'
-              - 'src/config_manager.py'
-              - 'src/logging_config.py'
-              - 'config/**'
-              - 'requirements/dev.txt'
-            crawler:
-              - 'Dockerfile.crawler'
-              - 'Archives/legacy/requirements/requirements.crawler.txt'
-              - 'src/**'
-              - 'config/**'
-              - 'database/**'
-            ui:
-              - 'Dockerfile.frontend'
-              - 'frontend/**'
-              - 'nginx/**'
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          python - <<'PYCODE'
+          import fnmatch
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          event_name = os.environ["GITHUB_EVENT_NAME"]
+          event_path = Path(os.environ["GITHUB_EVENT_PATH"])
+          current_sha = os.environ["GITHUB_SHA"]
+          output_path = Path(os.environ["GITHUB_OUTPUT"])
+          event = json.loads(event_path.read_text(encoding="utf-8"))
+
+          base_sha = None
+          head_sha = None
+
+          if event_name == "pull_request":
+              pull_request = event["pull_request"]
+              base_sha = pull_request["base"]["sha"]
+              head_sha = pull_request["head"]["sha"]
+          elif event_name == "push":
+              base_sha = event.get("before")
+              head_sha = event.get("after") or current_sha
+          else:
+              head_sha = current_sha
+
+          changed_files = []
+          invalid_base = {None, "", "0000000000000000000000000000000000000000"}
+
+          if base_sha not in invalid_base and head_sha:
+              diff = subprocess.run(
+                  ["git", "diff", "--name-only", f"{base_sha}..{head_sha}"],
+                  check=True,
+                  capture_output=True,
+                  text=True,
+              )
+              changed_files = [line for line in diff.stdout.splitlines() if line]
+
+          filters = {
+              "api": [
+                  "Dockerfile.api",
+                  "src/api/**",
+                  "src/postgres_adapter.py",
+                  "src/config_manager.py",
+                  "src/logging_config.py",
+                  "config/**",
+                  "requirements/dev.txt",
+              ],
+              "crawler": [
+                  "Dockerfile.crawler",
+                  "Archives/legacy/requirements/requirements.crawler.txt",
+                  "src/**",
+                  "config/**",
+                  "database/**",
+              ],
+              "ui": [
+                  "Dockerfile.frontend",
+                  "frontend/**",
+                  "nginx/**",
+              ],
+          }
+
+          results = {}
+          for name, patterns in filters.items():
+              results[name] = any(
+                  fnmatch.fnmatch(path, pattern)
+                  for path in changed_files
+                  for pattern in patterns
+              )
+
+          with output_path.open("a", encoding="utf-8") as fh:
+              for name, matched in results.items():
+                  fh.write(f"{name}={'true' if matched else 'false'}\n")
+          PYCODE
 
   docker-build-api:
     runs-on: ubuntu-latest
@@ -281,7 +341,7 @@ jobs:
       packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -330,7 +390,7 @@ jobs:
       packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -379,7 +439,7 @@ jobs:
       packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

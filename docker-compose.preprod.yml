@@ -31,13 +31,13 @@ services:
       start_period: 20s
 
   api:
-    image: ${OPENINDEX_API_IMAGE:-ghcr.io/lamacheref/openindex-api:latest}
+    image: ${OPENINDEX_API_IMAGE:-ghcr.io/lamacheref/openindex-api:0.3.29}
     container_name: openindex-api-preprod
     restart: unless-stopped
     environment:
       TZ: ${OPENINDEX_TIMEZONE:-Europe/Paris}
       OPENINDEX_TIMEZONE: ${OPENINDEX_TIMEZONE:-Europe/Paris}
-      OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.3.25}
+      OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.3.29}
       OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-preprod}
       OPENINDEX_BUILD_DATE: ${OPENINDEX_BUILD_DATE:-unknown}
       OPENINDEX_DB_BACKEND: postgresql
@@ -59,13 +59,13 @@ services:
       - openindex-network
 
   crawler:
-    image: ${OPENINDEX_CRAWLER_IMAGE:-ghcr.io/lamacheref/openindex-crawler:latest}
+    image: ${OPENINDEX_CRAWLER_IMAGE:-ghcr.io/lamacheref/openindex-crawler:0.3.29}
     container_name: openindex-crawler-preprod
     restart: unless-stopped
     environment:
       TZ: ${OPENINDEX_TIMEZONE:-Europe/Paris}
       OPENINDEX_TIMEZONE: ${OPENINDEX_TIMEZONE:-Europe/Paris}
-      OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.3.25}
+      OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.3.29}
       OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-preprod}
       OPENINDEX_BUILD_DATE: ${OPENINDEX_BUILD_DATE:-unknown}
       POSTGRES_HOST: postgres
@@ -83,13 +83,13 @@ services:
       - openindex-network
 
   ui:
-    image: ${OPENINDEX_UI_IMAGE:-ghcr.io/lamacheref/openindex-ui:latest}
+    image: ${OPENINDEX_UI_IMAGE:-ghcr.io/lamacheref/openindex-ui:0.3.29}
     container_name: openindex-ui-preprod
     restart: unless-stopped
     environment:
       TZ: ${OPENINDEX_TIMEZONE:-Europe/Paris}
       OPENINDEX_TIMEZONE: ${OPENINDEX_TIMEZONE:-Europe/Paris}
-      OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.3.25}
+      OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.3.29}
       OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-preprod}
       OPENINDEX_BUILD_DATE: ${OPENINDEX_BUILD_DATE:-unknown}
     ports:
