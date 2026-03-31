@@ -326,7 +326,8 @@ STALE_RUN_TIMEOUT_SECONDS = int(os.getenv("OPENINDEX_CRAWLER_STALE_TIMEOUT_SECON
 ACTIVE_RUN_STATUSES = {"queued", "pending", "running", "in_progress", "cancelling"}
 RUNNING_RUN_STATUSES = {"running", "in_progress"}
 DOCKER_SOCKET_PATH = os.getenv("OPENINDEX_DOCKER_SOCKET_PATH", "/var/run/docker.sock")
-CRAWLER_CONTAINER_NAME = os.getenv("OPENINDEX_CRAWLER_CONTAINER_NAME", "openindex-crawler-preprod")
+CRAWLER_CONTAINER_NAME = os.getenv("OPENINDEX_CRAWLER_CONTAINER_NAME", "").strip()
+DEFAULT_CRAWLER_CONTAINER_NAMES = ("openindex-crawler", "openindex-crawler-preprod")
 CRAWLER_FORCE_KILL_DELAY_SECONDS = int(os.getenv("OPENINDEX_CRAWLER_FORCE_KILL_DELAY_SECONDS", "15"))
 
 
@@ -2050,30 +2051,110 @@ def _docker_api_request(method: str, path: str) -> Dict[str, Any]:
     }
 
 
+def _docker_api_raw_request(method: str, path: str) -> Dict[str, Any]:
+    connection = UnixSocketHTTPConnection(DOCKER_SOCKET_PATH, timeout=10.0)
+    try:
+        connection.request(method, path)
+        response = connection.getresponse()
+        payload = response.read()
+        status = response.status
+        reason = response.reason
+    finally:
+        connection.close()
+
+    return {
+        "status": status,
+        "reason": reason,
+        "body": payload,
+    }
+
+
+def _crawler_container_candidates() -> List[str]:
+    if CRAWLER_CONTAINER_NAME:
+        return [CRAWLER_CONTAINER_NAME]
+    return list(DEFAULT_CRAWLER_CONTAINER_NAMES)
+
+
+def _resolve_crawler_container_name() -> Optional[str]:
+    if not DOCKER_SOCKET_PATH or not Path(DOCKER_SOCKET_PATH).exists():
+        return None
+
+    for container_name in _crawler_container_candidates():
+        inspect_response = _docker_api_request("GET", f"/containers/{container_name}/json")
+        if inspect_response["status"] < 400:
+            return container_name
+    return None
+
+
+def _decode_docker_log_stream(payload: bytes) -> List[str]:
+    if not payload:
+        return []
+
+    lines: List[str] = []
+    cursor = 0
+    payload_length = len(payload)
+
+    while cursor + 8 <= payload_length:
+        stream_type = payload[cursor]
+        frame_size = int.from_bytes(payload[cursor + 4:cursor + 8], byteorder="big")
+        frame_start = cursor + 8
+        frame_end = frame_start + frame_size
+        if frame_end > payload_length:
+            break
+        if stream_type in {1, 2}:
+            chunk = payload[frame_start:frame_end].decode("utf-8", errors="replace")
+            lines.extend(line for line in chunk.splitlines() if line.strip())
+        cursor = frame_end
+
+    if not lines:
+        text_payload = payload.decode("utf-8", errors="replace")
+        lines = [line for line in text_payload.splitlines() if line.strip()]
+
+    return lines
+
+
+def _read_crawler_docker_log_lines(limit: int = 80) -> Optional[List[str]]:
+    container_name = _resolve_crawler_container_name()
+    if not container_name:
+        return None
+
+    request_path = (
+        f"/containers/{container_name}/logs?"
+        f"stdout=1&stderr=1&timestamps=1&tail={max(1, int(limit))}"
+    )
+    response = _docker_api_raw_request("GET", request_path)
+    if response["status"] >= 400:
+        logger.warning("Lecture docker logs impossible pour %s: %s", container_name, response)
+        return None
+    return _decode_docker_log_stream(response["body"])
+
+
 def _force_kill_crawler_container() -> bool:
     if not DOCKER_SOCKET_PATH or not Path(DOCKER_SOCKET_PATH).exists():
         logger.warning("Socket Docker introuvable, kill du crawler impossible: %s", DOCKER_SOCKET_PATH)
         return False
 
-    inspect_response = _docker_api_request("GET", f"/containers/{CRAWLER_CONTAINER_NAME}/json")
-    if inspect_response["status"] == 404:
-        logger.warning("Conteneur crawler introuvable: %s", CRAWLER_CONTAINER_NAME)
+    container_name = _resolve_crawler_container_name()
+    if not container_name:
+        logger.warning("Conteneur crawler introuvable parmi: %s", ", ".join(_crawler_container_candidates()))
         return False
+
+    inspect_response = _docker_api_request("GET", f"/containers/{container_name}/json")
     if inspect_response["status"] >= 400:
-        logger.error("Inspection Docker impossible pour %s: %s", CRAWLER_CONTAINER_NAME, inspect_response)
+        logger.error("Inspection Docker impossible pour %s: %s", container_name, inspect_response)
         return False
 
     state = (inspect_response["body"] or {}).get("State") or {}
     if not state.get("Running", False):
-        logger.info("Le conteneur crawler %s est deja arrete", CRAWLER_CONTAINER_NAME)
+        logger.info("Le conteneur crawler %s est deja arrete", container_name)
         return True
 
-    kill_response = _docker_api_request("POST", f"/containers/{CRAWLER_CONTAINER_NAME}/kill")
+    kill_response = _docker_api_request("POST", f"/containers/{container_name}/kill")
     if kill_response["status"] >= 400:
-        logger.error("Kill Docker impossible pour %s: %s", CRAWLER_CONTAINER_NAME, kill_response)
+        logger.error("Kill Docker impossible pour %s: %s", container_name, kill_response)
         return False
 
-    logger.warning("Conteneur crawler %s tue par l'API apres annulation bloquee", CRAWLER_CONTAINER_NAME)
+    logger.warning("Conteneur crawler %s tue par l'API apres annulation bloquee", container_name)
     return True
 
 
@@ -2380,7 +2461,10 @@ def _aggregate_operational_status(checks: List[OperationalCheck]) -> str:
 def _slice_current_run_log_lines(raw_log_lines: List[str]) -> List[str]:
     last_run_start_index = 0
     for index, line in enumerate(raw_log_lines):
-        if "Démarrage du crawl SMB avec PostgreSQL" in line:
+        if (
+            "Démarrage de l'exploration SMB avec PostgreSQL" in line
+            or "Démarrage du crawl SMB avec PostgreSQL" in line
+        ):
             last_run_start_index = index
     return raw_log_lines[last_run_start_index:]
 
@@ -2544,7 +2628,8 @@ async def get_crawler_runtime(log_limit: int = 80):
         db = get_db_adapter()
         ensure_crawl_storage_ready(db)
         log_path = _resolve_runtime_log_path(db)
-        raw_log_lines = _read_log_lines(log_path)
+        docker_log_lines = _read_crawler_docker_log_lines(limit=max(log_limit * 3, 200))
+        raw_log_lines = docker_log_lines if docker_log_lines is not None else _read_log_lines(log_path)
         current_run_log_lines = _slice_current_run_log_lines(raw_log_lines)
         monitoring = _reconcile_stale_running_runs(db, current_run_log_lines)
         log_lines = [_normalize_runtime_log_line(line) for line in current_run_log_lines[-log_limit:]]
@@ -2701,7 +2786,11 @@ async def get_crawler_runtime(log_limit: int = 80):
             progress_indicators=progress_indicators,
             queue_indicators=queue_indicators,
             log_lines=log_lines,
-            log_source=str(log_path),
+            log_source=(
+                f"docker:{_resolve_crawler_container_name()}"
+                if docker_log_lines is not None
+                else str(log_path)
+            ),
         )
     except Exception as e:
         logger.error(f"Erreur get_crawler_runtime: {e}")

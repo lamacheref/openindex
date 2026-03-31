@@ -1156,7 +1156,6 @@ class SMBCrawlerPostgreSQL:
             f"Durée: {duration:.1f}s | Erreurs: {self.stats['errors']}"
         )
 
-        print(f"\r{progress_line}", end="")
         self.logger.info(progress_line)
 
     def _print_final_stats(self):
@@ -1226,6 +1225,7 @@ def run_single_crawl(run_payload):
     config_manager = ConfigManager()
     crawler_config = config_manager.get_crawler_config()
     debug_mode = os.getenv('DEBUG', 'false').lower() == 'true'
+    log_path = Path(os.getenv("OPENINDEX_CRAWLER_LOG_PATH", "logs/smb_crawler_postgresql.log"))
     server, share_name, base_path = parse_unc_start_path(run_payload["start_path"])
     rotate_runtime_log_for_run(run_payload["run_id"])
 
@@ -1261,7 +1261,7 @@ def run_single_crawl(run_payload):
     )
     crawler.run_id = run_payload["run_id"]
 
-    print(f"📝 Logs configurés dans: logs/openindex.log")
+    print(f"📝 Logs configurés dans: {log_path}")
     print(f"🔧 Seuil des gros fichiers: {crawler_config['large_file_threshold'] / 1024 / 1024:.1f} MB")
     print(f"🐘 Base de données: PostgreSQL 17")
 
