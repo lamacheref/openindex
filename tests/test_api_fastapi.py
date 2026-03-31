@@ -172,6 +172,7 @@ class DummyDB:
             "name": payload.name,
             "domain_zone": payload.domain_zone,
             "start_path": payload.start_path,
+            "is_archive": payload.is_archive,
             "include_paths": payload.include_paths,
             "exclude_paths": payload.exclude_paths,
             "connection_username": payload.connection.username,
@@ -188,6 +189,7 @@ class DummyDB:
             item["name"] = payload.name
             item["domain_zone"] = payload.domain_zone
             item["start_path"] = payload.start_path
+            item["is_archive"] = payload.is_archive
             item["include_paths"] = payload.include_paths
             item["exclude_paths"] = payload.exclude_paths
             item["connection_username"] = payload.connection.username
@@ -835,7 +837,7 @@ def test_get_operations_status_endpoint_reports_critical_incidents(monkeypatch, 
     assert any(check["key"] == "run_failures" and check["status"] == "critical" for check in payload["checks"])
 
 
-def test_monitoring_reconciles_stale_cancelling_run_to_cancelled(monkeypatch):
+def test_monitoring_reconciles_stale_cancelling_run_to_cancelled(monkeypatch, tmp_path):
     db = DummyDB()
     db.crawl_configs.append(
         {
@@ -861,6 +863,9 @@ def test_monitoring_reconciles_stale_cancelling_run_to_cancelled(monkeypatch):
 
     monkeypatch.setattr(api_main, "get_db_adapter", lambda: db)
     monkeypatch.setattr(api_main, "STALE_RUN_TIMEOUT_SECONDS", 1)
+    log_file = tmp_path / "smb_crawler_postgresql.log"
+    log_file.write_text("", encoding="utf-8")
+    monkeypatch.setenv("OPENINDEX_CRAWLER_LOG_PATH", str(log_file))
 
     response = run_request("GET", "/api/monitoring")
     assert response.status_code == 200

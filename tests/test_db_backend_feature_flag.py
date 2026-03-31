@@ -43,6 +43,8 @@ def test_get_db_adapter_postgresql(monkeypatch):
                 return
             if 'ALTER TABLE files' in query:
                 return
+            if 'ALTER TABLE crawl_configs' in query:
+                return
             if 'CREATE INDEX IF NOT EXISTS idx_files_crawl_config_id' in query:
                 return
             if 'UPDATE files AS f' in query:
