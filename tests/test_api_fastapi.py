@@ -1,6 +1,7 @@
 import asyncio
 import io
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -20,9 +21,17 @@ class DummyDB:
         self.space_stats = {}
         self.files_by_config = {}
         self.duplicates_by_config = {}
+        self._file_id_seq = 100
 
     def execute_query(self, query, params=None):
         params = params or []
+        config_id = None
+        if "crawl_config_id::text" in query:
+            for value in reversed(params):
+                if isinstance(value, str) and value.startswith("cfg-"):
+                    config_id = value
+                    break
+
         if query.strip() == "ANALYZE":
             return []
 
@@ -32,7 +41,6 @@ class DummyDB:
             ]
 
         if "FROM files" in query and "JOIN files f2" in query:
-            config_id = params[0] if params and "crawl_config_id::text" in query else None
             if config_id is not None:
                 return self.duplicates_by_config.get(config_id, [])
             return [
@@ -55,10 +63,9 @@ class DummyDB:
                 ("/share/original/a.txt",),
             ]
 
-        if params and "crawl_config_id::text" in query:
-            config_id = params[0]
+        if config_id is not None:
             if "duplicate_count" in query:
-                return [
+                return self.files_by_config.get(config_id, [
                     (
                         "\\\\srv\\share\\docs",
                         "docs",
@@ -79,7 +86,7 @@ class DummyDB:
                         "2024-02-27T10:00:00Z",
                         2,
                     ),
-                ]
+                ])
             return self.files_by_config.get(config_id, [])
 
         # /api/files
@@ -160,6 +167,29 @@ class DummyDB:
         if normalized == "\\\\srv\\share\\docs\\readme.pdf":
             return "dummy"
         return None
+
+    def upsert_file_record(self, *, path, name, size, checksum, last_modified, crawl_config_id, created_at=None):
+        rows = self.files_by_config.setdefault(crawl_config_id, [])
+        row = (
+            path,
+            name,
+            size,
+            last_modified.isoformat() if hasattr(last_modified, "isoformat") else last_modified,
+            False,
+            crawl_config_id,
+            created_at.isoformat() if hasattr(created_at, "isoformat") else created_at,
+            0,
+        )
+        for index, existing in enumerate(rows):
+            if existing[0] == path:
+                rows[index] = row
+                break
+        else:
+            rows.append(row)
+
+    def delete_file_record(self, path):
+        for config_id, rows in list(self.files_by_config.items()):
+            self.files_by_config[config_id] = [row for row in rows if row[0] != path]
 
 
     def list_crawl_configs(self):
@@ -257,6 +287,15 @@ class DummyDB:
                 run["status"] = "cancelled"
                 updated += 1
         return updated
+
+    def revive_latest_terminal_run(self):
+        if not self.crawl_runs:
+            return None
+        latest = self.crawl_runs[-1]
+        if latest["status"] not in {"failed", "error", "completed", "cancelled"}:
+            return None
+        latest["status"] = "running"
+        return {"run_id": latest["run_id"], "status": latest["status"]}
 
     def get_monitoring_summary(self):
         latest = self.crawl_runs[-1] if self.crawl_runs else None
@@ -394,6 +433,57 @@ def test_get_explorer_items_endpoint_exposes_highlighting_metadata(client):
     assert payload[0]["duplicate_count"] == 2
     assert payload[0]["has_duplicates"] is True
     assert payload[0]["created_at"] == "2024-02-27T10:00:00Z"
+
+
+def test_get_explorer_items_keeps_rows_without_config_link_when_under_root(client):
+    db = api_main.get_db_adapter()
+    config = db.create_crawl_config(
+        api_main.CrawlConfigCreate(
+            name="Share",
+            domain_zone="FR",
+            start_path="\\\\srv\\share",
+            include_paths=[],
+            exclude_paths=[],
+            connection=api_main.CrawlConnectionConfig(
+                username="svc_share",
+                password="secret",
+                domain=None,
+            ),
+        )
+    )
+    db.files_by_config[config["id"]] = [
+        (
+            "\\\\srv\\share\\docs\\indexed.txt",
+            "indexed.txt",
+            12,
+            "2026-03-31T10:00:00Z",
+            False,
+            config["id"],
+            "2026-03-31T10:00:00Z",
+            0,
+        ),
+        (
+            "\\\\srv\\share\\docs\\orphan.txt",
+            "orphan.txt",
+            15,
+            "2026-03-31T10:00:00Z",
+            False,
+            None,
+            "2026-03-31T10:00:00Z",
+            0,
+        ),
+    ]
+
+    response = client(
+        "GET",
+        "/api/explorer/items",
+        params={"root": config["start_path"], "current_path": "\\\\srv\\share\\docs"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert any(item["path"] == "\\\\srv\\share\\docs\\indexed.txt" for item in payload)
+    assert any(item["path"] == "\\\\srv\\share\\docs\\orphan.txt" for item in payload)
 
 
 def test_space_scoping_uses_config_link_instead_of_path_guessing(client):
@@ -768,6 +858,50 @@ def test_get_crawler_runtime_endpoint(client, monkeypatch, tmp_path):
     assert "it/s" in integrity_progress["detail"]
 
 
+def test_get_crawler_runtime_reconciles_terminal_run_with_recent_db_activity(monkeypatch, tmp_path):
+    db = DummyDB()
+    db.crawl_configs.append(
+        {
+            "id": "cfg-1",
+            "name": "Crawl Runtime",
+            "domain_zone": "FR",
+            "start_path": "\\\\srv\\runtime",
+            "include_paths": [],
+            "exclude_paths": [],
+            "connection_username": "svc_runtime",
+            "connection_domain": "CORP",
+            "created_at": "2026-03-10T12:00:00+00:00",
+        }
+    )
+    db.crawl_runs.append(
+        {
+            "run_id": "run-1",
+            "config_id": "cfg-1",
+            "status": "completed",
+            "triggered_at": "2026-03-10T12:05:00+00:00",
+        }
+    )
+
+    log_file = tmp_path / "smb_crawler_postgresql.log"
+    log_file.write_text("", encoding="utf-8")
+    monkeypatch.setenv("OPENINDEX_CRAWLER_LOG_PATH", str(log_file))
+    monkeypatch.setattr(api_main, "get_db_adapter", lambda: db)
+    monkeypatch.setattr(
+        api_main,
+        "_get_recent_write_activity_safe",
+        lambda _db, window_seconds=300: {
+            "recent_writes": 4,
+            "last_write_at": datetime.utcnow() - timedelta(seconds=30),
+        },
+    )
+
+    response = run_request("GET", "/api/crawler/runtime")
+
+    assert response.status_code == 200
+    assert db.crawl_runs[-1]["status"] == "running"
+    assert response.json()["db_write_active"] is True
+
+
 def test_get_operations_status_endpoint_nominal(client, monkeypatch, tmp_path):
     log_file = tmp_path / "smb_crawler_postgresql.log"
     log_file.write_text("", encoding="utf-8")
@@ -920,6 +1054,55 @@ def test_file_content_endpoint_streams_data(client, monkeypatch):
     assert response.headers["content-type"] == "application/pdf"
 
 
+def test_file_preview_endpoint_retries_transient_smb_sharing_violation(client, monkeypatch):
+    db = api_main.get_db_adapter()
+    db.create_crawl_config(
+        api_main.CrawlConfigCreate(
+            name="SMIDEN",
+            domain_zone="FR",
+            start_path="\\\\srv\\share",
+            include_paths=[],
+            exclude_paths=[],
+            connection=api_main.CrawlConnectionConfig(username="svc", password="secret", domain="CORP"),
+        )
+    )
+
+    docx_buffer = io.BytesIO()
+    with api_main.zipfile.ZipFile(docx_buffer, "w") as archive:
+        archive.writestr(
+            "word/document.xml",
+            (
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+                "<w:body><w:p><w:r><w:t>Retry OK</w:t></w:r></w:p></w:body></w:document>"
+            ),
+        )
+
+    class FakeSMBClient:
+        def __init__(self):
+            self.calls = 0
+
+        def ClientConfig(self, **kwargs):
+            self.config = kwargs
+
+        def open_file(self, path, mode="rb"):
+            assert path == "\\\\srv\\share\\docs\\locked.docx"
+            self.calls += 1
+            if self.calls == 1:
+                raise OSError("[Error 1] [NtStatus 0xc0000043] The process cannot access the file because it is being used by another process")
+            return io.BytesIO(docx_buffer.getvalue())
+
+    fake_smb = FakeSMBClient()
+    monkeypatch.setattr(api_main, "smbclient", fake_smb)
+    monkeypatch.setattr(api_main.time, "sleep", lambda _seconds: None)
+
+    response = client("GET", "/api/file-preview", params={"path": "\\\\srv\\share\\docs\\locked.docx"})
+
+    assert response.status_code == 200
+    assert "Retry OK" in response.text
+    assert fake_smb.calls == 2
+
+
 def test_file_preview_endpoint_renders_docx_html(client, monkeypatch):
     db = api_main.get_db_adapter()
     db.create_crawl_config(
@@ -961,9 +1144,53 @@ def test_file_preview_endpoint_renders_docx_html(client, monkeypatch):
     assert response.headers["content-type"].startswith("text/html")
 
 
-def test_archive_file_endpoint_moves_file_between_spaces(client, monkeypatch):
+def test_file_preview_endpoint_renders_xlsx_html(client, monkeypatch):
+    if api_main.openpyxl is None:
+        pytest.skip("openpyxl indisponible")
+
     db = api_main.get_db_adapter()
     db.create_crawl_config(
+        api_main.CrawlConfigCreate(
+            name="SMIDEN",
+            domain_zone="FR",
+            start_path="\\\\srv\\share",
+            include_paths=[],
+            exclude_paths=[],
+            connection=api_main.CrawlConnectionConfig(username="svc", password="secret", domain="CORP"),
+        )
+    )
+
+    workbook = api_main.openpyxl.Workbook()
+    worksheet = workbook.active
+    worksheet.title = "Budget"
+    worksheet["A1"] = "Libelle"
+    worksheet["B1"] = "Montant"
+    worksheet["A2"] = "Serveurs"
+    worksheet["B2"] = 2025
+    xlsx_buffer = io.BytesIO()
+    workbook.save(xlsx_buffer)
+
+    class FakeSMBClient:
+        def ClientConfig(self, **kwargs):
+            self.config = kwargs
+
+        def open_file(self, path, mode="rb"):
+            assert path == "\\\\srv\\share\\docs\\2025.xlsx"
+            return io.BytesIO(xlsx_buffer.getvalue())
+
+    monkeypatch.setattr(api_main, "smbclient", FakeSMBClient())
+
+    response = client("GET", "/api/file-preview", params={"path": "\\\\srv\\share\\docs\\2025.xlsx"})
+
+    assert response.status_code == 200
+    assert "Budget" in response.text
+    assert "Serveurs" in response.text
+    assert response.headers["content-type"].startswith("text/html")
+
+
+def test_archive_file_endpoint_moves_file_between_spaces(client, monkeypatch):
+    db = api_main.get_db_adapter()
+    source_config = db.create_crawl_config(
         api_main.CrawlConfigCreate(
             name="SOURCE",
             domain_zone="FR",
@@ -973,7 +1200,7 @@ def test_archive_file_endpoint_moves_file_between_spaces(client, monkeypatch):
             connection=api_main.CrawlConnectionConfig(username="svc_source", password="secret", domain=None),
         )
     )
-    db.create_crawl_config(
+    archive_config = db.create_crawl_config(
         api_main.CrawlConfigCreate(
             name="ARCHIVE",
             domain_zone="FR",
@@ -1049,6 +1276,19 @@ def test_archive_file_endpoint_moves_file_between_spaces(client, monkeypatch):
     assert writes["\\\\srv\\archive\\2026\\budget.xlsx"] == b"archive-me"
     assert b"file://srv/archive/2026/budget.xlsx" in writes["\\\\srv\\source\\docs\\budget.xlsx.url"]
     assert removed == ["\\\\srv\\source\\docs\\budget.xlsx"]
+    archive_files = db.files_by_config[archive_config["id"]]
+    assert any(row[0] == "\\\\srv\\archive\\2026\\budget.xlsx" for row in archive_files)
+    assert any(run["config_id"] == archive_config["id"] for run in db.crawl_runs)
+    assert any(run["config_id"] == source_config["id"] for run in db.crawl_runs)
+
+    explorer_response = client(
+        "GET",
+        "/api/explorer/items",
+        params={"root": archive_config["start_path"], "current_path": "\\\\srv\\archive\\2026"},
+    )
+    assert explorer_response.status_code == 200
+    explorer_payload = explorer_response.json()
+    assert any(item["path"] == "\\\\srv\\archive\\2026\\budget.xlsx" for item in explorer_payload)
 
 
 def test_archive_file_refuses_delete_when_checksum_verification_fails(client, monkeypatch):

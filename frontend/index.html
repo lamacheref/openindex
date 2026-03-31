@@ -134,8 +134,8 @@
                     <div class="mt-4 space-y-2" x-show="spaces.length > 0">
                         <label class="text-xs text-slate-500">Basculer d’espace</label>
                         <select x-model="activeSpace" @change="selectSpace(activeSpace)" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-                            <template x-for="space in spaces" :key="space.path_prefix">
-                                <option :value="space.path_prefix" x-text="`${getSpaceDisplayName(space)} (${space.file_count})`"></option>
+                            <template x-for="space in sourceExplorerSpaces" :key="space.path_prefix">
+                                <option :value="space.path_prefix" x-text="`${getSpaceDisplayName(space)} (${space.file_count} • ${formatBytes(space.total_size || 0)})`"></option>
                             </template>
                         </select>
                     </div>
@@ -477,6 +477,7 @@
                                     <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Panneau source</p>
                                     <h3 class="mt-2 text-lg font-semibold" x-text="fileExplorer.source.rootLabel || 'Espace source'"></h3>
                                     <p class="mt-1 break-all text-xs text-slate-500" x-text="fileExplorer.source.currentPath || 'Aucun chemin actif'"></p>
+                                    <p class="mt-2 text-xs font-medium text-slate-500" x-text="activeSourceSpaceVolumeLabel"></p>
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <button @click="goToExplorerParent('source')"
@@ -1065,6 +1066,8 @@
                 crawlConfigs: [],
                 loadingMonitoring: false,
                 loadingOverview: false,
+                loadingRuntime: false,
+                overviewSyncInFlight: false,
                 implementationStatus: '',
                 monitoringError: '',
                 selectedConfigId: '',
@@ -1146,6 +1149,7 @@
                 animatedDiscoveredBytes: 0,
                 clockNow: Date.now(),
                 clockTimerId: null,
+                operationsPollTimerId: null,
                 volumeAnimationFrameId: null,
                 showRecentExplorations: false,
                 showActiveConfiguration: false,
@@ -1210,6 +1214,7 @@
                     await this.loadCrawlerRuntime();
                     this.refreshNotifications();
                     this.initWebSocket();
+                    this.startOperationsPolling();
                 },
 
                 openConfiguration(section = 'crawler') {
@@ -1275,6 +1280,13 @@
                     try {
                         const response = await fetch('/api/spaces');
                         this.spaces = await response.json();
+                        if (!this.activeSpace && this.sourceExplorerSpaces.length > 0) {
+                            const defaultSpace = this.sourceExplorerSpaces[0];
+                            this.activeSpace = defaultSpace?.path_prefix || '';
+                        }
+                        if (this.activeSpace && !this.sourceExplorerSpaces.some((space) => space.path_prefix === this.activeSpace)) {
+                            this.activeSpace = this.sourceExplorerSpaces[0]?.path_prefix || '';
+                        }
                         this.syncSelectedConfigWithActiveSpace();
                         this.syncExplorerRoots();
                     } catch (error) {
@@ -1359,6 +1371,10 @@
                 },
 
                 async loadCrawlerRuntime() {
+                    if (this.loadingRuntime) {
+                        return;
+                    }
+                    this.loadingRuntime = true;
                     try {
                         const response = await fetch('/api/crawler/runtime?log_limit=120');
                         if (!response.ok) {
@@ -1370,9 +1386,24 @@
                             runtime.processed_bytes ?? 0,
                             runtime.discovered_bytes ?? 0
                         );
+                        await this.ensureOverviewSync();
                     } catch (error) {
                         console.error('Erreur runtime explorateur:', error);
                         this.addLogEntry(`Erreur runtime explorateur: ${error.message}`);
+                    } finally {
+                        this.loadingRuntime = false;
+                    }
+                },
+
+                async ensureOverviewSync() {
+                    if (!this.needsOverviewSync || this.loadingOverview || this.overviewSyncInFlight) {
+                        return;
+                    }
+                    this.overviewSyncInFlight = true;
+                    try {
+                        await this.loadCrawlOverview();
+                    } finally {
+                        this.overviewSyncInFlight = false;
                     }
                 },
 
@@ -1658,7 +1689,9 @@
 
                 async goToExplorerParent(panelName) {
                     const panel = this.fileExplorer[panelName];
-                    if (!panel.root || !panel.currentPath || panel.currentPath === panel.root) return;
+                    if (!panel.root || !panel.currentPath || panel.currentPath === panel.root) {
+                        return;
+                    }
                     const normalizedCurrent = panel.currentPath.replaceAll('/', '\\');
                     const normalizedRoot = panel.root.replaceAll('/', '\\');
                     const parent = normalizedCurrent.lastIndexOf('\\') > 1
@@ -1788,7 +1821,13 @@
                 },
 
                 closePreview() {
-                    this.previewModal.open = false;
+                    this.previewModal = {
+                        open: false,
+                        path: '',
+                        name: '',
+                        kind: 'unsupported',
+                        previewError: ''
+                    };
                 },
 
                 async archiveSelectedFile() {
@@ -1821,6 +1860,7 @@
                             this.archiveStatus += ` (lien laissé: ${payload.link_path})`;
                         }
                         this.fileExplorer.source.selectedPath = '';
+                        await this.refreshOperations();
                         await this.refreshExplorerPanels();
                     } catch (error) {
                         this.archiveStatus = error.message;
@@ -1865,6 +1905,21 @@
                     this.clockTimerId = setInterval(() => {
                         this.clockNow = Date.now();
                     }, 1000);
+                },
+
+                startOperationsPolling() {
+                    if (this.operationsPollTimerId) {
+                        clearInterval(this.operationsPollTimerId);
+                    }
+                    this.operationsPollTimerId = setInterval(async () => {
+                        if (document.hidden) {
+                            return;
+                        }
+                        await this.loadCrawlerRuntime();
+                        if (!this.loadingOverview) {
+                            await this.loadCrawlOverview();
+                        }
+                    }, 5000);
                 },
 
                 animateVolumeCounters(nextProcessedBytes, nextDiscoveredBytes) {
@@ -1913,6 +1968,7 @@
 
                 async refreshOperations() {
                     await Promise.all([
+                        this.loadSpaces(),
                         this.loadStats(),
                         this.loadCrawlConfigs(),
                         this.loadMonitoringSummary(),
@@ -1938,7 +1994,10 @@
                         return;
                     }
 
-                    const fallbackConfig = this.crawlOverview.configs[0] || this.crawlConfigs[0] || null;
+                    const allConfigs = [...this.crawlOverview.configs, ...this.crawlConfigs];
+                    const fallbackConfig = allConfigs.find((entry) => !entry.is_archive)
+                        || allConfigs[0]
+                        || null;
                     if (!fallbackConfig) {
                         if (!this.activeSpace) {
                             this.selectedConfigId = '';
@@ -2144,73 +2203,107 @@
                     return !this.loadingOverview && this.hasRecentRunsData;
                 },
 
+                get needsOverviewSync() {
+                    return this.hasActiveRunSignal && !this.engineHasRunningRun;
+                },
+
                 get engineStatusLabel() {
                     return this.crawlerRuntime.status_label || this.translateRunStatus(this.crawlOverview.monitoring.latest_run_status);
                 },
 
-                get engineStatusBadgeClass() {
-                    const normalized = (this.crawlOverview.monitoring.latest_run_status || '').toLowerCase();
+                get engineStatusTone() {
+                    const runtimeLabel = (this.crawlerRuntime.status_label || '').toLowerCase();
+                    const latestStatus = (this.crawlOverview.monitoring.latest_run_status || '').toLowerCase();
+
                     if (this.engineIsIdle) {
-                        return 'bg-slate-100 text-slate-700';
+                        return 'idle';
                     }
                     if (this.crawlIsActive) {
+                        return 'active';
+                    }
+                    if (runtimeLabel.includes('incohérent') || runtimeLabel.includes('incoherent')) {
+                        return 'warning';
+                    }
+                    if (['failed', 'error'].includes(latestStatus)) {
+                        return 'failed';
+                    }
+                    if (['queued', 'pending'].includes(latestStatus)) {
+                        return 'queued';
+                    }
+                    return 'neutral';
+                },
+
+                get engineStatusBadgeClass() {
+                    if (this.engineStatusTone === 'idle') {
+                        return 'bg-slate-100 text-slate-700';
+                    }
+                    if (this.engineStatusTone === 'active') {
                         return 'bg-emerald-100 text-emerald-800';
                     }
-                    if (normalized === 'failed') {
+                    if (this.engineStatusTone === 'warning') {
+                        return 'bg-amber-100 text-amber-800';
+                    }
+                    if (this.engineStatusTone === 'failed') {
                         return 'bg-red-100 text-red-800';
                     }
-                    if (['queued', 'pending'].includes(normalized)) {
+                    if (this.engineStatusTone === 'queued') {
                         return 'bg-blue-100 text-blue-800';
                     }
                     return 'bg-slate-100 text-slate-700';
                 },
 
                 get engineStatusCardClass() {
-                    const normalized = (this.crawlOverview.monitoring.latest_run_status || '').toLowerCase();
-                    if (this.engineIsIdle) {
+                    if (this.engineStatusTone === 'idle') {
                         return 'border-slate-200 bg-slate-50';
                     }
-                    if (this.crawlIsActive) {
+                    if (this.engineStatusTone === 'active') {
                         return 'border-emerald-200 bg-emerald-50';
                     }
-                    if (normalized === 'failed') {
+                    if (this.engineStatusTone === 'warning') {
+                        return 'border-amber-200 bg-amber-50';
+                    }
+                    if (this.engineStatusTone === 'failed') {
                         return 'border-red-200 bg-red-50';
                     }
-                    if (['queued', 'pending'].includes(normalized)) {
+                    if (this.engineStatusTone === 'queued') {
                         return 'border-blue-200 bg-blue-50';
                     }
                     return 'border-slate-200 bg-slate-50';
                 },
 
                 get engineStatusCardLabelClass() {
-                    const normalized = (this.crawlOverview.monitoring.latest_run_status || '').toLowerCase();
-                    if (this.engineIsIdle) {
+                    if (this.engineStatusTone === 'idle') {
                         return 'text-slate-500';
                     }
-                    if (this.crawlIsActive) {
+                    if (this.engineStatusTone === 'active') {
                         return 'text-emerald-700';
                     }
-                    if (normalized === 'failed') {
+                    if (this.engineStatusTone === 'warning') {
+                        return 'text-amber-700';
+                    }
+                    if (this.engineStatusTone === 'failed') {
                         return 'text-red-700';
                     }
-                    if (['queued', 'pending'].includes(normalized)) {
+                    if (this.engineStatusTone === 'queued') {
                         return 'text-blue-700';
                     }
                     return 'text-slate-500';
                 },
 
                 get engineStatusDotClass() {
-                    const normalized = (this.crawlOverview.monitoring.latest_run_status || '').toLowerCase();
-                    if (this.engineIsIdle) {
+                    if (this.engineStatusTone === 'idle') {
                         return 'bg-slate-400';
                     }
-                    if (this.crawlIsActive) {
+                    if (this.engineStatusTone === 'active') {
                         return 'bg-emerald-500';
                     }
-                    if (normalized === 'failed') {
+                    if (this.engineStatusTone === 'warning') {
+                        return 'bg-amber-500';
+                    }
+                    if (this.engineStatusTone === 'failed') {
                         return 'bg-red-500';
                     }
-                    if (['queued', 'pending'].includes(normalized)) {
+                    if (this.engineStatusTone === 'queued') {
                         return 'bg-blue-500';
                     }
                     return 'bg-slate-400';
@@ -2248,14 +2341,27 @@
                     if (this.crawlerRuntime.db_write_active && this.crawlerRuntime.db_last_write_at) {
                         return `${this.crawlerRuntime.db_recent_writes || 0} écriture(s) DB récentes, dernier signal ${this.formatDate(this.crawlerRuntime.db_last_write_at)}`;
                     }
-                    return this.crawlerRuntime.db_activity_hint || 'Aucune écriture DB récente détectée.';
+                    const normalized = (this.crawlOverview.monitoring.latest_run_status || '').toLowerCase();
+                    if (this.engineIsIdle) {
+                        return 'Run actif sans écriture DB récente. Vérification recommandée.';
+                    }
+                    if (this.crawlIsActive || this.engineHasRunningRun) {
+                        return 'Exploration active, en attente des prochaines écritures DB.';
+                    }
+                    if (['queued', 'pending'].includes(normalized)) {
+                        return 'Run en attente, aucune écriture DB démarrée.';
+                    }
+                    if (['completed', 'cancelled', 'failed', 'error'].includes(normalized)) {
+                        return 'Aucune activité DB en cours.';
+                    }
+                    return 'Explorateur inactif.';
                 },
 
                 get runtimeActivityMessage() {
                     if (this.crawlerRuntime.activity_warning) {
                         return this.crawlerRuntime.activity_warning;
                     }
-                    return this.crawlerRuntime.progress_hint || '';
+                    return '';
                 },
 
                 get engineControlLocked() {
@@ -2286,8 +2392,19 @@
                     return this.activeSpaceObject?.path_prefix || 'non défini';
                 },
 
+                get sourceExplorerSpaces() {
+                    return this.spaces.filter((space) => !space.is_archive);
+                },
+
                 get archiveExplorerSpaces() {
                     return this.spaces.filter((space) => space.path_prefix !== this.activeSpace && !!space.is_archive);
+                },
+
+                get activeSourceSpaceVolumeLabel() {
+                    if (!this.activeSpaceObject) {
+                        return 'Aucun espace source disponible.';
+                    }
+                    return `${this.activeSpaceObject.file_count || 0} élément(s) indexé(s) • ${this.formatBytes(this.activeSpaceObject.total_size || 0)} en base`;
                 },
 
                 get selectedArchiveSpace() {
@@ -2325,6 +2442,7 @@
 
                 get previewInlineUrl() {
                     if (!this.previewModal.path) return '';
+                    if (!['image', 'video', 'pdf'].includes(this.previewModal.kind)) return '';
                     return `/api/file-content?path=${encodeURIComponent(this.previewModal.path)}`;
                 },
 
@@ -2335,6 +2453,7 @@
 
                 get previewOfficeUrl() {
                     if (!this.previewModal.path) return '';
+                    if (this.previewModal.kind !== 'office') return '';
                     return `/api/file-preview?path=${encodeURIComponent(this.previewModal.path)}`;
                 },
 

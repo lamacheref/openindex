@@ -20,6 +20,7 @@ import os
 import re
 import socket
 import shutil
+import time
 import zipfile
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -138,6 +139,7 @@ class SpaceInfo(BaseModel):
     name: str
     path_prefix: str
     file_count: int
+    total_size: int = 0
     config_id: Optional[str] = None
     is_archive: bool = False
 
@@ -326,7 +328,8 @@ STALE_RUN_TIMEOUT_SECONDS = int(os.getenv("OPENINDEX_CRAWLER_STALE_TIMEOUT_SECON
 ACTIVE_RUN_STATUSES = {"queued", "pending", "running", "in_progress", "cancelling"}
 RUNNING_RUN_STATUSES = {"running", "in_progress"}
 DOCKER_SOCKET_PATH = os.getenv("OPENINDEX_DOCKER_SOCKET_PATH", "/var/run/docker.sock")
-CRAWLER_CONTAINER_NAME = os.getenv("OPENINDEX_CRAWLER_CONTAINER_NAME", "openindex-crawler-preprod")
+CRAWLER_CONTAINER_NAME = os.getenv("OPENINDEX_CRAWLER_CONTAINER_NAME", "").strip()
+DEFAULT_CRAWLER_CONTAINER_NAMES = ("openindex-crawler", "openindex-crawler-preprod")
 CRAWLER_FORCE_KILL_DELAY_SECONDS = int(os.getenv("OPENINDEX_CRAWLER_FORCE_KILL_DELAY_SECONDS", "15"))
 
 
@@ -462,6 +465,59 @@ class PostgreSQLAdapter:
             return None
         return rows[0][0]
 
+    def upsert_file_record(
+        self,
+        *,
+        path: str,
+        name: str,
+        size: int,
+        checksum: Optional[str],
+        last_modified: Optional[datetime],
+        crawl_config_id: Optional[str],
+        created_at: Optional[datetime] = None,
+    ) -> None:
+        created_at = created_at or datetime.now(timezone.utc)
+        updated_at = datetime.now(timezone.utc)
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO files (
+                        path, name, size, checksum, last_modified,
+                        is_directory, is_duplicate, duplicate_of, crawl_config_id,
+                        created_at, updated_at
+                    )
+                    VALUES (%s, %s, %s, %s, %s, FALSE, FALSE, NULL, %s, %s, %s)
+                    ON CONFLICT (path) DO UPDATE SET
+                        name = EXCLUDED.name,
+                        size = EXCLUDED.size,
+                        checksum = EXCLUDED.checksum,
+                        last_modified = EXCLUDED.last_modified,
+                        is_directory = FALSE,
+                        is_duplicate = FALSE,
+                        duplicate_of = NULL,
+                        crawl_config_id = EXCLUDED.crawl_config_id,
+                        updated_at = EXCLUDED.updated_at
+                    """,
+                    [
+                        path,
+                        name,
+                        size,
+                        checksum,
+                        last_modified,
+                        crawl_config_id,
+                        created_at,
+                        updated_at,
+                    ],
+                )
+            conn.commit()
+
+    def delete_file_record(self, path: str) -> None:
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("DELETE FROM files WHERE path = %s", [path])
+            conn.commit()
+
     def get_spaces(self) -> List[Dict[str, Any]]:
         self.ensure_crawl_tables()
         config_rows = self.execute_query(
@@ -471,7 +527,8 @@ class PostgreSQLAdapter:
                 c.name,
                 c.start_path,
                 c.is_archive,
-                COUNT(f.id)
+                COUNT(f.id),
+                COALESCE(SUM(CASE WHEN f.is_directory = FALSE THEN f.size ELSE 0 END), 0)
             FROM crawl_configs c
             LEFT JOIN files f ON f.crawl_config_id = c.id
             GROUP BY c.id, c.name, c.start_path, c.is_archive
@@ -486,11 +543,18 @@ class PostgreSQLAdapter:
                     "path_prefix": row[2],
                     "is_archive": bool(row[3]),
                     "file_count": row[4] or 0,
+                    "total_size": row[5] or 0,
                 }
                 for row in config_rows
             ]
 
-        paths = self.execute_query("SELECT path FROM files WHERE path IS NOT NULL")
+        paths = self.execute_query(
+            """
+            SELECT path, size, is_directory
+            FROM files
+            WHERE path IS NOT NULL
+            """
+        )
         spaces: Dict[str, Dict[str, Any]] = {}
 
         for row in paths:
@@ -509,8 +573,11 @@ class PostgreSQLAdapter:
                     "path_prefix": prefix,
                     "is_archive": False,
                     "file_count": 0,
+                    "total_size": 0,
                 }
             spaces[prefix]["file_count"] += 1
+            if not bool(row[2]):
+                spaces[prefix]["total_size"] += int(row[1] or 0)
 
         return sorted(spaces.values(), key=lambda item: item["name"].lower())
 
@@ -690,7 +757,7 @@ class PostgreSQLAdapter:
                 connection_domain,
                 created_at::text
             FROM crawl_configs
-            WHERE %s LIKE start_path || '%%'
+            WHERE starts_with(%s, start_path)
             ORDER BY LENGTH(start_path) DESC, created_at DESC
             LIMIT 1
             """,
@@ -1006,6 +1073,30 @@ class PostgreSQLAdapter:
                 updated = cursor.rowcount or 0
             conn.commit()
         return updated
+
+    def revive_latest_terminal_run(self) -> Optional[Dict[str, Any]]:
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    WITH latest_run AS (
+                        SELECT id
+                        FROM crawl_runs
+                        ORDER BY triggered_at DESC
+                        LIMIT 1
+                    )
+                    UPDATE crawl_runs
+                    SET status = 'running'
+                    WHERE id IN (SELECT id FROM latest_run)
+                      AND LOWER(status) IN ('failed', 'error', 'completed', 'cancelled')
+                    RETURNING id::text, status
+                    """
+                )
+                row = cursor.fetchone()
+            conn.commit()
+        if not row:
+            return None
+        return {"run_id": row[0], "status": row[1]}
 
     def get_monitoring_summary(self) -> Dict[str, Any]:
         total_configs = self.execute_query("SELECT COUNT(*) FROM crawl_configs")[0][0] or 0
@@ -1350,6 +1441,28 @@ def _configure_smb_session(config: Dict[str, Any]) -> None:
     )
 
 
+def _is_smb_sharing_violation(exc: Exception) -> bool:
+    message = str(exc)
+    return "0xc0000043" in message or "being used by another process" in message
+
+
+def _read_smb_file_bytes(file_path: str, retries: int = 2, retry_delay: float = 0.15) -> bytes:
+    normalized_path = _normalize_smb_path(file_path)
+    last_error: Optional[Exception] = None
+    for attempt in range(retries + 1):
+        try:
+            with smbclient.open_file(normalized_path, mode="rb") as handle:
+                return handle.read()
+        except OSError as exc:
+            last_error = exc
+            if attempt >= retries or not _is_smb_sharing_violation(exc):
+                raise
+            time.sleep(retry_delay)
+    if last_error is not None:
+        raise last_error
+    raise OSError(f"Lecture SMB impossible pour {normalized_path}")
+
+
 def _get_config_for_path_or_404(file_path: str) -> Dict[str, Any]:
     db = get_db_adapter()
     config = db.get_crawl_config_for_path(_normalize_smb_path(file_path))
@@ -1369,6 +1482,65 @@ def _ensure_parent_directories(target_directory_path: str) -> None:
             smbclient.mkdir(current)
         except OSError:
             continue
+
+
+def _safe_queue_crawl_for_config(db: Any, config_id: Optional[str]) -> None:
+    if not config_id or not hasattr(db, "start_crawl"):
+        return
+    try:
+        db.start_crawl(config_id)
+    except ValueError:
+        logger.info("Run deja actif pour la configuration %s, nouveau lancement ignore.", config_id)
+    except Exception as exc:
+        logger.warning("Impossible de lancer automatiquement le crawl pour %s: %s", config_id, exc)
+
+
+def _sync_archived_file_in_db(
+    db: Any,
+    *,
+    source_path: str,
+    target_path: str,
+    checksum: str,
+    file_size: int,
+    source_config_id: Optional[str],
+    target_config_id: Optional[str],
+    source_deleted: bool,
+) -> None:
+    now = datetime.now(timezone.utc)
+    if hasattr(db, "upsert_file_record"):
+        db.upsert_file_record(
+            path=target_path,
+            name=_smb_name(target_path),
+            size=file_size,
+            checksum=checksum,
+            last_modified=now,
+            crawl_config_id=target_config_id,
+            created_at=now,
+        )
+        if source_deleted and hasattr(db, "delete_file_record"):
+            db.delete_file_record(source_path)
+        return
+
+    if hasattr(db, "save_files_batch"):
+        db.save_files_batch(
+            [
+                {
+                    "path": target_path,
+                    "name": _smb_name(target_path),
+                    "size": file_size,
+                    "checksum": checksum,
+                    "last_modified": now,
+                    "is_directory": False,
+                    "is_duplicate": False,
+                    "duplicate_of": None,
+                    "crawl_config_id": target_config_id,
+                    "created_at": now,
+                    "updated_at": now,
+                }
+            ]
+        )
+    if source_deleted and hasattr(db, "delete_file_record"):
+        db.delete_file_record(source_path)
 
 
 def _compute_smb_sha256(file_path: str) -> str:
@@ -1460,11 +1632,11 @@ async def get_explorer_items(
         normalized_root = _normalize_smb_path(root)
         normalized_current_path = _normalize_smb_path(current_path or root)
 
-        where_clause = "path LIKE %s"
-        params: List[Any] = [f"{normalized_current_path}%"]
+        where_clause = "starts_with(path, %s)"
+        params: List[Any] = [normalized_current_path]
         config_id = db.resolve_space_config_id(normalized_root) if hasattr(db, "resolve_space_config_id") else None
         if config_id:
-            where_clause += " AND crawl_config_id::text = %s"
+            where_clause += " AND (crawl_config_id::text = %s OR crawl_config_id IS NULL)"
             params.append(config_id)
 
         rows = db.execute_query(
@@ -1544,8 +1716,7 @@ async def get_file_content(path: str, download: bool = False):
         _configure_smb_session(config)
         media_type = _guess_media_type(normalized_path)
         filename = _smb_name(normalized_path) or "document"
-        with smbclient.open_file(normalized_path, mode="rb") as handle:
-            payload = handle.read()
+        payload = _read_smb_file_bytes(normalized_path)
 
         headers = {
             "Content-Disposition": (
@@ -1568,8 +1739,7 @@ async def get_file_preview(path: str):
         normalized_path = _normalize_smb_path(path)
         config = _get_config_for_path_or_404(normalized_path)
         _configure_smb_session(config)
-        with smbclient.open_file(normalized_path, mode="rb") as handle:
-            payload = handle.read()
+        payload = _read_smb_file_bytes(normalized_path)
         html_document = _generate_office_preview_html(normalized_path, payload)
         return HTMLResponse(content=html_document)
     except HTTPException:
@@ -1583,6 +1753,7 @@ async def get_file_preview(path: str):
 async def archive_file(payload: ArchiveFileRequest):
     try:
         db = get_db_adapter()
+        ensure_crawl_storage_ready(db)
         normalized_source_path = _normalize_smb_path(payload.source_path)
         normalized_target_directory = _normalize_smb_path(payload.target_directory_path)
         source_config = _get_config_for_path_or_404(normalized_source_path)
@@ -1605,9 +1776,15 @@ async def archive_file(payload: ArchiveFileRequest):
                 pass
 
         _ensure_parent_directories(normalized_target_directory)
+        copied_size = 0
         with smbclient.open_file(normalized_source_path, mode="rb") as source_handle:
             with smbclient.open_file(target_path, mode="wb") as target_handle:
-                shutil.copyfileobj(source_handle, target_handle, length=1024 * 1024)
+                while True:
+                    chunk = source_handle.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    copied_size += len(chunk)
+                    target_handle.write(chunk)
 
         archived_checksum = _compute_smb_sha256(target_path)
         if archived_checksum.lower() != source_checksum.lower():
@@ -1633,6 +1810,20 @@ async def archive_file(payload: ArchiveFileRequest):
                         f"URL={_unc_to_file_url(target_path)}\n"
                         "IconIndex=0\n"
                     )
+
+        _sync_archived_file_in_db(
+            db,
+            source_path=normalized_source_path,
+            target_path=target_path,
+            checksum=archived_checksum,
+            file_size=copied_size,
+            source_config_id=source_config.get("id"),
+            target_config_id=target_config.get("id"),
+            source_deleted=source_deleted,
+        )
+        _safe_queue_crawl_for_config(db, target_config.get("id"))
+        if payload.mode == "move":
+            _safe_queue_crawl_for_config(db, source_config.get("id"))
 
         return ArchiveFileResult(
             source_path=normalized_source_path,
@@ -1793,6 +1984,7 @@ async def get_spaces():
                         "path_prefix": prefix,
                         "is_archive": False,
                         "file_count": 0,
+                        "total_size": 0,
                     }
                 spaces_map[prefix]["file_count"] += 1
             spaces = sorted(spaces_map.values(), key=lambda item: item["name"].lower())
@@ -1899,7 +2091,7 @@ PROGRESS_RE = re.compile(
     re.IGNORECASE,
 )
 
-LOG_TIMESTAMP_RE = re.compile(r"^(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})")
+LOG_TIMESTAMP_RE = re.compile(r"(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})")
 LARGE_FILE_RE = re.compile(r"Gros fichier détecté: .*?\((?P<size>[\d,]+) bytes\)")
 
 
@@ -1970,7 +2162,7 @@ def _extract_runtime_metrics(log_lines: List[str]) -> Dict[str, Any]:
             "queue_checksums": queue_checksums,
             "queue_large": queue_large,
             "progress_percent": float(match.group("progress_percent")),
-            "progress_hint": "Le volume cible est stabilisé. La progression reflète maintenant le traitement restant.",
+            "progress_hint": "",
         }
     return {
         "discovered_files": 0,
@@ -2050,30 +2242,122 @@ def _docker_api_request(method: str, path: str) -> Dict[str, Any]:
     }
 
 
+def _docker_api_raw_request(method: str, path: str) -> Dict[str, Any]:
+    connection = UnixSocketHTTPConnection(DOCKER_SOCKET_PATH, timeout=10.0)
+    try:
+        connection.request(method, path)
+        response = connection.getresponse()
+        payload = response.read()
+        status = response.status
+        reason = response.reason
+    finally:
+        connection.close()
+
+    return {
+        "status": status,
+        "reason": reason,
+        "body": payload,
+    }
+
+
+def _crawler_container_candidates() -> List[str]:
+    if CRAWLER_CONTAINER_NAME:
+        return [CRAWLER_CONTAINER_NAME]
+    return list(DEFAULT_CRAWLER_CONTAINER_NAMES)
+
+
+def _resolve_crawler_container_name() -> Optional[str]:
+    if not DOCKER_SOCKET_PATH or not Path(DOCKER_SOCKET_PATH).exists():
+        return None
+
+    for container_name in _crawler_container_candidates():
+        inspect_response = _docker_api_request("GET", f"/containers/{container_name}/json")
+        if inspect_response["status"] < 400:
+            return container_name
+    return None
+
+
+def _decode_docker_log_stream(payload: bytes) -> List[str]:
+    if not payload:
+        return []
+
+    lines: List[str] = []
+    cursor = 0
+    payload_length = len(payload)
+
+    while cursor + 8 <= payload_length:
+        stream_type = payload[cursor]
+        frame_size = int.from_bytes(payload[cursor + 4:cursor + 8], byteorder="big")
+        frame_start = cursor + 8
+        frame_end = frame_start + frame_size
+        if frame_end > payload_length:
+            break
+        if stream_type in {1, 2}:
+            chunk = payload[frame_start:frame_end].decode("utf-8", errors="replace")
+            lines.extend(line for line in chunk.splitlines() if line.strip())
+        cursor = frame_end
+
+    if not lines:
+        text_payload = payload.decode("utf-8", errors="replace")
+        lines = [line for line in text_payload.splitlines() if line.strip()]
+
+    return lines
+
+
+def _read_crawler_docker_log_lines(limit: int = 80) -> Optional[List[str]]:
+    try:
+        container_name = _resolve_crawler_container_name()
+        if not container_name:
+            return None
+
+        request_path = (
+            f"/containers/{container_name}/logs?"
+            f"stdout=1&stderr=1&timestamps=1&tail={max(1, int(limit))}"
+        )
+        response = _docker_api_raw_request("GET", request_path)
+    except OSError as exc:
+        logger.warning("Lecture docker logs indisponible: %s", exc)
+        return None
+
+    if response["status"] >= 400:
+        logger.warning("Lecture docker logs impossible pour %s: %s", container_name, response)
+        return None
+    return _decode_docker_log_stream(response["body"])
+
+
+def _read_runtime_log_lines(db: Any, limit: int = 200) -> List[str]:
+    docker_log_lines = _read_crawler_docker_log_lines(limit=limit)
+    if docker_log_lines is not None:
+        return docker_log_lines
+    return _read_log_lines(_resolve_runtime_log_path(db))
+
+
 def _force_kill_crawler_container() -> bool:
     if not DOCKER_SOCKET_PATH or not Path(DOCKER_SOCKET_PATH).exists():
         logger.warning("Socket Docker introuvable, kill du crawler impossible: %s", DOCKER_SOCKET_PATH)
         return False
 
-    inspect_response = _docker_api_request("GET", f"/containers/{CRAWLER_CONTAINER_NAME}/json")
-    if inspect_response["status"] == 404:
-        logger.warning("Conteneur crawler introuvable: %s", CRAWLER_CONTAINER_NAME)
+    container_name = _resolve_crawler_container_name()
+    if not container_name:
+        logger.warning("Conteneur crawler introuvable parmi: %s", ", ".join(_crawler_container_candidates()))
         return False
+
+    inspect_response = _docker_api_request("GET", f"/containers/{container_name}/json")
     if inspect_response["status"] >= 400:
-        logger.error("Inspection Docker impossible pour %s: %s", CRAWLER_CONTAINER_NAME, inspect_response)
+        logger.error("Inspection Docker impossible pour %s: %s", container_name, inspect_response)
         return False
 
     state = (inspect_response["body"] or {}).get("State") or {}
     if not state.get("Running", False):
-        logger.info("Le conteneur crawler %s est deja arrete", CRAWLER_CONTAINER_NAME)
+        logger.info("Le conteneur crawler %s est deja arrete", container_name)
         return True
 
-    kill_response = _docker_api_request("POST", f"/containers/{CRAWLER_CONTAINER_NAME}/kill")
+    kill_response = _docker_api_request("POST", f"/containers/{container_name}/kill")
     if kill_response["status"] >= 400:
-        logger.error("Kill Docker impossible pour %s: %s", CRAWLER_CONTAINER_NAME, kill_response)
+        logger.error("Kill Docker impossible pour %s: %s", container_name, kill_response)
         return False
 
-    logger.warning("Conteneur crawler %s tue par l'API apres annulation bloquee", CRAWLER_CONTAINER_NAME)
+    logger.warning("Conteneur crawler %s tue par l'API apres annulation bloquee", container_name)
     return True
 
 
@@ -2119,32 +2403,44 @@ def _extract_last_progress_timestamp(log_lines: List[str]) -> Optional[datetime]
     for line in reversed(log_lines):
         if not PROGRESS_RE.search(line):
             continue
-        match = LOG_TIMESTAMP_RE.match(line)
-        if not match:
-            continue
-        try:
-            return datetime.strptime(match.group("ts"), "%Y-%m-%d %H:%M:%S")
-        except ValueError:
-            return None
+        parsed = _extract_line_timestamp(line)
+        if parsed is not None:
+            return parsed
     return None
 
 
 def _extract_last_log_timestamp(log_lines: List[str]) -> Optional[datetime]:
     for line in reversed(log_lines):
-        match = LOG_TIMESTAMP_RE.match(line)
-        if not match:
-            continue
-        try:
-            return datetime.strptime(match.group("ts"), "%Y-%m-%d %H:%M:%S")
-        except ValueError:
-            return None
+        parsed = _extract_line_timestamp(line)
+        if parsed is not None:
+            return parsed
     return None
+
+
+def _extract_line_timestamp(line: str) -> Optional[datetime]:
+    match = LOG_TIMESTAMP_RE.search(line)
+    if not match:
+        return None
+    try:
+        return datetime.strptime(match.group("ts"), "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return None
 
 
 def _is_recent_signal(timestamp: Optional[datetime], window_seconds: int = 300) -> bool:
     if timestamp is None:
         return False
     return (datetime.utcnow() - timestamp).total_seconds() <= window_seconds
+
+
+def _get_recent_write_activity_safe(db: Any, window_seconds: int = 300) -> Dict[str, Any]:
+    if not hasattr(db, "get_recent_write_activity"):
+        return {"recent_writes": 0, "last_write_at": None}
+    try:
+        return db.get_recent_write_activity(window_seconds=window_seconds)
+    except Exception as exc:
+        logger.warning("Sonde d'activité DB indisponible pour le runtime: %s", exc)
+        return {"recent_writes": 0, "last_write_at": None}
 
 
 def _translate_runtime_status(status: Optional[str], *, idle: bool = False, active: bool = False) -> str:
@@ -2223,6 +2519,33 @@ def _reconcile_stale_running_runs(db, raw_log_lines: List[str]) -> Dict[str, Any
             return db.get_monitoring_summary()
 
     return monitoring
+
+
+def _reconcile_terminal_run_with_recent_activity(
+    db,
+    monitoring: Dict[str, Any],
+    *,
+    recent_engine_signal: bool,
+    db_write_active: bool,
+) -> Dict[str, Any]:
+    latest_status = (monitoring.get("latest_run_status") or "").strip().lower()
+    has_running_run = int(monitoring.get("running_runs") or 0) > 0
+    if has_running_run or latest_status not in {"failed", "error", "completed", "cancelled"}:
+        return monitoring
+    if not (recent_engine_signal or db_write_active):
+        return monitoring
+    if not hasattr(db, "revive_latest_terminal_run"):
+        return monitoring
+
+    revived = db.revive_latest_terminal_run()
+    if not revived:
+        return monitoring
+
+    logger.warning(
+        "Run %s repasse en running: activite recente detectee cote explorateur.",
+        revived["run_id"],
+    )
+    return db.get_monitoring_summary()
 
 
 def _extract_large_file_metrics(raw_log_lines: List[str]) -> Dict[str, int]:
@@ -2380,7 +2703,10 @@ def _aggregate_operational_status(checks: List[OperationalCheck]) -> str:
 def _slice_current_run_log_lines(raw_log_lines: List[str]) -> List[str]:
     last_run_start_index = 0
     for index, line in enumerate(raw_log_lines):
-        if "Démarrage du crawl SMB avec PostgreSQL" in line:
+        if (
+            "Démarrage de l'exploration SMB avec PostgreSQL" in line
+            or "Démarrage du crawl SMB avec PostgreSQL" in line
+        ):
             last_run_start_index = index
     return raw_log_lines[last_run_start_index:]
 
@@ -2501,7 +2827,7 @@ async def get_monitoring_summary():
     try:
         db = get_db_adapter()
         ensure_crawl_storage_ready(db)
-        raw_log_lines = _read_log_lines(_resolve_runtime_log_path(db))
+        raw_log_lines = _read_runtime_log_lines(db, limit=400)
         summary = _reconcile_stale_running_runs(db, raw_log_lines)
         return MonitoringSummary(**summary)
     except Exception as e:
@@ -2516,7 +2842,7 @@ async def get_crawl_overview(limit: int = 10):
         ensure_crawl_storage_ready(db)
         _reconcile_stale_running_runs(
             db,
-            _read_log_lines(_resolve_runtime_log_path(db)),
+            _read_runtime_log_lines(db, limit=400),
         )
         overview = db.get_crawl_overview(limit=limit)
         return CrawlOverview(
@@ -2544,7 +2870,8 @@ async def get_crawler_runtime(log_limit: int = 80):
         db = get_db_adapter()
         ensure_crawl_storage_ready(db)
         log_path = _resolve_runtime_log_path(db)
-        raw_log_lines = _read_log_lines(log_path)
+        docker_log_lines = _read_crawler_docker_log_lines(limit=max(log_limit * 3, 200))
+        raw_log_lines = docker_log_lines if docker_log_lines is not None else _read_log_lines(log_path)
         current_run_log_lines = _slice_current_run_log_lines(raw_log_lines)
         monitoring = _reconcile_stale_running_runs(db, current_run_log_lines)
         log_lines = [_normalize_runtime_log_line(line) for line in current_run_log_lines[-log_limit:]]
@@ -2557,11 +2884,7 @@ async def get_crawler_runtime(log_limit: int = 80):
         has_running_run = monitoring["running_runs"] > 0
         started_at = _parse_db_timestamp(monitoring.get("latest_run_triggered_at"))
         recent_engine_signal = _is_recent_signal(last_engine_signal)
-        db_activity = (
-            db.get_recent_write_activity(window_seconds=300)
-            if hasattr(db, "get_recent_write_activity")
-            else {"recent_writes": 0, "last_write_at": None}
-        )
+        db_activity = _get_recent_write_activity_safe(db, window_seconds=300)
         db_last_write = db_activity.get("last_write_at")
         db_last_write_utc: Optional[datetime] = None
         if isinstance(db_last_write, datetime):
@@ -2572,8 +2895,17 @@ async def get_crawler_runtime(log_limit: int = 80):
             )
         db_recent_writes = int(db_activity.get("recent_writes") or 0)
         db_write_active = db_recent_writes > 0 and _is_recent_signal(db_last_write_utc)
+        monitoring = _reconcile_terminal_run_with_recent_activity(
+            db,
+            monitoring,
+            recent_engine_signal=recent_engine_signal,
+            db_write_active=db_write_active,
+        )
+        has_running_run = monitoring["running_runs"] > 0
         idle = False
-        if has_running_run and last_activity is not None:
+        if has_running_run and (recent_engine_signal or db_write_active):
+            idle = False
+        elif has_running_run and last_activity is not None:
             idle = (datetime.utcnow() - last_activity).total_seconds() > 300
         elif has_running_run and not log_lines:
             idle = True
@@ -2595,7 +2927,7 @@ async def get_crawler_runtime(log_limit: int = 80):
         db_activity_hint = (
             f"{db_recent_writes} écriture(s) DB observée(s) sur les 5 dernières minutes."
             if db_recent_writes > 0 and db_last_write_utc is not None
-            else "Aucune écriture DB récente détectée."
+            else ""
         )
 
         files_rate = _compute_rate(runtime_metrics["discovered_files"], started_at) if has_running_run else 0.0
@@ -2701,7 +3033,11 @@ async def get_crawler_runtime(log_limit: int = 80):
             progress_indicators=progress_indicators,
             queue_indicators=queue_indicators,
             log_lines=log_lines,
-            log_source=str(log_path),
+            log_source=(
+                f"docker:{_resolve_crawler_container_name()}"
+                if docker_log_lines is not None
+                else str(log_path)
+            ),
         )
     except Exception as e:
         logger.error(f"Erreur get_crawler_runtime: {e}")
