@@ -1621,6 +1621,58 @@ async def health_check():
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
 
+@app.get("/api/explorer/live-items", response_model=List[ExplorerItem])
+async def get_live_explorer_items(
+    root: str = Query(...),
+    current_path: Optional[str] = Query(default=None),
+):
+    """Liste les fichiers SMB en temps reel via smbclient.listdir sans passer par la base."""
+    try:
+        normalized_root = _normalize_smb_path(root)
+        normalized_current_path = _normalize_smb_path(current_path or root)
+        config = _get_config_for_path_or_404(normalized_current_path)
+        _configure_smb_session(config)
+
+        entries = smbclient.listdir(normalized_current_path)
+        items: List[ExplorerItem] = []
+
+        for entry_name in entries:
+            if entry_name in {".", ".."}:
+                continue
+            child_path = _join_smb_path(normalized_current_path, entry_name)
+            try:
+                stat_info = smbclient.stat(child_path)
+                is_directory = stat_info.st_file_attributes & 0x10 if hasattr(stat_info, 'st_file_attributes') else False
+                items.append(ExplorerItem(
+                    path=child_path,
+                    name=entry_name,
+                    is_directory=is_directory,
+                    size=None if is_directory else getattr(stat_info, 'st_size', 0),
+                    last_modified=datetime.fromtimestamp(getattr(stat_info, 'st_mtime', 0), tz=timezone.utc),
+                    created_at=datetime.fromtimestamp(getattr(stat_info, 'st_ctime', 0), tz=timezone.utc),
+                    extension=None if is_directory else _smb_extension(child_path),
+                    crawl_config_id=config.get("id"),
+                    has_duplicates=False,
+                    duplicate_count=0,
+                ))
+            except OSError:
+                items.append(ExplorerItem(
+                    path=child_path,
+                    name=entry_name,
+                    is_directory=True,
+                    crawl_config_id=config.get("id"),
+                    has_duplicates=False,
+                    duplicate_count=0,
+                ))
+
+        return sorted(items, key=lambda item: (not item.is_directory, item.name.lower()))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur get_live_explorer_items: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors du scan SMB en direct: {e}")
+
+
 @app.get("/api/explorer/items", response_model=List[ExplorerItem])
 async def get_explorer_items(
     root: str = Query(...),
