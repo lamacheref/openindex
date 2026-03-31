@@ -1821,7 +1821,13 @@
                 },
 
                 closePreview() {
-                    this.previewModal.open = false;
+                    this.previewModal = {
+                        open: false,
+                        path: '',
+                        name: '',
+                        kind: 'unsupported',
+                        previewError: ''
+                    };
                 },
 
                 async archiveSelectedFile() {
@@ -2436,6 +2442,7 @@
 
                 get previewInlineUrl() {
                     if (!this.previewModal.path) return '';
+                    if (!['image', 'video', 'pdf'].includes(this.previewModal.kind)) return '';
                     return `/api/file-content?path=${encodeURIComponent(this.previewModal.path)}`;
                 },
 
@@ -2446,6 +2453,7 @@
 
                 get previewOfficeUrl() {
                     if (!this.previewModal.path) return '';
+                    if (this.previewModal.kind !== 'office') return '';
                     return `/api/file-preview?path=${encodeURIComponent(this.previewModal.path)}`;
                 },
 
