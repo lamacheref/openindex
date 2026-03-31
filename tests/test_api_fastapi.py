@@ -21,9 +21,17 @@ class DummyDB:
         self.space_stats = {}
         self.files_by_config = {}
         self.duplicates_by_config = {}
+        self._file_id_seq = 100
 
     def execute_query(self, query, params=None):
         params = params or []
+        config_id = None
+        if "crawl_config_id::text" in query:
+            for value in reversed(params):
+                if isinstance(value, str) and value.startswith("cfg-"):
+                    config_id = value
+                    break
+
         if query.strip() == "ANALYZE":
             return []
 
@@ -33,7 +41,6 @@ class DummyDB:
             ]
 
         if "FROM files" in query and "JOIN files f2" in query:
-            config_id = params[0] if params and "crawl_config_id::text" in query else None
             if config_id is not None:
                 return self.duplicates_by_config.get(config_id, [])
             return [
@@ -56,10 +63,9 @@ class DummyDB:
                 ("/share/original/a.txt",),
             ]
 
-        if params and "crawl_config_id::text" in query:
-            config_id = params[0]
+        if config_id is not None:
             if "duplicate_count" in query:
-                return [
+                return self.files_by_config.get(config_id, [
                     (
                         "\\\\srv\\share\\docs",
                         "docs",
@@ -80,7 +86,7 @@ class DummyDB:
                         "2024-02-27T10:00:00Z",
                         2,
                     ),
-                ]
+                ])
             return self.files_by_config.get(config_id, [])
 
         # /api/files
@@ -161,6 +167,29 @@ class DummyDB:
         if normalized == "\\\\srv\\share\\docs\\readme.pdf":
             return "dummy"
         return None
+
+    def upsert_file_record(self, *, path, name, size, checksum, last_modified, crawl_config_id, created_at=None):
+        rows = self.files_by_config.setdefault(crawl_config_id, [])
+        row = (
+            path,
+            name,
+            size,
+            last_modified.isoformat() if hasattr(last_modified, "isoformat") else last_modified,
+            False,
+            crawl_config_id,
+            created_at.isoformat() if hasattr(created_at, "isoformat") else created_at,
+            0,
+        )
+        for index, existing in enumerate(rows):
+            if existing[0] == path:
+                rows[index] = row
+                break
+        else:
+            rows.append(row)
+
+    def delete_file_record(self, path):
+        for config_id, rows in list(self.files_by_config.items()):
+            self.files_by_config[config_id] = [row for row in rows if row[0] != path]
 
 
     def list_crawl_configs(self):
@@ -404,6 +433,57 @@ def test_get_explorer_items_endpoint_exposes_highlighting_metadata(client):
     assert payload[0]["duplicate_count"] == 2
     assert payload[0]["has_duplicates"] is True
     assert payload[0]["created_at"] == "2024-02-27T10:00:00Z"
+
+
+def test_get_explorer_items_keeps_rows_without_config_link_when_under_root(client):
+    db = api_main.get_db_adapter()
+    config = db.create_crawl_config(
+        api_main.CrawlConfigCreate(
+            name="Share",
+            domain_zone="FR",
+            start_path="\\\\srv\\share",
+            include_paths=[],
+            exclude_paths=[],
+            connection=api_main.CrawlConnectionConfig(
+                username="svc_share",
+                password="secret",
+                domain=None,
+            ),
+        )
+    )
+    db.files_by_config[config["id"]] = [
+        (
+            "\\\\srv\\share\\docs\\indexed.txt",
+            "indexed.txt",
+            12,
+            "2026-03-31T10:00:00Z",
+            False,
+            config["id"],
+            "2026-03-31T10:00:00Z",
+            0,
+        ),
+        (
+            "\\\\srv\\share\\docs\\orphan.txt",
+            "orphan.txt",
+            15,
+            "2026-03-31T10:00:00Z",
+            False,
+            None,
+            "2026-03-31T10:00:00Z",
+            0,
+        ),
+    ]
+
+    response = client(
+        "GET",
+        "/api/explorer/items",
+        params={"root": config["start_path"], "current_path": "\\\\srv\\share\\docs"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert any(item["path"] == "\\\\srv\\share\\docs\\indexed.txt" for item in payload)
+    assert any(item["path"] == "\\\\srv\\share\\docs\\orphan.txt" for item in payload)
 
 
 def test_space_scoping_uses_config_link_instead_of_path_guessing(client):
@@ -1017,7 +1097,7 @@ def test_file_preview_endpoint_renders_docx_html(client, monkeypatch):
 
 def test_archive_file_endpoint_moves_file_between_spaces(client, monkeypatch):
     db = api_main.get_db_adapter()
-    db.create_crawl_config(
+    source_config = db.create_crawl_config(
         api_main.CrawlConfigCreate(
             name="SOURCE",
             domain_zone="FR",
@@ -1027,7 +1107,7 @@ def test_archive_file_endpoint_moves_file_between_spaces(client, monkeypatch):
             connection=api_main.CrawlConnectionConfig(username="svc_source", password="secret", domain=None),
         )
     )
-    db.create_crawl_config(
+    archive_config = db.create_crawl_config(
         api_main.CrawlConfigCreate(
             name="ARCHIVE",
             domain_zone="FR",
@@ -1103,6 +1183,19 @@ def test_archive_file_endpoint_moves_file_between_spaces(client, monkeypatch):
     assert writes["\\\\srv\\archive\\2026\\budget.xlsx"] == b"archive-me"
     assert b"file://srv/archive/2026/budget.xlsx" in writes["\\\\srv\\source\\docs\\budget.xlsx.url"]
     assert removed == ["\\\\srv\\source\\docs\\budget.xlsx"]
+    archive_files = db.files_by_config[archive_config["id"]]
+    assert any(row[0] == "\\\\srv\\archive\\2026\\budget.xlsx" for row in archive_files)
+    assert any(run["config_id"] == archive_config["id"] for run in db.crawl_runs)
+    assert any(run["config_id"] == source_config["id"] for run in db.crawl_runs)
+
+    explorer_response = client(
+        "GET",
+        "/api/explorer/items",
+        params={"root": archive_config["start_path"], "current_path": "\\\\srv\\archive\\2026"},
+    )
+    assert explorer_response.status_code == 200
+    explorer_payload = explorer_response.json()
+    assert any(item["path"] == "\\\\srv\\archive\\2026\\budget.xlsx" for item in explorer_payload)
 
 
 def test_archive_file_refuses_delete_when_checksum_verification_fails(client, monkeypatch):

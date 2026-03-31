@@ -464,6 +464,59 @@ class PostgreSQLAdapter:
             return None
         return rows[0][0]
 
+    def upsert_file_record(
+        self,
+        *,
+        path: str,
+        name: str,
+        size: int,
+        checksum: Optional[str],
+        last_modified: Optional[datetime],
+        crawl_config_id: Optional[str],
+        created_at: Optional[datetime] = None,
+    ) -> None:
+        created_at = created_at or datetime.now(timezone.utc)
+        updated_at = datetime.now(timezone.utc)
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO files (
+                        path, name, size, checksum, last_modified,
+                        is_directory, is_duplicate, duplicate_of, crawl_config_id,
+                        created_at, updated_at
+                    )
+                    VALUES (%s, %s, %s, %s, %s, FALSE, FALSE, NULL, %s, %s, %s)
+                    ON CONFLICT (path) DO UPDATE SET
+                        name = EXCLUDED.name,
+                        size = EXCLUDED.size,
+                        checksum = EXCLUDED.checksum,
+                        last_modified = EXCLUDED.last_modified,
+                        is_directory = FALSE,
+                        is_duplicate = FALSE,
+                        duplicate_of = NULL,
+                        crawl_config_id = EXCLUDED.crawl_config_id,
+                        updated_at = EXCLUDED.updated_at
+                    """,
+                    [
+                        path,
+                        name,
+                        size,
+                        checksum,
+                        last_modified,
+                        crawl_config_id,
+                        created_at,
+                        updated_at,
+                    ],
+                )
+            conn.commit()
+
+    def delete_file_record(self, path: str) -> None:
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("DELETE FROM files WHERE path = %s", [path])
+            conn.commit()
+
     def get_spaces(self) -> List[Dict[str, Any]]:
         self.ensure_crawl_tables()
         config_rows = self.execute_query(
@@ -1408,6 +1461,65 @@ def _ensure_parent_directories(target_directory_path: str) -> None:
             continue
 
 
+def _safe_queue_crawl_for_config(db: Any, config_id: Optional[str]) -> None:
+    if not config_id or not hasattr(db, "start_crawl"):
+        return
+    try:
+        db.start_crawl(config_id)
+    except ValueError:
+        logger.info("Run deja actif pour la configuration %s, nouveau lancement ignore.", config_id)
+    except Exception as exc:
+        logger.warning("Impossible de lancer automatiquement le crawl pour %s: %s", config_id, exc)
+
+
+def _sync_archived_file_in_db(
+    db: Any,
+    *,
+    source_path: str,
+    target_path: str,
+    checksum: str,
+    file_size: int,
+    source_config_id: Optional[str],
+    target_config_id: Optional[str],
+    source_deleted: bool,
+) -> None:
+    now = datetime.now(timezone.utc)
+    if hasattr(db, "upsert_file_record"):
+        db.upsert_file_record(
+            path=target_path,
+            name=_smb_name(target_path),
+            size=file_size,
+            checksum=checksum,
+            last_modified=now,
+            crawl_config_id=target_config_id,
+            created_at=now,
+        )
+        if source_deleted and hasattr(db, "delete_file_record"):
+            db.delete_file_record(source_path)
+        return
+
+    if hasattr(db, "save_files_batch"):
+        db.save_files_batch(
+            [
+                {
+                    "path": target_path,
+                    "name": _smb_name(target_path),
+                    "size": file_size,
+                    "checksum": checksum,
+                    "last_modified": now,
+                    "is_directory": False,
+                    "is_duplicate": False,
+                    "duplicate_of": None,
+                    "crawl_config_id": target_config_id,
+                    "created_at": now,
+                    "updated_at": now,
+                }
+            ]
+        )
+    if source_deleted and hasattr(db, "delete_file_record"):
+        db.delete_file_record(source_path)
+
+
 def _compute_smb_sha256(file_path: str) -> str:
     digest = hashlib.sha256()
     with smbclient.open_file(_normalize_smb_path(file_path), mode="rb") as handle:
@@ -1501,7 +1613,7 @@ async def get_explorer_items(
         params: List[Any] = [f"{normalized_current_path}%"]
         config_id = db.resolve_space_config_id(normalized_root) if hasattr(db, "resolve_space_config_id") else None
         if config_id:
-            where_clause += " AND crawl_config_id::text = %s"
+            where_clause += " AND (crawl_config_id::text = %s OR crawl_config_id IS NULL)"
             params.append(config_id)
 
         rows = db.execute_query(
@@ -1620,6 +1732,7 @@ async def get_file_preview(path: str):
 async def archive_file(payload: ArchiveFileRequest):
     try:
         db = get_db_adapter()
+        ensure_crawl_storage_ready(db)
         normalized_source_path = _normalize_smb_path(payload.source_path)
         normalized_target_directory = _normalize_smb_path(payload.target_directory_path)
         source_config = _get_config_for_path_or_404(normalized_source_path)
@@ -1642,9 +1755,15 @@ async def archive_file(payload: ArchiveFileRequest):
                 pass
 
         _ensure_parent_directories(normalized_target_directory)
+        copied_size = 0
         with smbclient.open_file(normalized_source_path, mode="rb") as source_handle:
             with smbclient.open_file(target_path, mode="wb") as target_handle:
-                shutil.copyfileobj(source_handle, target_handle, length=1024 * 1024)
+                while True:
+                    chunk = source_handle.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    copied_size += len(chunk)
+                    target_handle.write(chunk)
 
         archived_checksum = _compute_smb_sha256(target_path)
         if archived_checksum.lower() != source_checksum.lower():
@@ -1670,6 +1789,20 @@ async def archive_file(payload: ArchiveFileRequest):
                         f"URL={_unc_to_file_url(target_path)}\n"
                         "IconIndex=0\n"
                     )
+
+        _sync_archived_file_in_db(
+            db,
+            source_path=normalized_source_path,
+            target_path=target_path,
+            checksum=archived_checksum,
+            file_size=copied_size,
+            source_config_id=source_config.get("id"),
+            target_config_id=target_config.get("id"),
+            source_deleted=source_deleted,
+        )
+        _safe_queue_crawl_for_config(db, target_config.get("id"))
+        if payload.mode == "move":
+            _safe_queue_crawl_for_config(db, source_config.get("id"))
 
         return ArchiveFileResult(
             source_path=normalized_source_path,

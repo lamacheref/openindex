@@ -1854,6 +1854,7 @@
                             this.archiveStatus += ` (lien laissé: ${payload.link_path})`;
                         }
                         this.fileExplorer.source.selectedPath = '';
+                        await this.refreshOperations();
                         await this.refreshExplorerPanels();
                     } catch (error) {
                         this.archiveStatus = error.message;
