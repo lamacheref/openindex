@@ -59,13 +59,13 @@ services:
       - openindex-network
 
   crawler:
-    image: ${OPENINDEX_CRAWLER_IMAGE:-ghcr.io/lamacheref/openindex-crawler:0.3.29}
+    image: ${OPENINDEX_CRAWLER_IMAGE:-ghcr.io/lamacheref/openindex-crawler:0.4.2}
     container_name: openindex-crawler-preprod
     restart: unless-stopped
     environment:
       TZ: ${OPENINDEX_TIMEZONE:-Europe/Paris}
       OPENINDEX_TIMEZONE: ${OPENINDEX_TIMEZONE:-Europe/Paris}
-      OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.3.29}
+      OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.4.2}
       OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-preprod}
       OPENINDEX_BUILD_DATE: ${OPENINDEX_BUILD_DATE:-unknown}
       POSTGRES_HOST: postgres
@@ -79,6 +79,7 @@ services:
         condition: service_healthy
     volumes:
       - ./logs:/app/logs
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - openindex-network
 
