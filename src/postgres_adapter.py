@@ -770,6 +770,27 @@ class PostgreSQLAdapter:
                 return None
             return row[0]
 
+    def get_recent_write_activity(self, window_seconds: int = 300) -> Dict[str, Any]:
+        """Retourne les écritures récentes observées dans la table files."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cursor.execute(
+                """
+                SELECT
+                    COUNT(*) AS recent_writes,
+                    MAX(updated_at) AS last_write_at
+                FROM files
+                WHERE updated_at >= CURRENT_TIMESTAMP - (%s * INTERVAL '1 second')
+                """,
+                [max(int(window_seconds), 1)],
+            )
+            row = cursor.fetchone() or {}
+            conn.commit()
+            return {
+                "recent_writes": int(row.get("recent_writes") or 0),
+                "last_write_at": row.get("last_write_at"),
+            }
+
     def mark_crawl_run_pending(self, run_id: str) -> Optional[Dict[str, Any]]:
         """Replace un run actif ou en file d'attente dans l'état pending."""
         with self.get_connection() as conn:

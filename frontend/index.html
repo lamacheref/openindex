@@ -266,7 +266,7 @@
                                     <i class="fas fa-pause mr-2"></i>En attente
                                 </button>
                                 <button @click="engineHasRunningRun ? stopActiveRun() : (launchableConfigId ? startCrawl(launchableConfigId) : null)"
-                                        :disabled="engineHasRunningRun ? !activeRunId : !launchableConfigId"
+                                        :disabled="engineHasRunningRun ? !activeRunId : (!launchableConfigId || engineControlLocked)"
                                         class="rounded-2xl px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-300"
                                         :class="engineHasRunningRun ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'">
                                     <i :class="engineHasRunningRun ? 'fas fa-stop mr-2' : 'fas fa-play mr-2'"></i>
@@ -280,13 +280,19 @@
                                 <div>
                                     <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Signal runtime</p>
                                     <p class="mt-3 text-base font-semibold text-slate-900" x-text="volumeProgressLabel"></p>
+                                    <p class="mt-2 text-sm text-slate-600" x-text="databaseActivityLabel"></p>
+                                    <p x-show="runtimeActivityMessage" class="mt-2 text-sm text-amber-700" x-text="runtimeActivityMessage"></p>
                                 </div>
                                 <button @click="showCrawlerLogs = !showCrawlerLogs"
-                                        :disabled="!engineHasRunningRun"
+                                        :disabled="!engineHasRunningRun && !crawlIsActive && !crawlerRuntime.log_lines.length"
                                         class="self-start rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
                                     Voir les logs
                                 </button>
                             </div>
+                        </div>
+
+                        <div x-show="runtimeHasResidualActivity" class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-800">
+                            Le run est clôturé côté statut, mais une activité moteur ou base est encore détectée. Le lancement d'un nouveau run est temporairement bloqué pour éviter un chevauchement.
                         </div>
 
                         <div x-show="engineHasRunningRun" class="mt-6">
@@ -368,7 +374,7 @@
                                                 <td>
                                                     <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
                                                           :class="statusBadgeClass(run.status)"
-                                                          x-text="run.status"></span>
+                                                          x-text="translateRunStatus(run.status)"></span>
                                                 </td>
                                                 <td class="text-sm text-slate-600" x-text="formatDate(run.triggered_at)"></td>
                                                 <td class="text-right">
@@ -902,8 +908,9 @@
             <div class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <p class="text-xs uppercase tracking-[0.22em] text-slate-400">État courant</p>
-                    <p class="mt-2 text-base font-semibold" x-text="engineHasRunningRun ? engineStatusLabel : 'Explorateur inactif'"></p>
+                    <p class="mt-2 text-base font-semibold" x-text="hasActiveRunSignal ? engineStatusLabel : 'Explorateur inactif'"></p>
                     <p class="mt-2 text-sm text-slate-600" x-text="latestRunLabel"></p>
+                    <p class="mt-2 text-xs text-slate-500" x-text="databaseActivityLabel"></p>
                 </div>
                 <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Configuration cible</p>
@@ -918,19 +925,20 @@
 
             <div class="mt-6 flex flex-wrap gap-3">
                 <button @click="engineHasRunningRun ? stopActiveRun() : (selectedConfigId ? startCrawl(selectedConfigId) : null)"
-                        :disabled="engineHasRunningRun ? !activeRunId : !selectedConfigId"
+                        :disabled="engineHasRunningRun ? !activeRunId : (!selectedConfigId || engineControlLocked)"
                         class="rounded-2xl px-4 py-2.5 text-sm font-semibold text-white disabled:bg-slate-300"
                         :class="engineHasRunningRun ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'">
                     <i :class="engineHasRunningRun ? 'fas fa-stop mr-2' : 'fas fa-play mr-2'"></i>
                     <span x-text="engineHasRunningRun ? 'Arrêter' : 'Lancer'"></span>
                 </button>
                 <button @click="selectedConfigId ? startCrawl(selectedConfigId) : null"
-                        :disabled="!selectedConfigId || engineHasRunningRun"
+                        :disabled="!selectedConfigId || engineHasRunningRun || engineControlLocked"
                         class="rounded-2xl border border-teal-300 bg-teal-50 px-4 py-2.5 text-sm font-semibold text-teal-800 hover:bg-teal-100 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
                     <i class="fas fa-bolt mr-2"></i>Forcer une exploration
                 </button>
             </div>
             <p class="mt-4 text-sm text-slate-500">Le pilotage agit sur le run actif de l’espace courant. Le forçage reste désactivé tant qu’une exploration est déjà en cours.</p>
+            <p x-show="runtimeHasResidualActivity" class="mt-2 text-sm text-amber-700" x-text="runtimeActivityMessage"></p>
         </div>
     </div>
 
@@ -1051,6 +1059,7 @@
                     idle: false,
                     latest_status: 'Aucun run',
                     latest_config_name: '-',
+                    status_label: 'Explorateur inactif',
                     progress_percent: null,
                     processed_bytes: 0,
                     discovered_bytes: 0,
@@ -1060,6 +1069,12 @@
                     large_files_bytes: 0,
                     progress_hint: '',
                     last_activity_at: null,
+                    last_engine_signal_at: null,
+                    db_write_active: false,
+                    db_recent_writes: 0,
+                    db_last_write_at: null,
+                    db_activity_hint: '',
+                    activity_warning: '',
                     progress_indicators: [],
                     queue_indicators: [],
                     log_lines: [],
@@ -1860,6 +1875,18 @@
                     return 'bg-slate-100 text-slate-800';
                 },
 
+                translateRunStatus(status) {
+                    const normalized = (status || '').toLowerCase();
+                    if (['completed', 'done', 'success'].includes(normalized)) return 'Terminé';
+                    if (['running', 'in_progress'].includes(normalized)) return 'En cours';
+                    if (normalized === 'queued') return 'En file';
+                    if (normalized === 'pending') return 'En attente';
+                    if (normalized === 'cancelling') return 'Arrêt en cours';
+                    if (normalized === 'cancelled') return 'Arrêté';
+                    if (['failed', 'error'].includes(normalized)) return 'En échec';
+                    return status || '-';
+                },
+
                 canStopRun(status) {
                     return ['queued', 'pending', 'running', 'in_progress', 'cancelling'].includes((status || '').toLowerCase());
                 },
@@ -2011,7 +2038,8 @@
                     return this.isActiveRunStatus(this.crawlOverview.monitoring.latest_run_status)
                         || this.engineHasRunningRun
                         || this.crawlIsActive
-                        || this.engineIsIdle;
+                        || this.engineIsIdle
+                        || this.crawlerRuntime.db_write_active;
                 },
 
                 get showRecentRunsSyncHint() {
@@ -2027,26 +2055,7 @@
                 },
 
                 get engineStatusLabel() {
-                    const normalized = (this.crawlOverview.monitoring.latest_run_status || '').toLowerCase();
-                    if (this.engineIsIdle) {
-                        return 'Idle';
-                    }
-                    if (this.crawlIsActive) {
-                        return 'Exploration active';
-                    }
-                    if (normalized === 'failed') {
-                        return 'Erreur';
-                    }
-                    if (['queued', 'pending'].includes(normalized)) {
-                        return 'En file';
-                    }
-                    if (normalized === 'completed') {
-                        return 'Terminé';
-                    }
-                    if (normalized === 'cancelled') {
-                        return 'Arrêté';
-                    }
-                    return 'Arrêté';
+                    return this.crawlerRuntime.status_label || this.translateRunStatus(this.crawlOverview.monitoring.latest_run_status);
                 },
 
                 get engineStatusBadgeClass() {
@@ -2139,9 +2148,33 @@
                     return 'Volume exploré non disponible';
                 },
 
+                get runtimeHasResidualActivity() {
+                    const normalized = (this.crawlOverview.monitoring.latest_run_status || '').toLowerCase();
+                    return ['failed', 'error', 'completed', 'cancelled'].includes(normalized)
+                        && (this.crawlIsActive || this.crawlerRuntime.db_write_active);
+                },
+
+                get databaseActivityLabel() {
+                    if (this.crawlerRuntime.db_write_active && this.crawlerRuntime.db_last_write_at) {
+                        return `${this.crawlerRuntime.db_recent_writes || 0} écriture(s) DB récentes, dernier signal ${this.formatDate(this.crawlerRuntime.db_last_write_at)}`;
+                    }
+                    return this.crawlerRuntime.db_activity_hint || 'Aucune écriture DB récente détectée.';
+                },
+
+                get runtimeActivityMessage() {
+                    if (this.crawlerRuntime.activity_warning) {
+                        return this.crawlerRuntime.activity_warning;
+                    }
+                    return this.crawlerRuntime.progress_hint || '';
+                },
+
+                get engineControlLocked() {
+                    return this.runtimeHasResidualActivity;
+                },
+
                 get liveImplementationStatus() {
                     if (this.crawlOverview.monitoring.latest_run_status && this.crawlOverview.monitoring.latest_run_config_name) {
-                        return `Exploration ${this.crawlOverview.monitoring.latest_run_config_name} en statut ${this.crawlOverview.monitoring.latest_run_status}`;
+                        return `Exploration ${this.crawlOverview.monitoring.latest_run_config_name} en statut ${this.translateRunStatus(this.crawlOverview.monitoring.latest_run_status)}`;
                     }
                     return this.implementationStatus;
                 },
