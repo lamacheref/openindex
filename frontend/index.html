@@ -448,6 +448,10 @@
                                 <p class="mt-2 text-sm text-slate-500">Classement manuel entre l’espace SMB actif et un espace d’archivage déjà configuré.</p>
                             </div>
                             <div class="flex flex-wrap gap-3">
+                                <button @click="openConfiguration('fileExplorer')"
+                                        class="rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                                    <i class="fas fa-sliders mr-2"></i>Configurer
+                                </button>
                                 <button @click="refreshExplorerPanels()" class="rounded-2xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-800">
                                     <i class="fas fa-rotate mr-2"></i>Rafraîchir les panneaux
                                 </button>
@@ -638,7 +642,7 @@
                             </div>
                             <div x-show="fileExplorer.archive.error" class="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" x-text="fileExplorer.archive.error"></div>
                             <div x-show="!fileExplorer.archive.root" class="mt-4 flex h-[26rem] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-8 text-center text-sm text-slate-500">
-                                Configurez au moins un second espace SMB pour servir d’archivage.
+                                Cochez l’option Archivage sur au moins un espace SMB pour alimenter ce panneau.
                             </div>
                             <div x-show="fileExplorer.archive.root" class="mt-4 overflow-hidden rounded-2xl border border-slate-200">
                                 <div class="grid grid-cols-[minmax(0,1fr)_7rem_11rem] bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
@@ -718,11 +722,11 @@
 
     <div x-cloak x-show="showConfigOverlay" class="fixed inset-0 z-[80]">
         <div class="absolute inset-0 bg-slate-900/35" @click="closeConfiguration()"></div>
-        <aside class="absolute right-0 top-0 h-full w-full max-w-3xl overflow-y-auto border-l border-slate-200 bg-white shadow-2xl shadow-slate-900/20">
+        <aside class="absolute right-0 top-0 h-full w-full max-w-[66vw] overflow-y-auto border-l border-slate-200 bg-white shadow-2xl shadow-slate-900/20">
             <div class="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
                 <div>
                     <h2 class="text-2xl font-bold tracking-tight">Configuration</h2>
-                    <p class="mt-1 text-sm text-slate-500">Réglages opératoires, base de données et profil utilisateur.</p>
+                    <p class="mt-1 text-sm text-slate-500">Réglages opératoires, explorateur de fichiers, base de données et profil utilisateur.</p>
                 </div>
                 <button @click="closeConfiguration()" class="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
                     Fermer
@@ -733,6 +737,8 @@
                 <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
                     <button @click="configSection = 'crawler'; loadCrawlConfigs()" class="rounded-2xl px-4 py-3 text-sm font-medium"
                             :class="configSection === 'crawler' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">Espaces explorés</button>
+                    <button @click="configSection = 'fileExplorer'" class="rounded-2xl px-4 py-3 text-sm font-medium"
+                            :class="configSection === 'fileExplorer' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">Explorateur</button>
                     <button @click="configSection = 'dbAnalysis'; loadDbExplain()" class="rounded-2xl px-4 py-3 text-sm font-medium"
                             :class="configSection === 'dbAnalysis' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">Base de données</button>
                     <button x-show="currentUser.is_admin" @click="configSection = 'users'" class="rounded-2xl px-4 py-3 text-sm font-medium"
@@ -762,6 +768,51 @@
                     </div>
                 </div>
 
+                <div x-show="configSection === 'fileExplorer'" class="fade-in mt-6 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+                    <div class="card p-6">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <h3 class="text-xl font-semibold">Explorateur de fichiers</h3>
+                                <p class="mt-1 text-sm text-slate-500">Choisissez l’espace SMB qui servira d’archive par défaut pour le panneau de droite.</p>
+                            </div>
+                        </div>
+                        <div class="mt-5 grid grid-cols-1 gap-4">
+                            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                <label class="text-xs uppercase tracking-[0.22em] text-slate-400">Espace d’archivage par défaut</label>
+                                <select x-model="preferredArchiveRoot"
+                                        @change="saveFileExplorerSettings()"
+                                        class="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
+                                    <option value="">Sélection automatique</option>
+                                    <template x-for="space in archiveExplorerSpaces" :key="space.path_prefix">
+                                        <option :value="space.path_prefix" x-text="getSpaceDisplayName(space)"></option>
+                                    </template>
+                                </select>
+                                <p class="mt-2 text-sm text-slate-600" x-text="archiveExplorerSpaces.length > 0 ? 'Ce réglage alimente le panneau d’archivage et reste mémorisé dans ce navigateur.' : 'Coche l’option Archivage sur au moins un espace SMB pour l’utiliser dans le panneau de droite.'"></p>
+                            </div>
+                            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Source active</p>
+                                <p class="mt-2 text-base font-semibold" x-text="activeSpaceName"></p>
+                                <p class="mt-2 break-all text-sm text-slate-600" x-text="activeSpacePath"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card p-6">
+                        <h3 class="text-xl font-semibold">Résumé courant</h3>
+                        <div class="mt-5 grid grid-cols-1 gap-4">
+                            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Zone d’archivage sélectionnée</p>
+                                <p class="mt-2 text-base font-semibold" x-text="selectedArchiveSpaceName"></p>
+                                <p class="mt-2 break-all text-sm text-slate-600" x-text="fileExplorer.archive.root || 'Aucun espace d’archivage sélectionné'"></p>
+                            </div>
+                            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Comportement</p>
+                                <p class="mt-2 text-sm text-slate-600">Si l’espace choisi devient la source active, l’interface bascule automatiquement vers un autre espace disponible pour éviter une archive sur elle-même.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div x-show="configSection === 'crawler'" class="fade-in mt-6 grid grid-cols-1 gap-5 xl:grid-cols-2">
                     <div class="card p-6">
                         <div class="flex items-start justify-between gap-3">
@@ -786,6 +837,13 @@
                                 <label class="mb-1 block text-sm font-medium text-slate-700">Chemin de départ</label>
                                 <input type="text" x-model="newCrawl.start_path" placeholder="\\server\share" required class="w-full rounded-xl border border-slate-300 px-3 py-2">
                             </div>
+                            <label class="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                                <input type="checkbox" x-model="newCrawl.is_archive" class="h-4 w-4 rounded border-slate-300 text-teal-700 focus:ring-teal-600">
+                                <span>
+                                    <span class="block font-semibold">Archivage</span>
+                                    <span class="mt-1 block text-xs text-slate-500">Rend cet espace disponible dans le panneau d’archivage de l’Explorateur de fichiers.</span>
+                                </span>
+                            </label>
                             <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
                                 <input type="text" x-model="newCrawl.connection.username" placeholder="Utilisateur" required class="rounded-xl border border-slate-300 px-3 py-2">
                                 <input type="password" x-model="newCrawl.connection.password" :placeholder="editingCrawlId ? 'Nouveau mot de passe' : 'Mot de passe'" :required="!editingCrawlId" class="rounded-xl border border-slate-300 px-3 py-2">
@@ -805,7 +863,10 @@
                                 <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                                     <div class="flex items-start justify-between gap-3">
                                         <div>
-                                            <p class="font-semibold" x-text="config.name"></p>
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <p class="font-semibold" x-text="config.name"></p>
+                                                <span x-show="config.is_archive" class="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">Archivage</span>
+                                            </div>
                                             <p class="mt-1 text-xs text-slate-500" x-text="config.start_path"></p>
                                         </div>
                                         <div class="flex gap-2">
@@ -1054,6 +1115,7 @@
                 },
                 displayTimezone: 'Europe/Paris',
                 timezoneOptions: ['Europe/Paris', 'UTC'],
+                preferredArchiveRoot: '',
                 crawlerRuntime: {
                     active: false,
                     idle: false,
@@ -1125,6 +1187,7 @@
                     name: '',
                     domain_zone: '',
                     start_path: '',
+                    is_archive: false,
                     connection: {
                         username: '',
                         password: '',
@@ -1134,6 +1197,7 @@
 
                 async init() {
                     this.displayTimezone = localStorage.getItem('openindex.displayTimezone') || 'Europe/Paris';
+                    this.preferredArchiveRoot = localStorage.getItem('openindex.fileExplorer.archiveRoot') || '';
                     this.startRealtimeClock();
                     await this.loadSpaces();
                     await this.loadStats();
@@ -1170,6 +1234,7 @@
                         name: '',
                         domain_zone: '',
                         start_path: '',
+                        is_archive: false,
                         connection: {
                             username: '',
                             password: '',
@@ -1180,6 +1245,16 @@
 
                 saveDisplayTimezone() {
                     localStorage.setItem('openindex.displayTimezone', this.displayTimezone);
+                },
+
+                saveFileExplorerSettings() {
+                    if (this.preferredArchiveRoot) {
+                        localStorage.setItem('openindex.fileExplorer.archiveRoot', this.preferredArchiveRoot);
+                    } else {
+                        localStorage.removeItem('openindex.fileExplorer.archiveRoot');
+                    }
+                    this.syncExplorerRoots();
+                    this.refreshExplorerPanel('archive');
                 },
 
                 async loadStats() {
@@ -1307,6 +1382,7 @@
                             name: this.newCrawl.name,
                             domain_zone: this.newCrawl.domain_zone,
                             start_path: this.newCrawl.start_path,
+                            is_archive: !!this.newCrawl.is_archive,
                             include_paths: [],
                             exclude_paths: [],
                             connection: {
@@ -1341,6 +1417,7 @@
                         name: config.name || '',
                         domain_zone: config.domain_zone || '',
                         start_path: config.start_path || '',
+                        is_archive: !!config.is_archive,
                         connection: {
                             username: config.connection_username || '',
                             password: '',
@@ -1355,6 +1432,7 @@
                             name: this.newCrawl.name,
                             domain_zone: this.newCrawl.domain_zone,
                             start_path: this.newCrawl.start_path,
+                            is_archive: !!this.newCrawl.is_archive,
                             include_paths: [],
                             exclude_paths: [],
                             connection: {
@@ -1491,9 +1569,15 @@
                     this.fileExplorer.source.currentPath = this.fileExplorer.source.root || '';
                     this.fileExplorer.source.selectedPath = '';
 
-                    const archiveSpace = this.archiveExplorerSpaces.find((space) => space.path_prefix === this.fileExplorer.archive.root)
+                    const archiveSpace = this.archiveExplorerSpaces.find((space) => space.path_prefix === this.preferredArchiveRoot)
+                        || this.archiveExplorerSpaces.find((space) => space.path_prefix === this.fileExplorer.archive.root)
                         || this.archiveExplorerSpaces[0]
                         || null;
+                    if (archiveSpace?.path_prefix) {
+                        this.preferredArchiveRoot = archiveSpace.path_prefix;
+                    } else if (this.preferredArchiveRoot && this.preferredArchiveRoot === this.activeSpace) {
+                        this.preferredArchiveRoot = '';
+                    }
                     this.fileExplorer.archive.root = archiveSpace?.path_prefix || '';
                     this.fileExplorer.archive.rootLabel = archiveSpace ? this.getSpaceDisplayName(archiveSpace) : '';
                     this.fileExplorer.archive.currentPath = archiveSpace?.path_prefix || '';
@@ -1502,6 +1586,12 @@
 
                 async selectArchiveRoot(rootPath) {
                     const archiveSpace = this.archiveExplorerSpaces.find((space) => space.path_prefix === rootPath) || null;
+                    this.preferredArchiveRoot = archiveSpace?.path_prefix || '';
+                    if (this.preferredArchiveRoot) {
+                        localStorage.setItem('openindex.fileExplorer.archiveRoot', this.preferredArchiveRoot);
+                    } else {
+                        localStorage.removeItem('openindex.fileExplorer.archiveRoot');
+                    }
                     this.fileExplorer.archive.root = archiveSpace?.path_prefix || '';
                     this.fileExplorer.archive.rootLabel = archiveSpace ? this.getSpaceDisplayName(archiveSpace) : '';
                     this.fileExplorer.archive.currentPath = archiveSpace?.path_prefix || '';
@@ -2197,7 +2287,16 @@
                 },
 
                 get archiveExplorerSpaces() {
-                    return this.spaces.filter((space) => space.path_prefix !== this.activeSpace);
+                    return this.spaces.filter((space) => space.path_prefix !== this.activeSpace && !!space.is_archive);
+                },
+
+                get selectedArchiveSpace() {
+                    return this.archiveExplorerSpaces.find((space) => space.path_prefix === this.fileExplorer.archive.root) || null;
+                },
+
+                get selectedArchiveSpaceName() {
+                    if (!this.selectedArchiveSpace) return 'Aucun espace d’archivage sélectionné';
+                    return this.getSpaceDisplayName(this.selectedArchiveSpace);
                 },
 
                 get explorerLegend() {
