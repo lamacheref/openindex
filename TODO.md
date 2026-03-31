@@ -104,7 +104,7 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
   - Implémenter l'ouverture de configuration en overlay latéral droite -> gauche pour: espaces crawler, gestion de la base, inscription utilisateurs, profil utilisateur.
   - Implémenter "Piloter le crawl" sous forme de lightbox permettant de lancer, forcer ou arrêter un crawl.
 
-- [ ] **T-15 — Concevoir l'Explorateur de fichiers double panneau**
+- [x] **T-15 — Concevoir l'Explorateur de fichiers double panneau**
   - Définir le comportement cible type Explorateur Windows / Dolphin.
   - Prévoir navigation arborescente, sélection, transfert inter-panneaux et actions contextuelles.
   - Déterminer les endpoints API nécessaires pour une navigation hiérarchique et des opérations de déplacement/copie pilotées.
@@ -121,6 +121,7 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
     vérification SHA-256 post-copie avant suppression source, option de laisser un lien côté source et mode overwrite piloté pour les conflits de destination.
   - Dette restante moyen terme :
     navigation SMB live hors index, opérations de masse, menu contextuel type Explorateur Windows/Dolphin et meilleur traitement des erreurs SMB côté UI.
+  - PR fix/explorateur créée le `2026-03-31` avec version `0.4.1` (bump fix).
 
 - [ ] **T-16 — Concevoir la page de traitements des artefacts**
   - Définir les catégories d'artefacts traitables: temporaires Office, doublons, fichiers système, archives obsolètes.
