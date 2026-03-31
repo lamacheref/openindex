@@ -50,6 +50,7 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
   - [x] Conclusion : P95 `/api/stats` ≈ 56 ms / `/api/files` ≈ 66 ms stable sur les trois runs ⇒ OK.
 
 - [ ] **T-06 — Durcir la CI PostgreSQL de référence**
+  - [ ] Revoir les PKI sur la préproduction (sur le serveur).
   - [x] Rendre obligatoire le passage des jobs CI PostgreSQL avant merge.
   - [x] Ajouter la collecte d'artefacts minimaux en cas d'échec (logs API/tests).
   - [x] Documenter le chemin de diagnostic rapide en cas de pipeline rouge.

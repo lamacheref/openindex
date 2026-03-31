@@ -53,7 +53,7 @@ services:
     ports:
       - "${OPENINDEX_API_PORT:-8000}:8000"
     volumes:
-      - ./logs:/app/logs
+      - logs_data_preprod:/app/logs
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - openindex-network
@@ -78,7 +78,7 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ./logs:/app/logs
+      - logs_data_preprod:/app/logs
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - openindex-network
@@ -103,6 +103,8 @@ services:
 
 volumes:
   postgres_data_preprod:
+    driver: local
+  logs_data_preprod:
     driver: local
 
 networks:
