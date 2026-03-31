@@ -20,6 +20,7 @@ import os
 import re
 import socket
 import shutil
+import time
 import zipfile
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -756,7 +757,7 @@ class PostgreSQLAdapter:
                 connection_domain,
                 created_at::text
             FROM crawl_configs
-            WHERE %s LIKE start_path || '%%'
+            WHERE starts_with(%s, start_path)
             ORDER BY LENGTH(start_path) DESC, created_at DESC
             LIMIT 1
             """,
@@ -1440,6 +1441,28 @@ def _configure_smb_session(config: Dict[str, Any]) -> None:
     )
 
 
+def _is_smb_sharing_violation(exc: Exception) -> bool:
+    message = str(exc)
+    return "0xc0000043" in message or "being used by another process" in message
+
+
+def _read_smb_file_bytes(file_path: str, retries: int = 2, retry_delay: float = 0.15) -> bytes:
+    normalized_path = _normalize_smb_path(file_path)
+    last_error: Optional[Exception] = None
+    for attempt in range(retries + 1):
+        try:
+            with smbclient.open_file(normalized_path, mode="rb") as handle:
+                return handle.read()
+        except OSError as exc:
+            last_error = exc
+            if attempt >= retries or not _is_smb_sharing_violation(exc):
+                raise
+            time.sleep(retry_delay)
+    if last_error is not None:
+        raise last_error
+    raise OSError(f"Lecture SMB impossible pour {normalized_path}")
+
+
 def _get_config_for_path_or_404(file_path: str) -> Dict[str, Any]:
     db = get_db_adapter()
     config = db.get_crawl_config_for_path(_normalize_smb_path(file_path))
@@ -1609,8 +1632,8 @@ async def get_explorer_items(
         normalized_root = _normalize_smb_path(root)
         normalized_current_path = _normalize_smb_path(current_path or root)
 
-        where_clause = "path LIKE %s"
-        params: List[Any] = [f"{normalized_current_path}%"]
+        where_clause = "starts_with(path, %s)"
+        params: List[Any] = [normalized_current_path]
         config_id = db.resolve_space_config_id(normalized_root) if hasattr(db, "resolve_space_config_id") else None
         if config_id:
             where_clause += " AND (crawl_config_id::text = %s OR crawl_config_id IS NULL)"
@@ -1693,8 +1716,7 @@ async def get_file_content(path: str, download: bool = False):
         _configure_smb_session(config)
         media_type = _guess_media_type(normalized_path)
         filename = _smb_name(normalized_path) or "document"
-        with smbclient.open_file(normalized_path, mode="rb") as handle:
-            payload = handle.read()
+        payload = _read_smb_file_bytes(normalized_path)
 
         headers = {
             "Content-Disposition": (
@@ -1717,8 +1739,7 @@ async def get_file_preview(path: str):
         normalized_path = _normalize_smb_path(path)
         config = _get_config_for_path_or_404(normalized_path)
         _configure_smb_session(config)
-        with smbclient.open_file(normalized_path, mode="rb") as handle:
-            payload = handle.read()
+        payload = _read_smb_file_bytes(normalized_path)
         html_document = _generate_office_preview_html(normalized_path, payload)
         return HTMLResponse(content=html_document)
     except HTTPException:

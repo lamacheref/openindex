@@ -1054,6 +1054,55 @@ def test_file_content_endpoint_streams_data(client, monkeypatch):
     assert response.headers["content-type"] == "application/pdf"
 
 
+def test_file_preview_endpoint_retries_transient_smb_sharing_violation(client, monkeypatch):
+    db = api_main.get_db_adapter()
+    db.create_crawl_config(
+        api_main.CrawlConfigCreate(
+            name="SMIDEN",
+            domain_zone="FR",
+            start_path="\\\\srv\\share",
+            include_paths=[],
+            exclude_paths=[],
+            connection=api_main.CrawlConnectionConfig(username="svc", password="secret", domain="CORP"),
+        )
+    )
+
+    docx_buffer = io.BytesIO()
+    with api_main.zipfile.ZipFile(docx_buffer, "w") as archive:
+        archive.writestr(
+            "word/document.xml",
+            (
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+                "<w:body><w:p><w:r><w:t>Retry OK</w:t></w:r></w:p></w:body></w:document>"
+            ),
+        )
+
+    class FakeSMBClient:
+        def __init__(self):
+            self.calls = 0
+
+        def ClientConfig(self, **kwargs):
+            self.config = kwargs
+
+        def open_file(self, path, mode="rb"):
+            assert path == "\\\\srv\\share\\docs\\locked.docx"
+            self.calls += 1
+            if self.calls == 1:
+                raise OSError("[Error 1] [NtStatus 0xc0000043] The process cannot access the file because it is being used by another process")
+            return io.BytesIO(docx_buffer.getvalue())
+
+    fake_smb = FakeSMBClient()
+    monkeypatch.setattr(api_main, "smbclient", fake_smb)
+    monkeypatch.setattr(api_main.time, "sleep", lambda _seconds: None)
+
+    response = client("GET", "/api/file-preview", params={"path": "\\\\srv\\share\\docs\\locked.docx"})
+
+    assert response.status_code == 200
+    assert "Retry OK" in response.text
+    assert fake_smb.calls == 2
+
+
 def test_file_preview_endpoint_renders_docx_html(client, monkeypatch):
     db = api_main.get_db_adapter()
     db.create_crawl_config(
@@ -1092,6 +1141,50 @@ def test_file_preview_endpoint_renders_docx_html(client, monkeypatch):
 
     assert response.status_code == 200
     assert "Bonjour OpenIndex" in response.text
+    assert response.headers["content-type"].startswith("text/html")
+
+
+def test_file_preview_endpoint_renders_xlsx_html(client, monkeypatch):
+    if api_main.openpyxl is None:
+        pytest.skip("openpyxl indisponible")
+
+    db = api_main.get_db_adapter()
+    db.create_crawl_config(
+        api_main.CrawlConfigCreate(
+            name="SMIDEN",
+            domain_zone="FR",
+            start_path="\\\\srv\\share",
+            include_paths=[],
+            exclude_paths=[],
+            connection=api_main.CrawlConnectionConfig(username="svc", password="secret", domain="CORP"),
+        )
+    )
+
+    workbook = api_main.openpyxl.Workbook()
+    worksheet = workbook.active
+    worksheet.title = "Budget"
+    worksheet["A1"] = "Libelle"
+    worksheet["B1"] = "Montant"
+    worksheet["A2"] = "Serveurs"
+    worksheet["B2"] = 2025
+    xlsx_buffer = io.BytesIO()
+    workbook.save(xlsx_buffer)
+
+    class FakeSMBClient:
+        def ClientConfig(self, **kwargs):
+            self.config = kwargs
+
+        def open_file(self, path, mode="rb"):
+            assert path == "\\\\srv\\share\\docs\\2025.xlsx"
+            return io.BytesIO(xlsx_buffer.getvalue())
+
+    monkeypatch.setattr(api_main, "smbclient", FakeSMBClient())
+
+    response = client("GET", "/api/file-preview", params={"path": "\\\\srv\\share\\docs\\2025.xlsx"})
+
+    assert response.status_code == 200
+    assert "Budget" in response.text
+    assert "Serveurs" in response.text
     assert response.headers["content-type"].startswith("text/html")
 
 
