@@ -135,8 +135,14 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
     - [x] Lightbox PDF/images/vidéos et reconnaissance des formats bureautiques.
   - [x] Couverture technique déjà livrée :
     - [x] Endpoints `/api/explorer/items`, `/api/file-content` et `/api/archive/file`, plus tests API/structure frontend associés.
-  - [ ] Dette restante court terme :
-    - [ ] Rendu bureautique complet (Word / Excel / PowerPoint / LibreOffice) dans le lightbox.
+  - [x] Dette restante court terme :
+    - [x] Rendu bureautique complet dans le lightbox — infrastructure deja en place dans l'API :
+      - DOCX/DOC : `_preview_docx` (extraction XML paragraphs)
+      - ODT : `_preview_odt` (extraction XML content)
+      - PPTX/ODP : `_preview_pptx` / `_preview_odp` (slides texte)
+      - XLSX/XLS : `_preview_xlsx` via openpyxl (tableaux HTML)
+      - ODS : `_preview_ods` (tableaux HTML XML content)
+      - Endpoint `/api/file-preview` expose le rendu HTML pour le lightbox frontend.
   - [x] Compléments livrés le `2026-03-30` :
     - [x] Vérification SHA-256 post-copie avant suppression source.
     - [x] Option de laisser un lien côté source.
