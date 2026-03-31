@@ -1065,6 +1065,8 @@
                 crawlConfigs: [],
                 loadingMonitoring: false,
                 loadingOverview: false,
+                loadingRuntime: false,
+                overviewSyncInFlight: false,
                 implementationStatus: '',
                 monitoringError: '',
                 selectedConfigId: '',
@@ -1146,6 +1148,7 @@
                 animatedDiscoveredBytes: 0,
                 clockNow: Date.now(),
                 clockTimerId: null,
+                operationsPollTimerId: null,
                 volumeAnimationFrameId: null,
                 showRecentExplorations: false,
                 showActiveConfiguration: false,
@@ -1210,6 +1213,7 @@
                     await this.loadCrawlerRuntime();
                     this.refreshNotifications();
                     this.initWebSocket();
+                    this.startOperationsPolling();
                 },
 
                 openConfiguration(section = 'crawler') {
@@ -1359,6 +1363,10 @@
                 },
 
                 async loadCrawlerRuntime() {
+                    if (this.loadingRuntime) {
+                        return;
+                    }
+                    this.loadingRuntime = true;
                     try {
                         const response = await fetch('/api/crawler/runtime?log_limit=120');
                         if (!response.ok) {
@@ -1370,9 +1378,24 @@
                             runtime.processed_bytes ?? 0,
                             runtime.discovered_bytes ?? 0
                         );
+                        await this.ensureOverviewSync();
                     } catch (error) {
                         console.error('Erreur runtime explorateur:', error);
                         this.addLogEntry(`Erreur runtime explorateur: ${error.message}`);
+                    } finally {
+                        this.loadingRuntime = false;
+                    }
+                },
+
+                async ensureOverviewSync() {
+                    if (!this.needsOverviewSync || this.loadingOverview || this.overviewSyncInFlight) {
+                        return;
+                    }
+                    this.overviewSyncInFlight = true;
+                    try {
+                        await this.loadCrawlOverview();
+                    } finally {
+                        this.overviewSyncInFlight = false;
                     }
                 },
 
@@ -1867,6 +1890,21 @@
                     }, 1000);
                 },
 
+                startOperationsPolling() {
+                    if (this.operationsPollTimerId) {
+                        clearInterval(this.operationsPollTimerId);
+                    }
+                    this.operationsPollTimerId = setInterval(async () => {
+                        if (document.hidden) {
+                            return;
+                        }
+                        await this.loadCrawlerRuntime();
+                        if (!this.loadingOverview) {
+                            await this.loadCrawlOverview();
+                        }
+                    }, 5000);
+                },
+
                 animateVolumeCounters(nextProcessedBytes, nextDiscoveredBytes) {
                     if (this.volumeAnimationFrameId) {
                         cancelAnimationFrame(this.volumeAnimationFrameId);
@@ -1913,6 +1951,7 @@
 
                 async refreshOperations() {
                     await Promise.all([
+                        this.loadSpaces(),
                         this.loadStats(),
                         this.loadCrawlConfigs(),
                         this.loadMonitoringSummary(),
@@ -1938,7 +1977,10 @@
                         return;
                     }
 
-                    const fallbackConfig = this.crawlOverview.configs[0] || this.crawlConfigs[0] || null;
+                    const allConfigs = [...this.crawlOverview.configs, ...this.crawlConfigs];
+                    const fallbackConfig = allConfigs.find((entry) => !entry.is_archive)
+                        || allConfigs[0]
+                        || null;
                     if (!fallbackConfig) {
                         if (!this.activeSpace) {
                             this.selectedConfigId = '';
@@ -2142,6 +2184,10 @@
 
                 get showRecentRunsTable() {
                     return !this.loadingOverview && this.hasRecentRunsData;
+                },
+
+                get needsOverviewSync() {
+                    return this.hasActiveRunSignal && !this.engineHasRunningRun;
                 },
 
                 get engineStatusLabel() {
