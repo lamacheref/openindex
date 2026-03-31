@@ -271,6 +271,7 @@ class CrawlerRuntime(BaseModel):
     idle: bool = False
     latest_status: str
     latest_config_name: str
+    status_label: str = ""
     progress_percent: Optional[float] = None
     processed_bytes: int = 0
     discovered_bytes: int = 0
@@ -280,6 +281,12 @@ class CrawlerRuntime(BaseModel):
     large_files_bytes: int = 0
     progress_hint: str = ""
     last_activity_at: Optional[str] = None
+    last_engine_signal_at: Optional[str] = None
+    db_write_active: bool = False
+    db_recent_writes: int = 0
+    db_last_write_at: Optional[str] = None
+    db_activity_hint: str = ""
+    activity_warning: str = ""
     progress_indicators: List[ProgressIndicator]
     queue_indicators: List[QueueIndicator]
     log_lines: List[str]
@@ -2095,6 +2102,45 @@ def _extract_last_progress_timestamp(log_lines: List[str]) -> Optional[datetime]
     return None
 
 
+def _extract_last_log_timestamp(log_lines: List[str]) -> Optional[datetime]:
+    for line in reversed(log_lines):
+        match = LOG_TIMESTAMP_RE.match(line)
+        if not match:
+            continue
+        try:
+            return datetime.strptime(match.group("ts"), "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            return None
+    return None
+
+
+def _is_recent_signal(timestamp: Optional[datetime], window_seconds: int = 300) -> bool:
+    if timestamp is None:
+        return False
+    return (datetime.utcnow() - timestamp).total_seconds() <= window_seconds
+
+
+def _translate_runtime_status(status: Optional[str], *, idle: bool = False, active: bool = False) -> str:
+    normalized = (status or "").strip().lower()
+    if idle:
+        return "En veille"
+    if active:
+        return "Exploration active"
+    if normalized in {"queued", "pending"}:
+        return "En file"
+    if normalized in {"running", "in_progress"}:
+        return "En cours"
+    if normalized == "cancelling":
+        return "Arrêt en cours"
+    if normalized == "cancelled":
+        return "Arrêté"
+    if normalized in {"failed", "error"}:
+        return "En échec"
+    if normalized in {"completed", "done", "success"}:
+        return "Terminé"
+    return "Explorateur inactif"
+
+
 def _resolve_reconciliation_reference(
     raw_log_lines: List[str],
     latest_run_triggered_at: Optional[str],
@@ -2102,6 +2148,10 @@ def _resolve_reconciliation_reference(
     last_activity = _extract_last_progress_timestamp(raw_log_lines)
     if last_activity is not None:
         return last_activity
+
+    last_log_activity = _extract_last_log_timestamp(raw_log_lines)
+    if last_log_activity is not None:
+        return last_log_activity
 
     triggered_at = _parse_db_timestamp(latest_run_triggered_at)
     if triggered_at is None:
@@ -2474,14 +2524,52 @@ async def get_crawler_runtime(log_limit: int = 80):
         runtime_metrics = _extract_runtime_metrics(log_lines)
         large_file_metrics = _extract_large_file_metrics(current_run_log_lines)
         queue_snapshot = _extract_queue_snapshot(log_lines)
-        last_activity = _extract_last_progress_timestamp(current_run_log_lines)
+        last_progress_activity = _extract_last_progress_timestamp(current_run_log_lines)
+        last_engine_signal = _extract_last_log_timestamp(current_run_log_lines)
+        last_activity = last_progress_activity or last_engine_signal
         has_running_run = monitoring["running_runs"] > 0
         started_at = _parse_db_timestamp(monitoring.get("latest_run_triggered_at"))
+        recent_engine_signal = _is_recent_signal(last_engine_signal)
+        db_activity = (
+            db.get_recent_write_activity(window_seconds=300)
+            if hasattr(db, "get_recent_write_activity")
+            else {"recent_writes": 0, "last_write_at": None}
+        )
+        db_last_write = db_activity.get("last_write_at")
+        db_last_write_utc: Optional[datetime] = None
+        if isinstance(db_last_write, datetime):
+            db_last_write_utc = (
+                db_last_write.astimezone(timezone.utc).replace(tzinfo=None)
+                if db_last_write.tzinfo
+                else db_last_write
+            )
+        db_recent_writes = int(db_activity.get("recent_writes") or 0)
+        db_write_active = db_recent_writes > 0 and _is_recent_signal(db_last_write_utc)
         idle = False
         if has_running_run and last_activity is not None:
             idle = (datetime.utcnow() - last_activity).total_seconds() > 300
         elif has_running_run and not log_lines:
             idle = True
+
+        residual_activity = (recent_engine_signal or db_write_active) and not has_running_run
+        runtime_active = (has_running_run and not idle) or residual_activity
+        latest_status = monitoring["latest_run_status"]
+        normalized_status = (latest_status or "").strip().lower()
+        status_label = _translate_runtime_status(latest_status, idle=idle, active=runtime_active)
+        activity_warning = ""
+        if normalized_status in {"failed", "error", "completed", "cancelled"} and (recent_engine_signal or db_write_active):
+            status_label = "Statut incohérent, activité détectée"
+            activity_warning = (
+                "Le run est marqué terminé ou en échec, mais le moteur ou la base montrent encore une activité récente."
+            )
+        elif has_running_run and idle:
+            activity_warning = "Le run est toujours enregistré comme actif, mais aucun signal récent n'a été vu."
+
+        db_activity_hint = (
+            f"{db_recent_writes} écriture(s) DB observée(s) sur les 5 dernières minutes."
+            if db_recent_writes > 0 and db_last_write_utc is not None
+            else "Aucune écriture DB récente détectée."
+        )
 
         files_rate = _compute_rate(runtime_metrics["discovered_files"], started_at) if has_running_run else 0.0
         directories_rate = _compute_rate(runtime_metrics["discovered_directories"], started_at) if has_running_run else 0.0
@@ -2559,10 +2647,11 @@ async def get_crawler_runtime(log_limit: int = 80):
         ]
 
         return CrawlerRuntime(
-            active=has_running_run and not idle,
+            active=runtime_active,
             idle=idle,
-            latest_status=monitoring["latest_run_status"],
+            latest_status=latest_status,
             latest_config_name=monitoring["latest_run_config_name"],
+            status_label=status_label,
             progress_percent=runtime_metrics["progress_percent"] if monitoring["running_runs"] > 0 else monitoring["progress_percent"],
             processed_bytes=runtime_metrics["processed_bytes"],
             discovered_bytes=runtime_metrics["discovered_bytes"],
@@ -2576,6 +2665,12 @@ async def get_crawler_runtime(log_limit: int = 80):
                 else runtime_metrics["progress_hint"]
             ),
             last_activity_at=last_activity.isoformat() if last_activity else None,
+            last_engine_signal_at=last_engine_signal.isoformat() if last_engine_signal else None,
+            db_write_active=db_write_active,
+            db_recent_writes=db_recent_writes,
+            db_last_write_at=db_last_write_utc.isoformat() if db_last_write_utc else None,
+            db_activity_hint=db_activity_hint,
+            activity_warning=activity_warning,
             progress_indicators=progress_indicators,
             queue_indicators=queue_indicators,
             log_lines=log_lines,
