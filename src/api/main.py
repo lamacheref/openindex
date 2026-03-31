@@ -139,6 +139,7 @@ class SpaceInfo(BaseModel):
     path_prefix: str
     file_count: int
     config_id: Optional[str] = None
+    is_archive: bool = False
 
 
 class WebSocketMessage(BaseModel):
@@ -163,6 +164,7 @@ class CrawlConfigCreate(BaseModel):
     name: str
     domain_zone: str
     start_path: str
+    is_archive: bool = False
     include_paths: List[str] = Field(default_factory=list)
     exclude_paths: List[str] = Field(default_factory=list)
     connection: CrawlConnectionConfig
@@ -178,6 +180,7 @@ class CrawlConfigUpdate(BaseModel):
     name: str
     domain_zone: str
     start_path: str
+    is_archive: bool = False
     include_paths: List[str] = Field(default_factory=list)
     exclude_paths: List[str] = Field(default_factory=list)
     connection: CrawlConnectionUpdate
@@ -188,6 +191,7 @@ class CrawlConfigPublic(BaseModel):
     name: str
     domain_zone: str
     start_path: str
+    is_archive: bool = False
     include_paths: List[str]
     exclude_paths: List[str]
     connection_username: str
@@ -466,10 +470,11 @@ class PostgreSQLAdapter:
                 c.id::text,
                 c.name,
                 c.start_path,
+                c.is_archive,
                 COUNT(f.id)
             FROM crawl_configs c
             LEFT JOIN files f ON f.crawl_config_id = c.id
-            GROUP BY c.id, c.name, c.start_path
+            GROUP BY c.id, c.name, c.start_path, c.is_archive
             ORDER BY c.name ASC, c.created_at DESC
             """
         )
@@ -479,7 +484,8 @@ class PostgreSQLAdapter:
                     "config_id": row[0],
                     "name": row[1],
                     "path_prefix": row[2],
-                    "file_count": row[3] or 0,
+                    "is_archive": bool(row[3]),
+                    "file_count": row[4] or 0,
                 }
                 for row in config_rows
             ]
@@ -501,6 +507,7 @@ class PostgreSQLAdapter:
                     "config_id": None,
                     "name": prefix.replace("/", "").replace("\\", "") or prefix,
                     "path_prefix": prefix,
+                    "is_archive": False,
                     "file_count": 0,
                 }
             spaces[prefix]["file_count"] += 1
@@ -516,6 +523,7 @@ class PostgreSQLAdapter:
                 name TEXT NOT NULL,
                 domain_zone TEXT NOT NULL,
                 start_path TEXT NOT NULL,
+                is_archive BOOLEAN NOT NULL DEFAULT FALSE,
                 include_paths TEXT[] NOT NULL DEFAULT '{}',
                 exclude_paths TEXT[] NOT NULL DEFAULT '{}',
                 connection_username TEXT NOT NULL,
@@ -569,6 +577,10 @@ class PostgreSQLAdapter:
             ALTER TABLE files
             ADD COLUMN IF NOT EXISTS crawl_config_id UUID REFERENCES crawl_configs(id) ON DELETE SET NULL
             """,
+            """
+            ALTER TABLE crawl_configs
+            ADD COLUMN IF NOT EXISTS is_archive BOOLEAN NOT NULL DEFAULT FALSE
+            """,
             "CREATE INDEX IF NOT EXISTS idx_files_crawl_config_id ON files(crawl_config_id)",
         ]
         with self.get_connection() as conn:
@@ -598,6 +610,7 @@ class PostgreSQLAdapter:
     def list_crawl_configs(self) -> List[Dict[str, Any]]:
         query = """
             SELECT id::text, name, domain_zone, start_path,
+                   is_archive,
                    include_paths, exclude_paths,
                    connection_username, connection_domain,
                    created_at::text
@@ -611,11 +624,12 @@ class PostgreSQLAdapter:
                 "name": row[1],
                 "domain_zone": row[2],
                 "start_path": row[3],
-                "include_paths": row[4] or [],
-                "exclude_paths": row[5] or [],
-                "connection_username": row[6],
-                "connection_domain": row[7],
-                "created_at": row[8],
+                "is_archive": bool(row[4]),
+                "include_paths": row[5] or [],
+                "exclude_paths": row[6] or [],
+                "connection_username": row[7],
+                "connection_domain": row[8],
+                "created_at": row[9],
             }
             for row in rows
         ]
@@ -628,6 +642,7 @@ class PostgreSQLAdapter:
                 name,
                 domain_zone,
                 start_path,
+                is_archive,
                 include_paths,
                 exclude_paths,
                 connection_username,
@@ -648,12 +663,13 @@ class PostgreSQLAdapter:
             "name": row[1],
             "domain_zone": row[2],
             "start_path": row[3],
-            "include_paths": row[4] or [],
-            "exclude_paths": row[5] or [],
-            "connection_username": row[6],
-            "connection_password": row[7],
-            "connection_domain": row[8],
-            "created_at": row[9],
+            "is_archive": bool(row[4]),
+            "include_paths": row[5] or [],
+            "exclude_paths": row[6] or [],
+            "connection_username": row[7],
+            "connection_password": row[8],
+            "connection_domain": row[9],
+            "created_at": row[10],
         }
 
     def get_crawl_config_for_path(self, file_path: str) -> Optional[Dict[str, Any]]:
@@ -666,6 +682,7 @@ class PostgreSQLAdapter:
                 name,
                 domain_zone,
                 start_path,
+                is_archive,
                 include_paths,
                 exclude_paths,
                 connection_username,
@@ -687,23 +704,25 @@ class PostgreSQLAdapter:
             "name": row[1],
             "domain_zone": row[2],
             "start_path": row[3],
-            "include_paths": row[4] or [],
-            "exclude_paths": row[5] or [],
-            "connection_username": row[6],
-            "connection_password": row[7],
-            "connection_domain": row[8],
-            "created_at": row[9],
+            "is_archive": bool(row[4]),
+            "include_paths": row[5] or [],
+            "exclude_paths": row[6] or [],
+            "connection_username": row[7],
+            "connection_password": row[8],
+            "connection_domain": row[9],
+            "created_at": row[10],
         }
 
     def create_crawl_config(self, payload: CrawlConfigCreate) -> Dict[str, Any]:
         query = """
             INSERT INTO crawl_configs (
                 name, domain_zone, start_path,
+                is_archive,
                 include_paths, exclude_paths,
                 connection_username, connection_password, connection_domain
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id::text, name, domain_zone, start_path,
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id::text, name, domain_zone, start_path, is_archive,
                       include_paths, exclude_paths,
                       connection_username, connection_domain,
                       created_at::text
@@ -716,6 +735,7 @@ class PostgreSQLAdapter:
                         payload.name,
                         payload.domain_zone,
                         payload.start_path,
+                        payload.is_archive,
                         payload.include_paths,
                         payload.exclude_paths,
                         payload.connection.username,
@@ -731,11 +751,12 @@ class PostgreSQLAdapter:
             "name": row[1],
             "domain_zone": row[2],
             "start_path": row[3],
-            "include_paths": row[4] or [],
-            "exclude_paths": row[5] or [],
-            "connection_username": row[6],
-            "connection_domain": row[7],
-            "created_at": row[8],
+            "is_archive": bool(row[4]),
+            "include_paths": row[5] or [],
+            "exclude_paths": row[6] or [],
+            "connection_username": row[7],
+            "connection_domain": row[8],
+            "created_at": row[9],
         }
 
     def update_crawl_config(self, config_id: str, payload: CrawlConfigUpdate) -> Optional[Dict[str, Any]]:
@@ -748,13 +769,14 @@ class PostgreSQLAdapter:
                         SET name = %s,
                             domain_zone = %s,
                             start_path = %s,
+                            is_archive = %s,
                             include_paths = %s,
                             exclude_paths = %s,
                             connection_username = %s,
                             connection_password = %s,
                             connection_domain = %s
                         WHERE id::text = %s
-                        RETURNING id::text, name, domain_zone, start_path,
+                        RETURNING id::text, name, domain_zone, start_path, is_archive,
                                   include_paths, exclude_paths,
                                   connection_username, connection_domain,
                                   created_at::text
@@ -763,6 +785,7 @@ class PostgreSQLAdapter:
                             payload.name,
                             payload.domain_zone,
                             payload.start_path,
+                            payload.is_archive,
                             payload.include_paths,
                             payload.exclude_paths,
                             payload.connection.username,
@@ -778,12 +801,13 @@ class PostgreSQLAdapter:
                         SET name = %s,
                             domain_zone = %s,
                             start_path = %s,
+                            is_archive = %s,
                             include_paths = %s,
                             exclude_paths = %s,
                             connection_username = %s,
                             connection_domain = %s
                         WHERE id::text = %s
-                        RETURNING id::text, name, domain_zone, start_path,
+                        RETURNING id::text, name, domain_zone, start_path, is_archive,
                                   include_paths, exclude_paths,
                                   connection_username, connection_domain,
                                   created_at::text
@@ -792,6 +816,7 @@ class PostgreSQLAdapter:
                             payload.name,
                             payload.domain_zone,
                             payload.start_path,
+                            payload.is_archive,
                             payload.include_paths,
                             payload.exclude_paths,
                             payload.connection.username,
@@ -810,11 +835,12 @@ class PostgreSQLAdapter:
             "name": row[1],
             "domain_zone": row[2],
             "start_path": row[3],
-            "include_paths": row[4] or [],
-            "exclude_paths": row[5] or [],
-            "connection_username": row[6],
-            "connection_domain": row[7],
-            "created_at": row[8],
+            "is_archive": bool(row[4]),
+            "include_paths": row[5] or [],
+            "exclude_paths": row[6] or [],
+            "connection_username": row[7],
+            "connection_domain": row[8],
+            "created_at": row[9],
         }
 
     def start_crawl(self, config_id: str) -> Optional[Dict[str, Any]]:
@@ -1765,6 +1791,7 @@ async def get_spaces():
                     spaces_map[prefix] = {
                         "name": prefix.replace("/", "").replace("\\", "") or prefix,
                         "path_prefix": prefix,
+                        "is_archive": False,
                         "file_count": 0,
                     }
                 spaces_map[prefix]["file_count"] += 1
