@@ -97,8 +97,8 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
   - [x] Exposition des vraies files du worker (Dossiers, Fichiers, Somme de contrôle, Gros fichiers) (livré le `2026-03-18`).
   - [x] Actions arrêter/supprimer sur les runs récents (livré le `2026-03-18`).
   - [x] Garde-fou un seul run actif par espace (livré le `2026-03-18`).
-  - [ ] Transformer le tableau de bord en poste opérateur actif: espace courant, dernier lancement, état du crawl, KPI temps réel, progression et journal.
-  - [ ] Implémenter le protocole de pré-estimation volumétrique avant exploration pour fiabiliser la progression, selon `docs/operations/CRAWL_PRE_ESTIMATION_PROTOCOL.md`.
+  - [x] Transformer le tableau de bord en poste opérateur actif: espace courant, dernier lancement, état du crawl, KPI temps réel, progression et journal (livré le `2026-03-18`).
+  - [x] ~~Implémenter le protocole de pré-estimation volumétrique avant exploration~~ — Annulé en raison de la charge serveur excessive. Le pilotage repose désormais sur les métriques runtime et le journal réel.
   - [ ] Corriger les finitions demandées dans `docs/definition_ui.md`:
     - [ ] Nom distinctif d'espace.
     - [ ] "Non défini" si dernier lancement absent.
