@@ -265,8 +265,8 @@
                                         class="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
                                     <i class="fas fa-pause mr-2"></i>En attente
                                 </button>
-                                <button @click="engineHasRunningRun ? stopActiveRun() : (activeSpaceConfigId ? startCrawl(activeSpaceConfigId) : null)"
-                                        :disabled="engineHasRunningRun ? !activeRunId : !activeSpaceConfigId"
+                                <button @click="engineHasRunningRun ? stopActiveRun() : (launchableConfigId ? startCrawl(launchableConfigId) : null)"
+                                        :disabled="engineHasRunningRun ? !activeRunId : !launchableConfigId"
                                         class="rounded-2xl px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-300"
                                         :class="engineHasRunningRun ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'">
                                     <i :class="engineHasRunningRun ? 'fas fa-stop mr-2' : 'fas fa-play mr-2'"></i>
@@ -1826,8 +1826,24 @@
                     const config = this.findConfigForSpace(this.activeSpace);
                     if (config) {
                         this.selectedConfigId = config.id;
-                    } else if (!this.activeSpace) {
-                        this.selectedConfigId = '';
+                        return;
+                    }
+
+                    if (this.selectedConfig) {
+                        return;
+                    }
+
+                    const fallbackConfig = this.crawlOverview.configs[0] || this.crawlConfigs[0] || null;
+                    if (!fallbackConfig) {
+                        if (!this.activeSpace) {
+                            this.selectedConfigId = '';
+                        }
+                        return;
+                    }
+
+                    this.selectedConfigId = fallbackConfig.id;
+                    if (!this.activeSpace && fallbackConfig.start_path) {
+                        this.activeSpace = fallbackConfig.start_path;
                     }
                 },
 
@@ -1911,6 +1927,10 @@
 
                 get activeSpaceConfigId() {
                     return this.findConfigForSpace(this.activeSpace)?.id || '';
+                },
+
+                get launchableConfigId() {
+                    return this.activeSpaceConfigId || this.selectedConfigId || '';
                 },
 
                 get selectedConfigAccount() {
