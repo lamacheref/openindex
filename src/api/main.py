@@ -420,6 +420,8 @@ class PostgreSQLAdapter:
         with self.get_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(pg_query, params)
+                if cursor.description is None:
+                    return []
                 return cursor.fetchall()
 
     def resolve_space_config_id(self, space: Optional[str]) -> Optional[str]:
@@ -1623,17 +1625,17 @@ EXPLAIN_QUERIES = {
                f2.path as duplicate_of_path
         FROM files f1
         JOIN files f2 ON f1.checksum = f2.checksum AND f1.id != f2.id
-        WHERE f1.is_duplicate = 1
+        WHERE f1.is_duplicate = TRUE
         ORDER BY f1.size DESC
         LIMIT 100
     """,
     "stats": """
         SELECT
             COUNT(*) as total_files,
-            SUM(CASE WHEN is_directory = 0 THEN 1 ELSE 0 END) as files_only,
-            SUM(CASE WHEN is_directory = 1 THEN 1 ELSE 0 END) as directories,
-            SUM(CASE WHEN is_duplicate = 1 THEN 1 ELSE 0 END) as duplicates,
-            COALESCE(SUM(CASE WHEN is_directory = 0 THEN size ELSE 0 END), 0) as total_size
+            SUM(CASE WHEN is_directory = FALSE THEN 1 ELSE 0 END) as files_only,
+            SUM(CASE WHEN is_directory = TRUE THEN 1 ELSE 0 END) as directories,
+            SUM(CASE WHEN is_duplicate = TRUE THEN 1 ELSE 0 END) as duplicates,
+            COALESCE(SUM(CASE WHEN is_directory = FALSE THEN size ELSE 0 END), 0) as total_size
         FROM files
     """,
 }

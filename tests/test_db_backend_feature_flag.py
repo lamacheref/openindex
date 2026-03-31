@@ -92,3 +92,36 @@ def test_get_db_adapter_postgresql(monkeypatch):
     adapter = api_main.get_db_adapter()
     assert isinstance(adapter, api_main.PostgreSQLAdapter)
     assert calls['count'] == 1
+
+
+def test_postgresql_execute_query_returns_empty_list_when_cursor_has_no_result_set(monkeypatch):
+    class FakeCursor:
+        description = None
+
+        def execute(self, query, params=None):
+            assert query == "ANALYZE"
+            assert params == []
+
+        def fetchall(self):  # pragma: no cover - should never be called
+            raise AssertionError("fetchall should not be called when description is None")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class FakeConn:
+        def cursor(self):
+            return FakeCursor()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    adapter = api_main.PostgreSQLAdapter({})
+    monkeypatch.setattr(adapter, "get_connection", lambda: FakeConn())
+
+    assert adapter.execute_query("ANALYZE") == []
