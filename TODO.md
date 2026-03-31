@@ -91,18 +91,35 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
   - Références opératoires: `docs/operations/J5_OBSERVABILITY_BASELINE.md` et `docs/operations/EXPLOITATION.md`.
 
 - [ ] **T-14 — Revoir l'UI pour le pilotage des tests et crawls**
-  - Repenser l'interface actuelle, jugée insuffisante pour le suivi opérationnel.
-  - Transformer le tableau de bord en poste opérateur actif: espace courant, dernier lancement, état du crawl, KPI temps réel, progression et journal.
-  - Implémenter un protocole de pré-estimation volumétrique avant exploration pour fiabiliser la progression, selon `docs/operations/CRAWL_PRE_ESTIMATION_PROTOCOL.md`.
-  - Corriger les finitions demandées dans `docs/definition_ui.md`: nom distinctif d'espace, "non défini" si dernier lancement absent, zone version réduite, suppression du sous-titre inutile, unités en octets, bouton logs déplacé sous la progression et désactivé si le crawler est inactif.
-  - Déjà livré le `2026-03-18`: vocabulaire exploration/explorateur, logs réels du worker, progression par volume, queues réelles, actions arrêter/supprimer sur les runs récents et garde-fou un seul run actif par espace.
-  - Déporter les explications de conception ou limites techniques hors de l'interface vers `TODO.md` ou la documentation.
-  - Rendre visibles les statuts en cours, succès, échecs, durée, artefacts et journaux utiles directement dans l'UI finale.
-  - Supprimer les vues de démonstration ou décoratives qui ne servent pas l'exploitation réelle.
-  - Prévoir un écran de suivi temps réel orienté exploitation plutôt qu'une simple consultation statique.
-  - Rendre actifs les éléments de shell: cloche de notifications, engrenage de configuration et bouton "Piloter le crawl".
-  - Implémenter l'ouverture de configuration en overlay latéral droite -> gauche pour: espaces crawler, gestion de la base, inscription utilisateurs, profil utilisateur.
-  - Implémenter "Piloter le crawl" sous forme de lightbox permettant de lancer, forcer ou arrêter un crawl.
+  - [x] Vocabulaire exploration/explorateur aligné dans l'UI (livré le `2026-03-18`).
+  - [x] Logs réels du worker dans l'UI (livré le `2026-03-18`).
+  - [x] Progression basée sur le volume découvert/traité (livré le `2026-03-18`).
+  - [x] Exposition des vraies files du worker (Dossiers, Fichiers, Somme de contrôle, Gros fichiers) (livré le `2026-03-18`).
+  - [x] Actions arrêter/supprimer sur les runs récents (livré le `2026-03-18`).
+  - [x] Garde-fou un seul run actif par espace (livré le `2026-03-18`).
+  - [ ] Transformer le tableau de bord en poste opérateur actif: espace courant, dernier lancement, état du crawl, KPI temps réel, progression et journal.
+  - [ ] Implémenter le protocole de pré-estimation volumétrique avant exploration pour fiabiliser la progression, selon `docs/operations/CRAWL_PRE_ESTIMATION_PROTOCOL.md`.
+  - [ ] Corriger les finitions demandées dans `docs/definition_ui.md`:
+    - [ ] Nom distinctif d'espace.
+    - [ ] "Non défini" si dernier lancement absent.
+    - [ ] Zone version réduite.
+    - [ ] Suppression du sous-titre inutile.
+    - [ ] Unités en octets (et non kelvins).
+    - [ ] Bouton logs déplacé sous la progression et désactivé si le crawler est inactif.
+  - [ ] Déporter les explications de conception ou limites techniques hors de l'interface vers `TODO.md` ou la documentation.
+  - [ ] Rendre visibles les statuts en cours, succès, échecs, durée, artefacts et journaux utiles directement dans l'UI finale.
+  - [ ] Supprimer les vues de démonstration ou décoratives qui ne servent pas l'exploitation réelle.
+  - [ ] Prévoir un écran de suivi temps réel orienté exploitation plutôt qu'une simple consultation statique.
+  - [ ] Rendre actifs les éléments de shell:
+    - [ ] Cloche de notifications.
+    - [ ] Engrenage de configuration.
+    - [ ] Bouton "Piloter le crawl".
+  - [ ] Implémenter l'ouverture de configuration en overlay latéral droite -> gauche pour:
+    - [ ] Espaces crawler.
+    - [ ] Gestion de la base.
+    - [ ] Inscription des utilisateurs (admin).
+    - [ ] Profil utilisateur.
+  - [ ] Implémenter "Piloter le crawl" sous forme de lightbox permettant de lancer, forcer ou arrêter un crawl.
 
 - [x] **T-15 — Concevoir l'Explorateur de fichiers double panneau**
   - Définir le comportement cible type Explorateur Windows / Dolphin.
