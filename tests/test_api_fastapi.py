@@ -1,6 +1,7 @@
 import asyncio
 import io
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -257,6 +258,15 @@ class DummyDB:
                 run["status"] = "cancelled"
                 updated += 1
         return updated
+
+    def revive_latest_terminal_run(self):
+        if not self.crawl_runs:
+            return None
+        latest = self.crawl_runs[-1]
+        if latest["status"] not in {"failed", "error", "completed", "cancelled"}:
+            return None
+        latest["status"] = "running"
+        return {"run_id": latest["run_id"], "status": latest["status"]}
 
     def get_monitoring_summary(self):
         latest = self.crawl_runs[-1] if self.crawl_runs else None
@@ -766,6 +776,50 @@ def test_get_crawler_runtime_endpoint(client, monkeypatch, tmp_path):
     integrity_progress = next(item for item in payload["progress_indicators"] if item["key"] == "integrity_backlog")
     assert "it/s" in integrity_queue["detail"]
     assert "it/s" in integrity_progress["detail"]
+
+
+def test_get_crawler_runtime_reconciles_terminal_run_with_recent_db_activity(monkeypatch, tmp_path):
+    db = DummyDB()
+    db.crawl_configs.append(
+        {
+            "id": "cfg-1",
+            "name": "Crawl Runtime",
+            "domain_zone": "FR",
+            "start_path": "\\\\srv\\runtime",
+            "include_paths": [],
+            "exclude_paths": [],
+            "connection_username": "svc_runtime",
+            "connection_domain": "CORP",
+            "created_at": "2026-03-10T12:00:00+00:00",
+        }
+    )
+    db.crawl_runs.append(
+        {
+            "run_id": "run-1",
+            "config_id": "cfg-1",
+            "status": "completed",
+            "triggered_at": "2026-03-10T12:05:00+00:00",
+        }
+    )
+
+    log_file = tmp_path / "smb_crawler_postgresql.log"
+    log_file.write_text("", encoding="utf-8")
+    monkeypatch.setenv("OPENINDEX_CRAWLER_LOG_PATH", str(log_file))
+    monkeypatch.setattr(api_main, "get_db_adapter", lambda: db)
+    monkeypatch.setattr(
+        api_main,
+        "_get_recent_write_activity_safe",
+        lambda _db, window_seconds=300: {
+            "recent_writes": 4,
+            "last_write_at": datetime.utcnow() - timedelta(seconds=30),
+        },
+    )
+
+    response = run_request("GET", "/api/crawler/runtime")
+
+    assert response.status_code == 200
+    assert db.crawl_runs[-1]["status"] == "running"
+    assert response.json()["db_write_active"] is True
 
 
 def test_get_operations_status_endpoint_nominal(client, monkeypatch, tmp_path):

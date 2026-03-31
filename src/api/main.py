@@ -138,6 +138,7 @@ class SpaceInfo(BaseModel):
     name: str
     path_prefix: str
     file_count: int
+    total_size: int = 0
     config_id: Optional[str] = None
     is_archive: bool = False
 
@@ -472,7 +473,8 @@ class PostgreSQLAdapter:
                 c.name,
                 c.start_path,
                 c.is_archive,
-                COUNT(f.id)
+                COUNT(f.id),
+                COALESCE(SUM(CASE WHEN f.is_directory = FALSE THEN f.size ELSE 0 END), 0)
             FROM crawl_configs c
             LEFT JOIN files f ON f.crawl_config_id = c.id
             GROUP BY c.id, c.name, c.start_path, c.is_archive
@@ -487,11 +489,18 @@ class PostgreSQLAdapter:
                     "path_prefix": row[2],
                     "is_archive": bool(row[3]),
                     "file_count": row[4] or 0,
+                    "total_size": row[5] or 0,
                 }
                 for row in config_rows
             ]
 
-        paths = self.execute_query("SELECT path FROM files WHERE path IS NOT NULL")
+        paths = self.execute_query(
+            """
+            SELECT path, size, is_directory
+            FROM files
+            WHERE path IS NOT NULL
+            """
+        )
         spaces: Dict[str, Dict[str, Any]] = {}
 
         for row in paths:
@@ -510,8 +519,11 @@ class PostgreSQLAdapter:
                     "path_prefix": prefix,
                     "is_archive": False,
                     "file_count": 0,
+                    "total_size": 0,
                 }
             spaces[prefix]["file_count"] += 1
+            if not bool(row[2]):
+                spaces[prefix]["total_size"] += int(row[1] or 0)
 
         return sorted(spaces.values(), key=lambda item: item["name"].lower())
 
@@ -1007,6 +1019,30 @@ class PostgreSQLAdapter:
                 updated = cursor.rowcount or 0
             conn.commit()
         return updated
+
+    def revive_latest_terminal_run(self) -> Optional[Dict[str, Any]]:
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    WITH latest_run AS (
+                        SELECT id
+                        FROM crawl_runs
+                        ORDER BY triggered_at DESC
+                        LIMIT 1
+                    )
+                    UPDATE crawl_runs
+                    SET status = 'running'
+                    WHERE id IN (SELECT id FROM latest_run)
+                      AND LOWER(status) IN ('failed', 'error', 'completed', 'cancelled')
+                    RETURNING id::text, status
+                    """
+                )
+                row = cursor.fetchone()
+            conn.commit()
+        if not row:
+            return None
+        return {"run_id": row[0], "status": row[1]}
 
     def get_monitoring_summary(self) -> Dict[str, Any]:
         total_configs = self.execute_query("SELECT COUNT(*) FROM crawl_configs")[0][0] or 0
@@ -1794,6 +1830,7 @@ async def get_spaces():
                         "path_prefix": prefix,
                         "is_archive": False,
                         "file_count": 0,
+                        "total_size": 0,
                     }
                 spaces_map[prefix]["file_count"] += 1
             spaces = sorted(spaces_map.values(), key=lambda item: item["name"].lower())
@@ -1900,7 +1937,7 @@ PROGRESS_RE = re.compile(
     re.IGNORECASE,
 )
 
-LOG_TIMESTAMP_RE = re.compile(r"^(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})")
+LOG_TIMESTAMP_RE = re.compile(r"(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})")
 LARGE_FILE_RE = re.compile(r"Gros fichier détecté: .*?\((?P<size>[\d,]+) bytes\)")
 
 
@@ -1971,7 +2008,7 @@ def _extract_runtime_metrics(log_lines: List[str]) -> Dict[str, Any]:
             "queue_checksums": queue_checksums,
             "queue_large": queue_large,
             "progress_percent": float(match.group("progress_percent")),
-            "progress_hint": "Le volume cible est stabilisé. La progression reflète maintenant le traitement restant.",
+            "progress_hint": "",
         }
     return {
         "discovered_files": 0,
@@ -2114,19 +2151,31 @@ def _decode_docker_log_stream(payload: bytes) -> List[str]:
 
 
 def _read_crawler_docker_log_lines(limit: int = 80) -> Optional[List[str]]:
-    container_name = _resolve_crawler_container_name()
-    if not container_name:
+    try:
+        container_name = _resolve_crawler_container_name()
+        if not container_name:
+            return None
+
+        request_path = (
+            f"/containers/{container_name}/logs?"
+            f"stdout=1&stderr=1&timestamps=1&tail={max(1, int(limit))}"
+        )
+        response = _docker_api_raw_request("GET", request_path)
+    except OSError as exc:
+        logger.warning("Lecture docker logs indisponible: %s", exc)
         return None
 
-    request_path = (
-        f"/containers/{container_name}/logs?"
-        f"stdout=1&stderr=1&timestamps=1&tail={max(1, int(limit))}"
-    )
-    response = _docker_api_raw_request("GET", request_path)
     if response["status"] >= 400:
         logger.warning("Lecture docker logs impossible pour %s: %s", container_name, response)
         return None
     return _decode_docker_log_stream(response["body"])
+
+
+def _read_runtime_log_lines(db: Any, limit: int = 200) -> List[str]:
+    docker_log_lines = _read_crawler_docker_log_lines(limit=limit)
+    if docker_log_lines is not None:
+        return docker_log_lines
+    return _read_log_lines(_resolve_runtime_log_path(db))
 
 
 def _force_kill_crawler_container() -> bool:
@@ -2200,32 +2249,44 @@ def _extract_last_progress_timestamp(log_lines: List[str]) -> Optional[datetime]
     for line in reversed(log_lines):
         if not PROGRESS_RE.search(line):
             continue
-        match = LOG_TIMESTAMP_RE.match(line)
-        if not match:
-            continue
-        try:
-            return datetime.strptime(match.group("ts"), "%Y-%m-%d %H:%M:%S")
-        except ValueError:
-            return None
+        parsed = _extract_line_timestamp(line)
+        if parsed is not None:
+            return parsed
     return None
 
 
 def _extract_last_log_timestamp(log_lines: List[str]) -> Optional[datetime]:
     for line in reversed(log_lines):
-        match = LOG_TIMESTAMP_RE.match(line)
-        if not match:
-            continue
-        try:
-            return datetime.strptime(match.group("ts"), "%Y-%m-%d %H:%M:%S")
-        except ValueError:
-            return None
+        parsed = _extract_line_timestamp(line)
+        if parsed is not None:
+            return parsed
     return None
+
+
+def _extract_line_timestamp(line: str) -> Optional[datetime]:
+    match = LOG_TIMESTAMP_RE.search(line)
+    if not match:
+        return None
+    try:
+        return datetime.strptime(match.group("ts"), "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return None
 
 
 def _is_recent_signal(timestamp: Optional[datetime], window_seconds: int = 300) -> bool:
     if timestamp is None:
         return False
     return (datetime.utcnow() - timestamp).total_seconds() <= window_seconds
+
+
+def _get_recent_write_activity_safe(db: Any, window_seconds: int = 300) -> Dict[str, Any]:
+    if not hasattr(db, "get_recent_write_activity"):
+        return {"recent_writes": 0, "last_write_at": None}
+    try:
+        return db.get_recent_write_activity(window_seconds=window_seconds)
+    except Exception as exc:
+        logger.warning("Sonde d'activité DB indisponible pour le runtime: %s", exc)
+        return {"recent_writes": 0, "last_write_at": None}
 
 
 def _translate_runtime_status(status: Optional[str], *, idle: bool = False, active: bool = False) -> str:
@@ -2304,6 +2365,33 @@ def _reconcile_stale_running_runs(db, raw_log_lines: List[str]) -> Dict[str, Any
             return db.get_monitoring_summary()
 
     return monitoring
+
+
+def _reconcile_terminal_run_with_recent_activity(
+    db,
+    monitoring: Dict[str, Any],
+    *,
+    recent_engine_signal: bool,
+    db_write_active: bool,
+) -> Dict[str, Any]:
+    latest_status = (monitoring.get("latest_run_status") or "").strip().lower()
+    has_running_run = int(monitoring.get("running_runs") or 0) > 0
+    if has_running_run or latest_status not in {"failed", "error", "completed", "cancelled"}:
+        return monitoring
+    if not (recent_engine_signal or db_write_active):
+        return monitoring
+    if not hasattr(db, "revive_latest_terminal_run"):
+        return monitoring
+
+    revived = db.revive_latest_terminal_run()
+    if not revived:
+        return monitoring
+
+    logger.warning(
+        "Run %s repasse en running: activite recente detectee cote explorateur.",
+        revived["run_id"],
+    )
+    return db.get_monitoring_summary()
 
 
 def _extract_large_file_metrics(raw_log_lines: List[str]) -> Dict[str, int]:
@@ -2585,7 +2673,7 @@ async def get_monitoring_summary():
     try:
         db = get_db_adapter()
         ensure_crawl_storage_ready(db)
-        raw_log_lines = _read_log_lines(_resolve_runtime_log_path(db))
+        raw_log_lines = _read_runtime_log_lines(db, limit=400)
         summary = _reconcile_stale_running_runs(db, raw_log_lines)
         return MonitoringSummary(**summary)
     except Exception as e:
@@ -2600,7 +2688,7 @@ async def get_crawl_overview(limit: int = 10):
         ensure_crawl_storage_ready(db)
         _reconcile_stale_running_runs(
             db,
-            _read_log_lines(_resolve_runtime_log_path(db)),
+            _read_runtime_log_lines(db, limit=400),
         )
         overview = db.get_crawl_overview(limit=limit)
         return CrawlOverview(
@@ -2642,11 +2730,7 @@ async def get_crawler_runtime(log_limit: int = 80):
         has_running_run = monitoring["running_runs"] > 0
         started_at = _parse_db_timestamp(monitoring.get("latest_run_triggered_at"))
         recent_engine_signal = _is_recent_signal(last_engine_signal)
-        db_activity = (
-            db.get_recent_write_activity(window_seconds=300)
-            if hasattr(db, "get_recent_write_activity")
-            else {"recent_writes": 0, "last_write_at": None}
-        )
+        db_activity = _get_recent_write_activity_safe(db, window_seconds=300)
         db_last_write = db_activity.get("last_write_at")
         db_last_write_utc: Optional[datetime] = None
         if isinstance(db_last_write, datetime):
@@ -2657,8 +2741,17 @@ async def get_crawler_runtime(log_limit: int = 80):
             )
         db_recent_writes = int(db_activity.get("recent_writes") or 0)
         db_write_active = db_recent_writes > 0 and _is_recent_signal(db_last_write_utc)
+        monitoring = _reconcile_terminal_run_with_recent_activity(
+            db,
+            monitoring,
+            recent_engine_signal=recent_engine_signal,
+            db_write_active=db_write_active,
+        )
+        has_running_run = monitoring["running_runs"] > 0
         idle = False
-        if has_running_run and last_activity is not None:
+        if has_running_run and (recent_engine_signal or db_write_active):
+            idle = False
+        elif has_running_run and last_activity is not None:
             idle = (datetime.utcnow() - last_activity).total_seconds() > 300
         elif has_running_run and not log_lines:
             idle = True
@@ -2680,7 +2773,7 @@ async def get_crawler_runtime(log_limit: int = 80):
         db_activity_hint = (
             f"{db_recent_writes} écriture(s) DB observée(s) sur les 5 dernières minutes."
             if db_recent_writes > 0 and db_last_write_utc is not None
-            else "Aucune écriture DB récente détectée."
+            else ""
         )
 
         files_rate = _compute_rate(runtime_metrics["discovered_files"], started_at) if has_running_run else 0.0
