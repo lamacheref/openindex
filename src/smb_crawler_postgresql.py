@@ -1070,6 +1070,7 @@ class SMBCrawlerPostgreSQL:
                 
             except KeyboardInterrupt:
                 self.stats['final_status'] = 'cancelled'
+                self.user_cancelled = True  # Marquer comme cancellation utilisateur
                 print("\n⚠️ Arrêt demandé par l'utilisateur...")
             finally:
                 # Arrêter tous les workers
@@ -1129,6 +1130,7 @@ class SMBCrawlerPostgreSQL:
         """Callback pour afficher la progression."""
         if self.should_stop_requested_run():
             self.logger.info(f"⏹️ Arrêt demandé pour le run {self.run_id}")
+            self.user_cancelled = True  # Marquer comme cancellation utilisateur
             self.stop()
             return
         if self.should_pause_requested_run():
