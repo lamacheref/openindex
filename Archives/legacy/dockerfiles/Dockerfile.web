@@ -1,10 +1,17 @@
 # Dockerfile pour le service Web UI
 FROM python:3.11-slim
 
+ARG OPENINDEX_APP_VERSION=0.4.12
+ARG OPENINDEX_BUILD_COMMIT=dev
+ARG OPENINDEX_BUILD_DATE=20260401_173742
+
 # Métadonnées
 LABEL maintainer="OpenIndex Team"
 LABEL description="OpenIndex Web UI Service"
-LABEL version="0.1.0"
+LABEL version="${OPENINDEX_APP_VERSION}"
+LABEL org.opencontainers.image.version="${OPENINDEX_APP_VERSION}"
+LABEL org.opencontainers.image.revision="${OPENINDEX_BUILD_COMMIT}"
+LABEL org.opencontainers.image.created="${OPENINDEX_BUILD_DATE}"
 
 # Configuration
 WORKDIR /app

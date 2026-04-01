@@ -1,5 +1,12 @@
 # Changelog OpenIndex avec PostgreSQL
 
+## 2026-04-01 — Mise à jour des informations de build Docker
+
+- **Dockerfiles mis à jour** : `Dockerfile.api`, `Dockerfile.crawler`, `Dockerfile.frontend`.
+- Version applicative synchronisée sur `0.4.12` (depuis `VERSION`).
+- Build commit fixé à `dev` pour les builds de développement.
+- Build date mise à jour au `20260401_173742`.
+
 ## 2026-04-01 — Correction des statuts de runs et améliorations interface
 
 - **Nettoyage automatique des runs bloqués** : Ajout de `cleanup_stale_runs()` dans le crawler pour détecter et corriger périodiquement les runs qui restent dans un état "running" alors qu'ils sont terminés côté serveur.
@@ -7,7 +14,7 @@
 - **Notifications améliorées** : Meilleure visibilité des changements de statut des runs avec notifications contextuelles.
 - **Amélioration de la logique de revival** : Correction des problèmes d'effacement intempestif de l'espace choisi.
 - **Documentation mise à jour** : README.md et CHANGELOG.md reflètent les nouvelles fonctionnalités.
-- Version mise à jour en `0.4.5` pour ces corrections et améliorations.
+- Version mise à jour en `0.4.12` pour ces corrections et améliorations.
 
 ## 2026-03-26 — Durcissement de la gate PostgreSQL et lancement du socle J5
 

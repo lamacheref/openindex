@@ -1,9 +1,9 @@
 # Dockerfile pour le service Crawler Python
 FROM python:3.11-slim
 
-ARG OPENINDEX_APP_VERSION=0.3.0
+ARG OPENINDEX_APP_VERSION=0.4.12
 ARG OPENINDEX_BUILD_COMMIT=dev
-ARG OPENINDEX_BUILD_DATE=unknown
+ARG OPENINDEX_BUILD_DATE=20260401_173742
 
 # Métadonnées
 LABEL maintainer="OpenIndex Team"

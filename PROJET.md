@@ -1,12 +1,18 @@
 # PROJET — OpenIndex
 
-## Objectif
+## Objectifs du projet
 
 OpenIndex fournit un socle d’indexation de fichiers SMB avec restitution via API et interface web légère.
 
-## Cap J1 (en cours)
+## Cap J5 (en cours)
 
-Le **jour J1** marque le lancement du pilotage projet avec 4 priorités :
+Le **jour J5** marque la phase de qualité et observabilité industrielle :
+
+- Couverture de tests mesurée et suivie.
+- Dashboards de santé et alerting.
+- Processus de release strict (DoD + checklist publication).
+
+## Cap J1 (historique)
 
 - Stabiliser le cadre documentaire (vision, roadmap, suivi, changelog).
 - Poser un cadre d’exécution hebdomadaire clair (priorités + done).
@@ -25,7 +31,7 @@ Le **jour J1** marque le lancement du pilotage projet avec 4 priorités :
 - Crawler Python SMB (base existante + historique d’optimisations).
 - API FastAPI (`src/api/main.py`).
 - Frontend (`frontend/index.html`).
-- Déploiement J3 via Docker Compose (`docker-compose.j3.yml`).
+- Déploiement via Docker Compose (`docker-compose.yml`).
 
 ## Trajectoire
 
