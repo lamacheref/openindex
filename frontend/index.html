@@ -499,6 +499,22 @@
                                 </template>
                             </div>
                             <div x-show="fileExplorer.source.error" class="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" x-text="fileExplorer.source.error"></div>
+                            <div x-show="hasSmbErrors('source')" class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                                <div class="flex items-center justify-between">
+                                    <span><i class="fas fa-exclamation-triangle mr-2"></i>Erreurs SMB détectées</span>
+                                    <button @click="clearSmbErrors('source')" class="text-amber-600 hover:text-amber-800">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                                <div class="mt-2 max-h-32 overflow-y-auto text-xs">
+                                    <template x-for="error in fileExplorer.source.smbErrors" :key="error.timestamp">
+                                        <div class="mt-1 flex items-start gap-2">
+                                            <i class="fas fa-exclamation-circle mt-1 text-amber-500"></i>
+                                            <span x-text="error.message"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
                             <div class="mt-4 overflow-hidden rounded-2xl border border-slate-200">
                                 <div class="grid grid-cols-[minmax(0,1fr)_7rem_11rem] bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
                                     <span>Nom</span>
@@ -508,7 +524,7 @@
                                 <div x-show="fileExplorer.source.loading" class="flex h-[26rem] items-center justify-center bg-white">
                                     <div class="loading"></div>
                                 </div>
-                                <div x-show="!fileExplorer.source.loading && fileExplorer.source.items.length === 0" class="flex h-[26rem] items-center justify-center bg-white px-8 text-center text-sm text-slate-500">
+                                <div x-show="!fileExplorer.source.loading && fileExplorer.source.items.length === 0 && !fileExplorer.source.error && !hasSmbErrors('source')" class="flex h-[26rem] items-center justify-center bg-white px-8 text-center text-sm text-slate-500">
                                     Aucun élément indexé dans ce répertoire.
                                 </div>
                                 <div x-show="!fileExplorer.source.loading && fileExplorer.source.items.length > 0" class="h-[26rem] overflow-y-auto bg-white">
@@ -657,6 +673,22 @@
                                 </template>
                             </div>
                             <div x-show="fileExplorer.archive.error" class="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" x-text="fileExplorer.archive.error"></div>
+                            <div x-show="hasSmbErrors('archive')" class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                                <div class="flex items-center justify-between">
+                                    <span><i class="fas fa-exclamation-triangle mr-2"></i>Erreurs SMB détectées</span>
+                                    <button @click="clearSmbErrors('archive')" class="text-amber-600 hover:text-amber-800">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                                <div class="mt-2 max-h-32 overflow-y-auto text-xs">
+                                    <template x-for="error in fileExplorer.archive.smbErrors" :key="error.timestamp">
+                                        <div class="mt-1 flex items-start gap-2">
+                                            <i class="fas fa-exclamation-circle mt-1 text-amber-500"></i>
+                                            <span x-text="error.message"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
                             <div x-show="!fileExplorer.archive.root" class="mt-4 flex h-[26rem] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-8 text-center text-sm text-slate-500">
                                 Cochez l’option Archivage sur au moins un espace SMB pour alimenter ce panneau.
                             </div>
@@ -669,7 +701,7 @@
                                 <div x-show="fileExplorer.archive.loading" class="flex h-[26rem] items-center justify-center bg-white">
                                     <div class="loading"></div>
                                 </div>
-                                <div x-show="!fileExplorer.archive.loading && fileExplorer.archive.items.length === 0" class="flex h-[26rem] items-center justify-center bg-white px-8 text-center text-sm text-slate-500">
+                                <div x-show="!fileExplorer.archive.loading && fileExplorer.archive.items.length === 0 && !fileExplorer.archive.error && !hasSmbErrors('archive')" class="flex h-[26rem] items-center justify-center bg-white px-8 text-center text-sm text-slate-500">
                                     Aucun élément indexé dans ce répertoire d’archives.
                                 </div>
                                 <div x-show="!fileExplorer.archive.loading && fileExplorer.archive.items.length > 0" class="h-[26rem] overflow-y-auto bg-white">
@@ -1196,7 +1228,8 @@
                         selectedPath: '',
                         selectedItems: [],
                         loading: false,
-                        error: ''
+                        error: '',
+                        smbErrors: []
                     },
                     archive: {
                         root: '',
@@ -1206,7 +1239,8 @@
                         selectedPath: '',
                         selectedItems: [],
                         loading: false,
-                        error: ''
+                        error: '',
+                        smbErrors: []
                     }
                 },
                 contextMenu: {
@@ -1681,6 +1715,7 @@
                     if (!panel.root || !panel.currentPath) {
                         panel.items = [];
                         panel.error = '';
+                        panel.smbErrors = [];
                         return;
                     }
                     panel.loading = true;
@@ -1693,16 +1728,34 @@
                         const response = await fetch(`/api/explorer/items?${params.toString()}`);
                         if (!response.ok) {
                             const payload = await response.json();
-                            throw new Error(payload.detail || 'Chargement impossible');
+                            const errorMsg = payload.detail || 'Chargement impossible';
+                            throw new Error(errorMsg);
                         }
                         panel.items = await response.json();
                         this.clearExplorerSelection(panelName);
+                        panel.smbErrors = [];
                     } catch (error) {
                         panel.items = [];
                         panel.error = error.message;
+                        if (error.message.includes('SMB')) {
+                            panel.smbErrors.push({
+                                timestamp: new Date().toISOString(),
+                                message: error.message,
+                                type: 'smb'
+                            });
+                        }
+                        this.showNotification(`Erreur SMB: ${error.message}`, 'error');
                     } finally {
                         panel.loading = false;
                     }
+                },
+
+                clearSmbErrors(panelName) {
+                    this.fileExplorer[panelName].smbErrors = [];
+                },
+
+                hasSmbErrors(panelName) {
+                    return this.fileExplorer[panelName].smbErrors.length > 0;
                 },
 
                 getSelectedExplorerItems(panelName) {
