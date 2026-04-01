@@ -7,7 +7,7 @@
 - **Notifications améliorées** : Meilleure visibilité des changements de statut des runs avec notifications contextuelles.
 - **Amélioration de la logique de revival** : Correction des problèmes d'effacement intempestif de l'espace choisi.
 - **Documentation mise à jour** : README.md et CHANGELOG.md reflètent les nouvelles fonctionnalités.
-- Version mise à jour en `0.4.3` pour ces corrections et améliorations.
+- Version mise à jour en `0.4.5` pour ces corrections et améliorations.
 
 ## 2026-03-26 — Durcissement de la gate PostgreSQL et lancement du socle J5
 
