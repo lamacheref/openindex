@@ -499,6 +499,22 @@
                                 </template>
                             </div>
                             <div x-show="fileExplorer.source.error" class="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" x-text="fileExplorer.source.error"></div>
+                            <div x-show="hasSmbErrors('source')" class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                                <div class="flex items-center justify-between">
+                                    <span><i class="fas fa-exclamation-triangle mr-2"></i>Erreurs SMB détectées</span>
+                                    <button @click="clearSmbErrors('source')" class="text-amber-600 hover:text-amber-800">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                                <div class="mt-2 max-h-32 overflow-y-auto text-xs">
+                                    <template x-for="error in fileExplorer.source.smbErrors" :key="error.timestamp">
+                                        <div class="mt-1 flex items-start gap-2">
+                                            <i class="fas fa-exclamation-circle mt-1 text-amber-500"></i>
+                                            <span x-text="error.message"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
                             <div class="mt-4 overflow-hidden rounded-2xl border border-slate-200">
                                 <div class="grid grid-cols-[minmax(0,1fr)_7rem_11rem] bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
                                     <span>Nom</span>
@@ -508,16 +524,31 @@
                                 <div x-show="fileExplorer.source.loading" class="flex h-[26rem] items-center justify-center bg-white">
                                     <div class="loading"></div>
                                 </div>
-                                <div x-show="!fileExplorer.source.loading && fileExplorer.source.items.length === 0" class="flex h-[26rem] items-center justify-center bg-white px-8 text-center text-sm text-slate-500">
+                                <div x-show="!fileExplorer.source.loading && fileExplorer.source.items.length === 0 && !fileExplorer.source.error && !hasSmbErrors('source')" class="flex h-[26rem] items-center justify-center bg-white px-8 text-center text-sm text-slate-500">
                                     Aucun élément indexé dans ce répertoire.
                                 </div>
                                 <div x-show="!fileExplorer.source.loading && fileExplorer.source.items.length > 0" class="h-[26rem] overflow-y-auto bg-white">
+                                    <div x-show="fileExplorer.source.selectedItems.length > 0" class="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-2 text-sm text-slate-600">
+                                        <span x-text="fileExplorer.source.selectedItems.length"></span> élément(s) sélectionné(s)
+                                        <button @click="clearExplorerSelection('source')" class="ml-3 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium hover:bg-slate-200">
+                                            Désélectionner tout
+                                        </button>
+                                        <button @click="archiveSelectedItems()" :disabled="archiveBusy" class="ml-2 rounded-full bg-teal-600 px-2 py-1 text-xs font-medium text-white hover:bg-teal-700 disabled:opacity-50">
+                                            Archiver la sélection
+                                        </button>
+                                    </div>
                                     <template x-for="item in fileExplorer.source.items" :key="item.path">
-                                        <button @click="selectExplorerItem('source', item)"
+                                        <button @click="selectExplorerItem('source', item, $event)"
                                                 @dblclick="item.is_directory ? openExplorerItem('source', item) : openPreview(item)"
+                                                @contextmenu="openContextMenu('source', item, $event)"
                                                 class="grid w-full grid-cols-[minmax(0,1fr)_7rem_11rem] gap-3 border-t border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50"
                                                 :class="explorerRowClass('source', item)">
                                             <span class="flex min-w-0 items-center gap-3">
+                                                <input type="checkbox"
+                                                       @click.stop=""
+                                                       @change="selectExplorerItem('source', item, $event)"
+                                                       :checked="isExplorerItemSelected('source', item)"
+                                                       class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
                                                 <i class="fas" :class="item.is_directory ? 'fa-folder text-amber-500' : fileIconClass(item.path)"></i>
                                                 <span class="min-w-0">
                                                     <span class="truncate text-sm font-medium text-slate-800" x-text="item.name"></span>
@@ -642,6 +673,22 @@
                                 </template>
                             </div>
                             <div x-show="fileExplorer.archive.error" class="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" x-text="fileExplorer.archive.error"></div>
+                            <div x-show="hasSmbErrors('archive')" class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                                <div class="flex items-center justify-between">
+                                    <span><i class="fas fa-exclamation-triangle mr-2"></i>Erreurs SMB détectées</span>
+                                    <button @click="clearSmbErrors('archive')" class="text-amber-600 hover:text-amber-800">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                                <div class="mt-2 max-h-32 overflow-y-auto text-xs">
+                                    <template x-for="error in fileExplorer.archive.smbErrors" :key="error.timestamp">
+                                        <div class="mt-1 flex items-start gap-2">
+                                            <i class="fas fa-exclamation-circle mt-1 text-amber-500"></i>
+                                            <span x-text="error.message"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
                             <div x-show="!fileExplorer.archive.root" class="mt-4 flex h-[26rem] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-8 text-center text-sm text-slate-500">
                                 Cochez l’option Archivage sur au moins un espace SMB pour alimenter ce panneau.
                             </div>
@@ -654,16 +701,28 @@
                                 <div x-show="fileExplorer.archive.loading" class="flex h-[26rem] items-center justify-center bg-white">
                                     <div class="loading"></div>
                                 </div>
-                                <div x-show="!fileExplorer.archive.loading && fileExplorer.archive.items.length === 0" class="flex h-[26rem] items-center justify-center bg-white px-8 text-center text-sm text-slate-500">
+                                <div x-show="!fileExplorer.archive.loading && fileExplorer.archive.items.length === 0 && !fileExplorer.archive.error && !hasSmbErrors('archive')" class="flex h-[26rem] items-center justify-center bg-white px-8 text-center text-sm text-slate-500">
                                     Aucun élément indexé dans ce répertoire d’archives.
                                 </div>
                                 <div x-show="!fileExplorer.archive.loading && fileExplorer.archive.items.length > 0" class="h-[26rem] overflow-y-auto bg-white">
+                                    <div x-show="fileExplorer.archive.selectedItems.length > 0" class="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-2 text-sm text-slate-600">
+                                        <span x-text="fileExplorer.archive.selectedItems.length"></span> élément(s) sélectionné(s)
+                                        <button @click="clearExplorerSelection('archive')" class="ml-3 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium hover:bg-slate-200">
+                                            Désélectionner tout
+                                        </button>
+                                    </div>
                                     <template x-for="item in fileExplorer.archive.items" :key="item.path">
-                                        <button @click="selectExplorerItem('archive', item)"
+                                        <button @click="selectExplorerItem('archive', item, $event)"
                                                 @dblclick="item.is_directory ? openExplorerItem('archive', item) : openPreview(item)"
+                                                @contextmenu="openContextMenu('archive', item, $event)"
                                                 class="grid w-full grid-cols-[minmax(0,1fr)_7rem_11rem] gap-3 border-t border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50"
                                                 :class="explorerRowClass('archive', item)">
                                             <span class="flex min-w-0 items-center gap-3">
+                                                <input type="checkbox"
+                                                       @click.stop=""
+                                                       @change="selectExplorerItem('archive', item, $event)"
+                                                       :checked="isExplorerItemSelected('archive', item)"
+                                                       class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
                                                 <i class="fas" :class="item.is_directory ? 'fa-folder text-amber-500' : fileIconClass(item.path)"></i>
                                                 <span class="min-w-0">
                                                     <span class="truncate text-sm font-medium text-slate-800" x-text="item.name"></span>
@@ -1167,8 +1226,10 @@
                         currentPath: '',
                         items: [],
                         selectedPath: '',
+                        selectedItems: [],
                         loading: false,
-                        error: ''
+                        error: '',
+                        smbErrors: []
                     },
                     archive: {
                         root: '',
@@ -1176,9 +1237,18 @@
                         currentPath: '',
                         items: [],
                         selectedPath: '',
+                        selectedItems: [],
                         loading: false,
-                        error: ''
+                        error: '',
+                        smbErrors: []
                     }
+                },
+                contextMenu: {
+                    open: false,
+                    x: 0,
+                    y: 0,
+                    panel: '',
+                    item: null
                 },
                 previewModal: {
                     open: false,
@@ -1645,6 +1715,7 @@
                     if (!panel.root || !panel.currentPath) {
                         panel.items = [];
                         panel.error = '';
+                        panel.smbErrors = [];
                         return;
                     }
                     panel.loading = true;
@@ -1657,14 +1728,85 @@
                         const response = await fetch(`/api/explorer/items?${params.toString()}`);
                         if (!response.ok) {
                             const payload = await response.json();
-                            throw new Error(payload.detail || 'Chargement impossible');
+                            const errorMsg = payload.detail || 'Chargement impossible';
+                            throw new Error(errorMsg);
                         }
                         panel.items = await response.json();
+                        this.clearExplorerSelection(panelName);
+                        panel.smbErrors = [];
                     } catch (error) {
                         panel.items = [];
                         panel.error = error.message;
+                        if (error.message.includes('SMB')) {
+                            panel.smbErrors.push({
+                                timestamp: new Date().toISOString(),
+                                message: error.message,
+                                type: 'smb'
+                            });
+                        }
+                        this.showNotification(`Erreur SMB: ${error.message}`, 'error');
                     } finally {
                         panel.loading = false;
+                    }
+                },
+
+                clearSmbErrors(panelName) {
+                    this.fileExplorer[panelName].smbErrors = [];
+                },
+
+                hasSmbErrors(panelName) {
+                    return this.fileExplorer[panelName].smbErrors.length > 0;
+                },
+
+                getSelectedExplorerItems(panelName) {
+                    return this.fileExplorer[panelName].selectedItems;
+                },
+
+                async archiveSelectedItems() {
+                    const sourcePanel = this.fileExplorer.source;
+                    const selected = sourcePanel.selectedItems;
+                    if (selected.length === 0) {
+                        this.showNotification('Aucun fichier sélectionné', 'info');
+                        return;
+                    }
+                    
+                    const archivePanel = this.fileExplorer.archive;
+                    if (!archivePanel.root) {
+                        this.showNotification('Sélectionnez un espace d\'archivage', 'warning');
+                        return;
+                    }
+                    
+                    this.archiveBusy = true;
+                    this.archiveStatus = `Archivage de ${selected.length} fichiers...`;
+                    
+                    try {
+                        for (const item of selected) {
+                            if (item.is_directory) continue;
+                            
+                            const params = new URLSearchParams({
+                                source_path: item.path,
+                                dest_root: archivePanel.root,
+                                dest_path: archivePanel.currentPath,
+                                overwrite: 'skip'
+                            });
+                            
+                            const response = await fetch(`/api/archive/file?${params.toString()}`, {
+                                method: 'POST'
+                            });
+                            
+                            if (!response.ok) {
+                                throw new Error(`Échec pour ${item.name}: ${response.status}`);
+                            }
+                        }
+                        
+                        this.showNotification(`Archivage terminé (${selected.length} fichiers)`, 'success');
+                        await this.refreshExplorerPanel('source');
+                        await this.refreshExplorerPanel('archive');
+                    } catch (error) {
+                        this.showNotification(`Erreur: ${error.message}`, 'error');
+                    } finally {
+                        this.archiveBusy = false;
+                        this.archiveStatus = '';
                     }
                 },
 
@@ -1724,8 +1866,100 @@
                     return crumbs;
                 },
 
-                selectExplorerItem(panelName, item) {
-                    this.fileExplorer[panelName].selectedPath = item.path;
+                selectExplorerItem(panelName, item, event) {
+                    const panel = this.fileExplorer[panelName];
+                    const isMultiSelect = event && (event.ctrlKey || event.metaKey);
+                    
+                    if (isMultiSelect) {
+                        const index = panel.selectedItems.findIndex(i => i.path === item.path);
+                        if (index >= 0) {
+                            panel.selectedItems.splice(index, 1);
+                        } else {
+                            panel.selectedItems.push(item);
+                        }
+                    } else {
+                        panel.selectedItems = [item];
+                    }
+                    panel.selectedPath = item.path;
+                },
+
+                openContextMenu(panelName, item, event) {
+                    event.preventDefault();
+                    this.contextMenu.open = true;
+                    this.contextMenu.panel = panelName;
+                    this.contextMenu.item = item;
+                    this.contextMenu.x = event.clientX;
+                    this.contextMenu.y = event.clientY;
+                },
+
+                closeContextMenu() {
+                    this.contextMenu.open = false;
+                },
+
+                async contextArchiveItem() {
+                    if (!this.contextMenu.item || this.contextMenu.item.is_directory) {
+                        this.closeContextMenu();
+                        return;
+                    }
+                    
+                    const sourcePanel = this.fileExplorer.source;
+                    const archivePanel = this.fileExplorer.archive;
+                    
+                    if (!archivePanel.root) {
+                        this.showNotification('Sélectionnez un espace d\'archivage', 'warning');
+                        this.closeContextMenu();
+                        return;
+                    }
+                    
+                    this.archiveBusy = true;
+                    this.archiveStatus = `Archivage de ${this.contextMenu.item.name}...`;
+                    
+                    try {
+                        const params = new URLSearchParams({
+                            source_path: this.contextMenu.item.path,
+                            dest_root: archivePanel.root,
+                            dest_path: archivePanel.currentPath,
+                            overwrite: 'skip'
+                        });
+                        
+                        const response = await fetch(`/api/archive/file?${params.toString()}`, {
+                            method: 'POST'
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error(`Échec pour ${this.contextMenu.item.name}`);
+                        }
+                        
+                        this.showNotification(`Archivage terminé: ${this.contextMenu.item.name}`, 'success');
+                        await this.refreshExplorerPanel('source');
+                        await this.refreshExplorerPanel('archive');
+                    } catch (error) {
+                        this.showNotification(`Erreur: ${error.message}`, 'error');
+                    } finally {
+                        this.archiveBusy = false;
+                        this.archiveStatus = '';
+                        this.closeContextMenu();
+                    }
+                },
+
+                async contextPreviewItem() {
+                    if (!this.contextMenu.item) {
+                        this.closeContextMenu();
+                        return;
+                    }
+                    
+                    this.openPreview(this.contextMenu.item);
+                    this.closeContextMenu();
+                },
+
+                isExplorerItemSelected(panelName, item) {
+                    return this.fileExplorer[panelName].selectedItems.some(i => i.path === item.path);
+                },
+
+                clearExplorerSelection(panelName) {
+                    const panel = this.fileExplorer[panelName];
+                    panel.selectedItems = [];
+                    panel.selectedPath = '';
                 },
 
                 fileIconClass(path) {
@@ -2478,5 +2712,42 @@
             };
         }
     </script>
+
+    <!-- Context Menu -->
+    <div x-cloak
+         x-show="contextMenu.open"
+         x-transition:enter="transition ease-out duration-100"
+         x-transition:enter-start="transform opacity-0 scale-95"
+         x-transition:enter-end="transform opacity-100 scale-100"
+         x-transition:leave="transition ease-in duration-75"
+         x-transition:leave-start="transform opacity-100 scale-100"
+         x-transition:leave-end="transform opacity-0 scale-95"
+         @click.away="closeContextMenu()"
+         class="fixed z-[90] rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/20"
+         :style="`left: ${contextMenu.x}px; top: ${contextMenu.y}px;`">
+        <template x-if="contextMenu.item">
+            <div class="p-2 text-sm text-slate-600">
+                <div class="flex items-center gap-2 px-3 py-2 hover:bg-slate-50" @click="contextPreviewItem()">
+                    <i class="fas fa-eye w-[18px] text-center"></i>
+                    <span>Prévisualiser</span>
+                </div>
+                <template x-if="contextMenu.panel === 'source' && !contextMenu.item.is_directory">
+                    <div class="flex items-center gap-2 px-3 py-2 hover:bg-slate-50" @click="contextArchiveItem()">
+                        <i class="fas fa-archive w-[18px] text-center"></i>
+                        <span>Archiver</span>
+                    </div>
+                </template>
+                <div class="border-t border-slate-200 my-1"></div>
+                <div class="flex items-center gap-2 px-3 py-2 hover:bg-slate-50" @click="closeContextMenu()">
+                    <i class="fas fa-copy w-[18px] text-center"></i>
+                    <span>Copier le nom</span>
+                </div>
+                <div class="flex items-center gap-2 px-3 py-2 hover:bg-slate-50" @click="closeContextMenu()">
+                    <i class="fas fa-info-circle w-[18px] text-center"></i>
+                    <span>Propriétés</span>
+                </div>
+            </div>
+        </template>
+    </div>
 </body>
 </html>

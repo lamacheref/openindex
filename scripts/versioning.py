@@ -45,7 +45,8 @@ def detect_bump_type(pr_title: str, labels: set[str]) -> str:
         return "minor"
     if "fix" in labels or normalized_title.startswith("fix:"):
         return "fix"
-    raise ValueError("La PR doit porter un label 'minor' ou 'fix', ou un titre commencant par 'minor:' ou 'fix:'.")
+    # Par défaut, considérer comme un fix si aucun indicateur n'est présent
+    return "fix"
 
 
 def validate_pr(base_version: str, target_version: str, bump_type: str) -> None:

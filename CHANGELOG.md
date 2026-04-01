@@ -1,5 +1,13 @@
 # Changelog OpenIndex avec PostgreSQL
 
+## 2026-03-31 — Navigation SMB live pour l'explorateur de fichiers
+
+- Ajout de l'endpoint `GET /api/explorer/live-items` pour la navigation SMB en temps réel sans passer par la base de données.
+- Cette fonctionnalité permet de voir les fichiers non indexés et les ajouts récents sur les partages SMB.
+- PR #62 sur `fix/explorer-live-navigation`.
+- Dette T-15 (navigation SMB live hors index) résolue.
+- Version mise à jour en `0.4.2` pour cette nouvelle fonctionnalité.
+
 ## 2026-03-26 — Durcissement de la gate PostgreSQL et lancement du socle J5
 
 - Durcissement du job `api-tests-postgresql` dans `.github/workflows/docker-stack.yml` : échec explicite si PostgreSQL n'est pas disponible, plus de voie de contournement "skip".
