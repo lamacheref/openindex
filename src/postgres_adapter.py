@@ -823,13 +823,13 @@ class PostgreSQLAdapter:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                SELECT id, started_at
+                SELECT id, triggered_at
                 FROM crawl_runs
                 WHERE LOWER(status) IN ('running', 'in_progress')
-                ORDER BY started_at ASC
+                ORDER BY triggered_at ASC
                 """
             )
-            return [dict(id=row[0], started_at=row[1]) for row in cursor.fetchall()]
+            return [dict(id=row[0], triggered_at=row[1]) for row in cursor.fetchall()]
 
     def reset_stale_running_runs(self) -> None:
         with self.get_connection() as conn:

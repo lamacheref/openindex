@@ -1122,7 +1122,7 @@
                 loadingDbExplain: false,
                 dbExplainError: '',
                 spaces: [],
-                activeSpace: '',
+                activeSpace: null,
                 crawlConfigs: [],
                 loadingMonitoring: false,
                 loadingOverview: false,
@@ -1355,14 +1355,24 @@
                 async loadSpaces() {
                     try {
                         const response = await fetch('/api/spaces');
-                        this.spaces = await response.json();
-                        if (!this.activeSpace && this.sourceExplorerSpaces.length > 0) {
+                        const newSpaces = await response.json();
+                        
+                        // Conserver l'espace actif actuel si possible
+                        const currentSpaceStillExists = this.activeSpace !== null && 
+                            newSpaces.some(space => space.path_prefix === this.activeSpace);
+                        
+                        this.spaces = newSpaces;
+                        
+                        // Seulement réinitialiser si nécessaire
+                        if (this.activeSpace === null && this.sourceExplorerSpaces.length > 0) {
                             const defaultSpace = this.sourceExplorerSpaces[0];
-                            this.activeSpace = defaultSpace?.path_prefix || '';
+                            this.activeSpace = defaultSpace?.path_prefix || null;
                         }
-                        if (this.activeSpace && !this.sourceExplorerSpaces.some((space) => space.path_prefix === this.activeSpace)) {
-                            this.activeSpace = this.sourceExplorerSpaces[0]?.path_prefix || '';
+                        else if (this.activeSpace !== null && !currentSpaceStillExists) {
+                            // L'espace actuel n'existe plus, trouver un remplacement
+                            this.activeSpace = this.sourceExplorerSpaces[0]?.path_prefix || null;
                         }
+                        
                         this.syncSelectedConfigWithActiveSpace();
                         this.syncExplorerRoots();
                     } catch (error) {
@@ -2517,9 +2527,10 @@
                     }
 
                     this.selectedConfigId = fallbackConfig.id;
-                    if (!this.activeSpace && fallbackConfig.start_path) {
-                        this.activeSpace = fallbackConfig.start_path;
-                    }
+                    // Ne plus modifier activeSpace ici pour éviter les réinitialisations intempestives
+                    // if (!this.activeSpace && fallbackConfig.start_path) {
+                    //     this.activeSpace = fallbackConfig.start_path;
+                    // }
                 },
 
                 refreshNotifications() {
@@ -2904,7 +2915,7 @@
                 },
 
                 get sourceExplorerSpaces() {
-                    return this.spaces.filter((space) => !space.is_archive);
+                    return this.spaces;
                 },
 
                 get archiveExplorerSpaces() {
