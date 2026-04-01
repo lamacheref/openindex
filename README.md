@@ -31,6 +31,9 @@ La base active à date est :
 - Affichage des vraies files du worker (`Dossiers`, `Fichiers`, `Somme de contrôle`, `Gros fichiers`).
 - Consultation des logs réels du worker d'exploration dans l'interface.
 - Le crawler PostgreSQL évite désormais de retraiter les fichiers déjà connus au même chemin quand ils sont inchangés, selon `size`, `last_modified` et la date du dernier crawl `completed` de l'espace.
+- **Nettoyage automatique des runs bloqués** : Le crawler détecte et corrige périodiquement les runs qui restent dans un état "running" alors qu'ils sont terminés côté serveur.
+- **Synchronisation manuelle des statuts** : Bouton "Synchroniser" dans l'interface pour forcer le rafraîchissement de l'état des runs.
+- **Notifications améliorées** : Meilleure visibilité des changements de statut des runs avec notifications contextuelles.
 
 ## Installation
 
