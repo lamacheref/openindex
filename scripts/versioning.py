@@ -53,10 +53,20 @@ def validate_pr(base_version: str, target_version: str, bump_type: str) -> None:
     base = parse_version(base_version)
     target = parse_version(target_version)
     expected = bump_version(base, bump_type)
-    if target != expected:
-        raise ValueError(
-            f"Version cible invalide pour un bump {bump_type}: attendue {expected}, obtenue {target}."
-        )
+    
+    # Pour les bumps de type fix, permettre que la version cible soit >= à la version attendue
+    # Cela permet de gérer le cas où plusieurs PRs sont mergées avec des increments de version
+    if bump_type == "fix":
+        if target.patch < expected.patch:
+            raise ValueError(
+                f"Version cible invalide pour un bump {bump_type}: attendue au moins {expected}, obtenue {target}."
+            )
+    else:
+        # Pour les bumps minor/major, validation stricte
+        if target != expected:
+            raise ValueError(
+                f"Version cible invalide pour un bump {bump_type}: attendue {expected}, obtenue {target}."
+            )
 
 
 def read_version_file(path: Path) -> str:

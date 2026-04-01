@@ -2573,12 +2573,24 @@ def _reconcile_stale_running_runs(db, raw_log_lines: List[str]) -> Dict[str, Any
     return monitoring
 
 
+def _has_completion_markers(raw_log_lines: List[str]) -> bool:
+    """Check if logs contain clear completion markers."""
+    completion_patterns = [
+        "🏁 Fin de crawl avec statut final=",
+        "🎉 CRAWL TERMINÉ - STATISTIQUES FINALES",
+        "✅ Run terminé:",
+        "Worker d'exploration prêt, en attente de runs...",
+    ]
+    return any(pattern in line for line in raw_log_lines for pattern in completion_patterns)
+
+
 def _reconcile_terminal_run_with_recent_activity(
     db,
     monitoring: Dict[str, Any],
     *,
     recent_engine_signal: bool,
     db_write_active: bool,
+    raw_log_lines: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     latest_status = (monitoring.get("latest_run_status") or "").strip().lower()
     has_running_run = int(monitoring.get("running_runs") or 0) > 0
@@ -2587,6 +2599,14 @@ def _reconcile_terminal_run_with_recent_activity(
     if not (recent_engine_signal or db_write_active):
         return monitoring
     if not hasattr(db, "revive_latest_terminal_run"):
+        return monitoring
+
+    # Check if logs show clear completion markers
+    if raw_log_lines and _has_completion_markers(raw_log_lines):
+        logger.info(
+            "Run %s non revive: marqueurs de completion detectes dans les logs.",
+            monitoring.get("latest_run_id"),
+        )
         return monitoring
 
     revived = db.revive_latest_terminal_run()
@@ -2952,6 +2972,7 @@ async def get_crawler_runtime(log_limit: int = 80):
             monitoring,
             recent_engine_signal=recent_engine_signal,
             db_write_active=db_write_active,
+            raw_log_lines=current_run_log_lines,
         )
         has_running_run = monitoring["running_runs"] > 0
         idle = False

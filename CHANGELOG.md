@@ -1,12 +1,13 @@
 # Changelog OpenIndex avec PostgreSQL
 
-## 2026-03-31 — Navigation SMB live pour l'explorateur de fichiers
+## 2026-04-01 — Correction des statuts de runs et améliorations interface
 
-- Ajout de l'endpoint `GET /api/explorer/live-items` pour la navigation SMB en temps réel sans passer par la base de données.
-- Cette fonctionnalité permet de voir les fichiers non indexés et les ajouts récents sur les partages SMB.
-- PR #62 sur `fix/explorer-live-navigation`.
-- Dette T-15 (navigation SMB live hors index) résolue.
-- Version mise à jour en `0.4.2` pour cette nouvelle fonctionnalité.
+- **Nettoyage automatique des runs bloqués** : Ajout de `cleanup_stale_runs()` dans le crawler pour détecter et corriger périodiquement les runs qui restent dans un état "running" alors qu'ils sont terminés côté serveur.
+- **Synchronisation manuelle des statuts** : Ajout d'un bouton "Synchroniser" dans l'interface pour forcer le rafraîchissement de l'état des runs.
+- **Notifications améliorées** : Meilleure visibilité des changements de statut des runs avec notifications contextuelles.
+- **Amélioration de la logique de revival** : Correction des problèmes d'effacement intempestif de l'espace choisi.
+- **Documentation mise à jour** : README.md et CHANGELOG.md reflètent les nouvelles fonctionnalités.
+- Version mise à jour en `0.4.5` pour ces corrections et améliorations.
 
 ## 2026-03-26 — Durcissement de la gate PostgreSQL et lancement du socle J5
 

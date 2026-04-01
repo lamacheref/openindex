@@ -213,7 +213,7 @@
                                 <h2 class="text-3xl font-bold tracking-tight">Tableau de bord</h2>
                             </div>
                             <div class="flex flex-wrap gap-3">
-                                <button @click="refreshOperations()" class="rounded-2xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-800">
+                                <button @click="forceRefresh()" class="rounded-2xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-800">
                                     <i class="fas fa-rotate mr-2"></i>Rafraîchir
                                 </button>
                                 <button @click="showCrawlPilot = true" class="rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
@@ -384,6 +384,10 @@
                                                                 class="rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
                                                             En attente
                                                         </button>
+                                                        <button @click="syncRunStatus(run.run_id)"
+                                                                class="rounded-xl border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100">
+                                                            🔄 Synchroniser
+                                                        </button>
                                                         <button @click="stopRun(run.run_id)"
                                                                 :disabled="!canStopRun(run.status)"
                                                                 class="rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
@@ -546,7 +550,7 @@
                                             <span class="flex min-w-0 items-center gap-3">
                                                 <input type="checkbox"
                                                        @click.stop=""
-                                                       @change="selectExplorerItem('source', item, $event)"
+                                                       @change="toggleExplorerItemSelection('source', item)"
                                                        :checked="isExplorerItemSelected('source', item)"
                                                        class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
                                                 <i class="fas" :class="item.is_directory ? 'fa-folder text-amber-500' : fileIconClass(item.path)"></i>
@@ -573,32 +577,19 @@
                             <div class="card p-5">
                                 <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Archivage</p>
                                 <div class="mt-4 space-y-3">
-                                    <div>
-                                        <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Mode</label>
-                                        <div class="grid grid-cols-2 gap-2">
-                                            <button @click="archiveMode = 'copy'"
-                                                    class="rounded-xl px-3 py-2 text-sm font-semibold transition"
-                                                    :class="archiveMode === 'copy' ? 'bg-teal-700 text-white' : 'border border-slate-300 bg-white text-slate-700'">
-                                                Copier
-                                            </button>
-                                            <button @click="archiveMode = 'move'"
-                                                    class="rounded-xl px-3 py-2 text-sm font-semibold transition"
-                                                    :class="archiveMode === 'move' ? 'bg-amber-600 text-white' : 'border border-slate-300 bg-white text-slate-700'">
-                                                Déplacer
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <button @click="archiveSelectedFile()"
+                                    <button @click="archiveSelectedFile('copy')"
                                             :disabled="!canArchiveSelectedFile || archiveBusy"
-                                            class="w-full rounded-2xl px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-300"
-                                            :class="archiveMode === 'move' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-teal-700 hover:bg-teal-800'">
-                                        <i class="fas fa-box-archive mr-2"></i>
-                                        <span x-text="archiveMode === 'move' ? 'Déplacer vers archives' : 'Copier vers archives'"></span>
+                                            class="w-full rounded-2xl bg-teal-700 px-4 py-3 text-sm font-semibold text-white hover:bg-teal-800 disabled:bg-slate-300">
+                                        <i class="fas fa-copy mr-2"></i>Copier vers archives
                                     </button>
-                                    <label class="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
-                                           :class="archiveMode !== 'move' ? 'opacity-50' : ''">
-                                        <input type="checkbox" x-model="archiveLeaveLink" :disabled="archiveMode !== 'move'">
-                                        <span>Laisser un lien dans le partage source</span>
+                                    <button @click="archiveSelectedFile('move')"
+                                            :disabled="!canArchiveSelectedFile || archiveBusy"
+                                            class="w-full rounded-2xl bg-amber-600 px-4 py-3 text-sm font-semibold text-white hover:bg-amber-700 disabled:bg-slate-300">
+                                        <i class="fas fa-arrow-right mr-2"></i>Déplacer vers archives
+                                    </button>
+                                    <label class="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                                        <input type="checkbox" x-model="archiveLeaveLink">
+                                        <span>Laisser un lien dans le partage source (déplacement uniquement)</span>
                                     </label>
                                     <label class="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
                                         <input type="checkbox" x-model="archiveOverwrite">
@@ -624,7 +615,11 @@
                                     </template>
                                 </div>
                                 <div x-show="archiveStatus" class="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600" x-text="archiveStatus"></div>
-                                <p class="mt-4 text-xs text-slate-500">Le mode “Copier” conserve l’original. En mode “Déplacer”, un raccourci `.url` peut être laissé côté source vers le fichier archivé. L’écrasement de la cible reste désactivé par défaut.</p>
+                                <p class="mt-4 text-xs text-slate-500">
+                                    <strong>Copier</strong> : conserve l’original dans le partage source.<br>
+                                    <strong>Déplacer</strong> : supprime l’original après vérification SHA-256 (optionnel : laisse un lien .url).<br>
+                                    La vérification d’intégrité est automatique pour les deux modes.
+                                </p>
                             </div>
                             <div class="card p-5">
                                 <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Aperçus pris en charge</p>
@@ -662,6 +657,12 @@
                                             :disabled="!fileExplorer.archive.root"
                                             class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">
                                         <i class="fas fa-rotate"></i>
+                                    </button>
+                                    <button @click="copyArchivePathToClipboard()"
+                                            :disabled="!fileExplorer.archive.currentPath"
+                                            class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                                            title="Copier le chemin courant">
+                                        <i class="fas fa-copy"></i>
                                     </button>
                                 </div>
                             </div>
@@ -720,7 +721,7 @@
                                             <span class="flex min-w-0 items-center gap-3">
                                                 <input type="checkbox"
                                                        @click.stop=""
-                                                       @change="selectExplorerItem('archive', item, $event)"
+                                                       @change="toggleExplorerItemSelection('archive', item)"
                                                        :checked="isExplorerItemSelected('archive', item)"
                                                        class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
                                                 <i class="fas" :class="item.is_directory ? 'fa-folder text-amber-500' : fileIconClass(item.path)"></i>
@@ -1121,7 +1122,7 @@
                 loadingDbExplain: false,
                 dbExplainError: '',
                 spaces: [],
-                activeSpace: '',
+                activeSpace: null,
                 crawlConfigs: [],
                 loadingMonitoring: false,
                 loadingOverview: false,
@@ -1257,6 +1258,10 @@
                     kind: 'unsupported',
                     previewError: ''
                 },
+                propertiesModal: {
+                    open: false,
+                    item: null
+                },
                 newCrawl: {
                     name: '',
                     domain_zone: '',
@@ -1273,6 +1278,7 @@
                     this.displayTimezone = localStorage.getItem('openindex.displayTimezone') || 'Europe/Paris';
                     this.preferredArchiveRoot = localStorage.getItem('openindex.fileExplorer.archiveRoot') || '';
                     this.startRealtimeClock();
+                    this.startAutoRefresh();
                     await this.loadSpaces();
                     await this.loadStats();
                     await this.loadCrawlConfigs();
@@ -1349,14 +1355,24 @@
                 async loadSpaces() {
                     try {
                         const response = await fetch('/api/spaces');
-                        this.spaces = await response.json();
-                        if (!this.activeSpace && this.sourceExplorerSpaces.length > 0) {
+                        const newSpaces = await response.json();
+                        
+                        // Conserver l'espace actif actuel si possible
+                        const currentSpaceStillExists = this.activeSpace !== null && 
+                            newSpaces.some(space => space.path_prefix === this.activeSpace);
+                        
+                        this.spaces = newSpaces;
+                        
+                        // Seulement réinitialiser si nécessaire
+                        if (this.activeSpace === null && this.sourceExplorerSpaces.length > 0) {
                             const defaultSpace = this.sourceExplorerSpaces[0];
-                            this.activeSpace = defaultSpace?.path_prefix || '';
+                            this.activeSpace = defaultSpace?.path_prefix || null;
                         }
-                        if (this.activeSpace && !this.sourceExplorerSpaces.some((space) => space.path_prefix === this.activeSpace)) {
-                            this.activeSpace = this.sourceExplorerSpaces[0]?.path_prefix || '';
+                        else if (this.activeSpace !== null && !currentSpaceStillExists) {
+                            // L'espace actuel n'existe plus, trouver un remplacement
+                            this.activeSpace = this.sourceExplorerSpaces[0]?.path_prefix || null;
                         }
+                        
                         this.syncSelectedConfigWithActiveSpace();
                         this.syncExplorerRoots();
                     } catch (error) {
@@ -1393,7 +1409,31 @@
                         if (!response.ok) {
                             throw new Error('Erreur API overview');
                         }
-                        this.crawlOverview = await response.json();
+                        const overview = await response.json();
+                        
+                        // Vérifier si des runs ont changé de statut depuis la dernière fois
+                        if (this.crawlOverview && this.crawlOverview.runs) {
+                            const previousRuns = this.crawlOverview.runs;
+                            const currentRuns = overview.runs;
+                            
+                            // Comparer les statuts pour détecter les changements
+                            for (const currentRun of currentRuns) {
+                                const previousRun = previousRuns.find(r => r.id === currentRun.id);
+                                
+                                if (previousRun && previousRun.status !== currentRun.status) {
+                                    const config = overview.configs.find(c => c.id === currentRun.crawl_config_id);
+                                    const spaceName = config ? this.getSpaceDisplayName(config) : 'inconnu';
+                                    
+                                    this.showAppNotification(
+                                        `🔄 Statut changé: ${spaceName} est maintenant ${currentRun.status}`,
+                                        'info',
+                                        { run_id: currentRun.id, old_status: previousRun.status, new_status: currentRun.status }
+                                    );
+                                }
+                            }
+                        }
+                        
+                        this.crawlOverview = overview;
                         this.syncSelectedConfigWithActiveSpace();
                         this.refreshNotifications();
                     } catch (error) {
@@ -1584,15 +1624,25 @@
                 },
 
                 async stopRun(runId) {
+                    const config = this.crawlOverview?.configs?.find(c => c.id === this.crawlOverview?.runs?.find(r => r.id === runId)?.crawl_config_id);
+                    const spaceName = config ? this.getSpaceDisplayName(config) : 'inconnu';
+                    
+                    this.showAppNotification(`⏳ Arrêt en cours pour ${spaceName}...`, 'info');
+                    
                     try {
                         const response = await fetch(`/api/crawls/${runId}/stop`, { method: 'POST' });
+                        const payload = await response.json();
+                        
                         if (!response.ok) {
-                            const details = await response.json();
-                            throw new Error(details.detail || 'Arrêt impossible');
+                            const errorMsg = payload.detail || 'Arrêt impossible';
+                            throw new Error(errorMsg);
                         }
+                        
+                        this.showAppNotification(`✅ Arrêt demandé pour ${spaceName}`, 'success');
                         await this.refreshOperations();
                     } catch (error) {
-                        this.addLogEntry(`Erreur arrêt exploration: ${error.message}`);
+                        this.showAppNotification(`❌ Échec de l'arrêt: ${error.message}`, 'error');
+                        this.addLogEntry(`Erreur arrêt exploration ${spaceName}: ${error.message}`);
                     }
                 },
 
@@ -1606,6 +1656,38 @@
                         await this.refreshOperations();
                     } catch (error) {
                         this.addLogEntry(`Erreur mise en attente exploration: ${error.message}`);
+                    }
+                },
+
+                async syncRunStatus(runId) {
+                    console.log(`[DEBUG] syncRunStatus appelé pour runId: ${runId}`);
+                    
+                    const config = this.crawlOverview?.configs?.find(c => c.id === this.crawlOverview?.runs?.find(r => r.id === runId)?.crawl_config_id);
+                    const spaceName = config ? this.getSpaceDisplayName(config) : 'inconnu';
+                    
+                    this.showAppNotification(`🔄 Synchronisation de ${spaceName}...`, 'info');
+                    
+                    try {
+                        console.log('[DEBUG] Appel de loadCrawlOverview...');
+                        // Forcer le rechargement des données depuis l'API
+                        await this.loadCrawlOverview();
+                        console.log('[DEBUG] loadCrawlOverview terminé');
+                        
+                        // Vérifier si le run a changé de statut
+                        const run = this.crawlOverview.runs.find(r => r.id === runId);
+                        console.log('[DEBUG] Run trouvé:', run);
+                        if (run) {
+                            this.showAppNotification(
+                                `✅ État actuel de ${spaceName}: ${run.status}`,
+                                run.status === 'completed' || run.status === 'cancelled' ? 'success' : 'info'
+                            );
+                        } else {
+                            this.showAppNotification(`⚠️ Run ${runId} non trouvé après synchronisation`, 'warning');
+                        }
+                    } catch (error) {
+                        console.error('[DEBUG] Erreur dans syncRunStatus:', error);
+                        this.showAppNotification(`❌ Échec de synchronisation: ${error.message}`, 'error');
+                        this.addLogEntry(`Erreur synchronisation run ${spaceName}: ${error.message}`);
                     }
                 },
 
@@ -1670,18 +1752,29 @@
                     this.fileExplorer.source.currentPath = this.fileExplorer.source.root || '';
                     this.fileExplorer.source.selectedPath = '';
 
+                    // Conserver l'espace d'archivage actuel si possible
+                    const currentArchiveRoot = this.fileExplorer.archive.root;
                     const archiveSpace = this.archiveExplorerSpaces.find((space) => space.path_prefix === this.preferredArchiveRoot)
-                        || this.archiveExplorerSpaces.find((space) => space.path_prefix === this.fileExplorer.archive.root)
+                        || this.archiveExplorerSpaces.find((space) => space.path_prefix === currentArchiveRoot)
                         || this.archiveExplorerSpaces[0]
                         || null;
+                    
+                    // Ne changer que si l'espace actuel n'est plus valide
                     if (archiveSpace?.path_prefix) {
                         this.preferredArchiveRoot = archiveSpace.path_prefix;
                     } else if (this.preferredArchiveRoot && this.preferredArchiveRoot === this.activeSpace) {
                         this.preferredArchiveRoot = '';
                     }
-                    this.fileExplorer.archive.root = archiveSpace?.path_prefix || '';
-                    this.fileExplorer.archive.rootLabel = archiveSpace ? this.getSpaceDisplayName(archiveSpace) : '';
-                    this.fileExplorer.archive.currentPath = archiveSpace?.path_prefix || '';
+                    
+                    // Conserver l'espace actuel s'il est toujours valide, sinon utiliser le premier espace disponible
+                    if (this.fileExplorer.archive.root && this.archiveExplorerSpaces.some(s => s.path_prefix === this.fileExplorer.archive.root)) {
+                        // L'espace actuel est toujours valide, le conserver
+                    } else {
+                        // L'espace actuel n'est plus valide, utiliser le premier espace disponible
+                        this.fileExplorer.archive.root = archiveSpace?.path_prefix || '';
+                        this.fileExplorer.archive.rootLabel = archiveSpace ? this.getSpaceDisplayName(archiveSpace) : '';
+                        this.fileExplorer.archive.currentPath = archiveSpace?.path_prefix || '';
+                    }
                     this.fileExplorer.archive.selectedPath = '';
                 },
 
@@ -1866,6 +1959,17 @@
                     return crumbs;
                 },
 
+                toggleExplorerItemSelection(panelName, item) {
+                    const panel = this.fileExplorer[panelName];
+                    const index = panel.selectedItems.findIndex(i => i.path === item.path);
+                    if (index >= 0) {
+                        panel.selectedItems.splice(index, 1);
+                    } else {
+                        panel.selectedItems.push(item);
+                    }
+                    panel.selectedPath = panel.selectedItems.length === 1 ? item.path : '';
+                },
+
                 selectExplorerItem(panelName, item, event) {
                     const panel = this.fileExplorer[panelName];
                     const isMultiSelect = event && (event.ctrlKey || event.metaKey);
@@ -1885,6 +1989,9 @@
 
                 openContextMenu(panelName, item, event) {
                     event.preventDefault();
+                    if (item.is_directory) {
+                        return;
+                    }
                     this.contextMenu.open = true;
                     this.contextMenu.panel = panelName;
                     this.contextMenu.item = item;
@@ -1910,6 +2017,8 @@
                         this.closeContextMenu();
                         return;
                     }
+                    
+                    this.closeContextMenu();
                     
                     this.archiveBusy = true;
                     this.archiveStatus = `Archivage de ${this.contextMenu.item.name}...`;
@@ -1938,18 +2047,63 @@
                     } finally {
                         this.archiveBusy = false;
                         this.archiveStatus = '';
-                        this.closeContextMenu();
                     }
                 },
 
                 async contextPreviewItem() {
+                    if (!this.contextMenu.item || this.contextMenu.item.is_directory) {
+                        this.closeContextMenu();
+                        return;
+                    }
+                    
+                    this.closeContextMenu();
+                    setTimeout(() => {
+                        this.openPreview(this.contextMenu.item);
+                    }, 50);
+                },
+
+                contextCopyName() {
                     if (!this.contextMenu.item) {
                         this.closeContextMenu();
                         return;
                     }
                     
-                    this.openPreview(this.contextMenu.item);
+                    navigator.clipboard.writeText(this.contextMenu.item.name)
+                        .then(() => {
+                            this.showNotification(`Nom copié: ${this.contextMenu.item.name}`, 'info');
+                        })
+                        .catch(() => {
+                            this.showNotification('Échec de la copie', 'error');
+                        });
                     this.closeContextMenu();
+                },
+
+                contextShowProperties() {
+                    if (!this.contextMenu.item) {
+                        this.closeContextMenu();
+                        return;
+                    }
+                    
+                    this.propertiesModal.open = true;
+                    this.propertiesModal.item = this.contextMenu.item;
+                    this.closeContextMenu();
+                },
+
+                closePropertiesModal() {
+                    this.propertiesModal.open = false;
+                    this.propertiesModal.item = null;
+                },
+
+                copyArchivePathToClipboard() {
+                    if (!this.fileExplorer.archive.currentPath) return;
+                    
+                    navigator.clipboard.writeText(this.fileExplorer.archive.currentPath)
+                        .then(() => {
+                            this.showNotification(`Chemin copié: ${this.fileExplorer.archive.currentPath}`, 'info');
+                        })
+                        .catch(() => {
+                            this.showNotification('Échec de la copie du chemin', 'error');
+                        });
                 },
 
                 isExplorerItemSelected(panelName, item) {
@@ -2064,10 +2218,21 @@
                     };
                 },
 
-                async archiveSelectedFile() {
+                async archiveSelectedFile(mode) {
                     if (!this.canArchiveSelectedFile) return;
+                    
+                    // Vérifier que l'espace d'archivage est bien configuré
+                    if (!this.selectedArchiveSpace) {
+                        this.archiveStatus = '❌ Aucun espace d’archivage valide sélectionné. Veuillez en choisir un dans la liste.';
+                        return;
+                    }
+                    
+                    // Conserver l'espace d'archivage sélectionné même en cas d'erreur
+                    const currentArchiveRoot = this.fileExplorer.archive.root;
+                    const currentArchivePath = this.fileExplorer.archive.currentPath;
+                    
                     this.archiveBusy = true;
-                    this.archiveStatus = '';
+                    this.archiveStatus = `Préparation de l'archivage (${mode === 'move' ? 'déplacement' : 'copie'})...`;
                     try {
                         const response = await fetch('/api/archive/file', {
                             method: 'POST',
@@ -2075,29 +2240,51 @@
                             body: JSON.stringify({
                                 source_path: this.selectedSourceFile.path,
                                 target_directory_path: this.fileExplorer.archive.currentPath,
-                                mode: this.archiveMode,
+                                mode: mode,
                                 overwrite: this.archiveOverwrite,
-                                leave_link: this.archiveMode === 'move' && this.archiveLeaveLink
+                                leave_link: mode === 'move' && this.archiveLeaveLink
                             })
                         });
                         const payload = await response.json();
                         if (!response.ok) {
-                            throw new Error(payload.detail || 'Archivage impossible');
+                            if (payload.detail && payload.detail.includes('Aucune configuration SMB')) {
+                                throw new Error(`❌ Configuration SMB introuvable\n\nVérifiez que:\n1. L'espace "${this.selectedArchiveSpaceName}" est bien configuré\n2. Le chemin "${currentArchivePath}" est couvert par la configuration\n3. Les identifiants SMB sont valides et le serveur est accessible`);
+                            }
+                            if (payload.detail && (payload.detail.includes('login') || payload.detail.includes('authentication') || payload.detail.includes('NT_STATUS'))) {
+                                throw new Error(`❌ Échec d'authentification SMB\n\nDétails:\n- Espace: ${this.selectedArchiveSpaceName}\n- Chemin: ${currentArchivePath}\n\nVérifiez:\n1. Le nom d'utilisateur et mot de passe SMB\n2. Le domaine (si applicable)\n3. Que le serveur SMB est accessible depuis ce réseau`);
+                            }
+                            if (payload.detail && payload.detail.includes('cancelled')) {
+                                throw new Error(`❌ Opération annulée\n\nLe statut du run est incohérent. Veuillez:\n1. Rafraîchir la page\n2. Vérifier l'état du crawler\n3. Recommencer l'opération`);
+                            }
+                            throw new Error(`❌ Erreur d'archivage: ${payload.detail || 'Détails non disponibles'}`);
                         }
-                        this.archiveStatus = this.archiveMode === 'move'
-                            ? `Fichier déplacé vers ${payload.target_path}`
-                            : `Fichier copié vers ${payload.target_path}`;
+                        
                         if (payload.checksum_verified && payload.checksum) {
-                            this.archiveStatus += ` (SHA-256 vérifié: ${payload.checksum})`;
+                            this.archiveStatus = mode === 'move'
+                                ? `✅ Fichier déplacé et vérifié: ${payload.target_path}`
+                                : `✅ Fichier copié et vérifié: ${payload.target_path}`;
+                            this.archiveStatus += `\nSHA-256: ${payload.checksum.substring(0, 16)}... (vérifié)`;
+                            
+                            if (mode === 'move' && payload.source_removed) {
+                                this.archiveStatus += `\n✅ Original supprimé (vérification post-déplacement)`;
+                            }
+                            if (mode === 'move' && payload.link_path) {
+                                this.archiveStatus += `\n🔗 Lien laissé: ${payload.link_path}`;
+                            }
+                        } else {
+                            this.archiveStatus = mode === 'move'
+                                ? `⚠️ Fichier déplacé (vérification SHA-256 non disponible)`
+                                : `⚠️ Fichier copié (vérification SHA-256 non disponible)`;
                         }
-                        if (payload.link_path) {
-                            this.archiveStatus += ` (lien laissé: ${payload.link_path})`;
-                        }
+                        
                         this.fileExplorer.source.selectedPath = '';
                         await this.refreshOperations();
                         await this.refreshExplorerPanels();
                     } catch (error) {
                         this.archiveStatus = error.message;
+                        // Restaurer l'espace d'archivage en cas d'erreur
+                        this.fileExplorer.archive.root = currentArchiveRoot;
+                        this.fileExplorer.archive.currentPath = currentArchivePath;
                     } finally {
                         this.archiveBusy = false;
                     }
@@ -2156,6 +2343,26 @@
                     }, 5000);
                 },
 
+                startAutoRefresh() {
+                    // Rafraîchir les opérations toutes les 30 secondes pour détecter les changements
+                    if (this.autoRefreshTimerId) {
+                        clearInterval(this.autoRefreshTimerId);
+                    }
+                    this.autoRefreshTimerId = setInterval(async () => {
+                        if (document.hidden) return;
+                        await this.refreshOperations();
+                    }, 30000);
+                    
+                    // Vérifier les runs cancelled plus fréquemment
+                    if (this.cancelledRunsTimerId) {
+                        clearInterval(this.cancelledRunsTimerId);
+                    }
+                    this.cancelledRunsTimerId = setInterval(() => {
+                        if (document.hidden) return;
+                        this.checkForCancelledRuns();
+                    }, 15000);
+                },
+
                 animateVolumeCounters(nextProcessedBytes, nextDiscoveredBytes) {
                     if (this.volumeAnimationFrameId) {
                         cancelAnimationFrame(this.volumeAnimationFrameId);
@@ -2210,6 +2417,86 @@
                         this.loadSystemStatus(),
                         this.loadCrawlerRuntime()
                     ]);
+                    
+                    // Vérifier les runs cancelled et notifier
+                    await this.checkForCancelledRuns();
+                },
+
+                async checkForCancelledRuns() {
+                    if (!this.crawlOverview || !this.crawlOverview.runs) return;
+                    
+                    const cancelledRuns = this.crawlOverview.runs.filter(run => run.status === 'cancelled');
+                    const runningRuns = this.crawlOverview.runs.filter(run => run.status === 'running');
+                    
+                    // Notifier les runs cancelled
+                    for (const run of cancelledRuns) {
+                        const config = this.crawlOverview.configs.find(c => c.id === run.crawl_config_id);
+                        const spaceName = config ? this.getSpaceDisplayName(config) : 'inconnu';
+                        
+                        // Vérifier si on a déjà notifié ce run
+                        const alreadyNotified = this.notifications.some(n => n.run_id === run.id);
+                        
+                        if (!alreadyNotified) {
+                            this.showAppNotification(
+                                `⚠️ Run annulé: ${spaceName} (${run.status})`,
+                                'warning',
+                                { run_id: run.id }
+                            );
+                        }
+                    }
+                    
+                    // Vérifier les runs qui semblent bloqués (running depuis trop longtemps)
+                    const now = new Date();
+                    for (const run of runningRuns) {
+                        if (run.started_at) {
+                            const startedDate = new Date(run.started_at);
+                            const durationMinutes = (now - startedDate) / (1000 * 60);
+                            
+                            // Si un run est en cours depuis plus de 2 heures, le signaler
+                            if (durationMinutes > 120) {
+                                const config = this.crawlOverview.configs.find(c => c.id === run.crawl_config_id);
+                                const spaceName = config ? this.getSpaceDisplayName(config) : 'inconnu';
+                                const alreadyNotified = this.notifications.some(n => n.run_id === run.id && n.type === 'stuck');
+                                
+                                if (!alreadyNotified) {
+                                    this.showAppNotification(
+                                        `⏳ Run bloqué: ${spaceName} est en cours depuis plus de 2 heures`,
+                                        'warning',
+                                        { run_id: run.id, type: 'stuck' }
+                                    );
+                                }
+                            }
+                        }
+                    }
+                },
+
+                showAppNotification(message, level = 'info', metadata = {}) {
+                    const id = Date.now() + Math.random().toString(36).substring(2, 9);
+                    const notification = {
+                        id,
+                        message,
+                        level,
+                        timestamp: new Date().toISOString(),
+                        ...metadata
+                    };
+                    this.notifications.unshift(notification);
+                    this.unreadNotifications = this.notifications.length;
+                    
+                    // Auto-remove after 10 minutes
+                    setTimeout(() => {
+                        this.notifications = this.notifications.filter(n => n.id !== id);
+                        this.unreadNotifications = this.notifications.length;
+                    }, 600000);
+                },
+
+                async forceRefresh() {
+                    this.showAppNotification('⏳ Rafraîchissement forcé en cours...', 'info');
+                    try {
+                        await this.refreshOperations();
+                        this.showAppNotification('✅ Données rafraîchies', 'success');
+                    } catch (error) {
+                        this.showAppNotification(`❌ Échec du rafraîchissement: ${error.message}`, 'error');
+                    }
                 },
 
                 addLogEntry(message) {
@@ -2240,9 +2527,10 @@
                     }
 
                     this.selectedConfigId = fallbackConfig.id;
-                    if (!this.activeSpace && fallbackConfig.start_path) {
-                        this.activeSpace = fallbackConfig.start_path;
-                    }
+                    // Ne plus modifier activeSpace ici pour éviter les réinitialisations intempestives
+                    // if (!this.activeSpace && fallbackConfig.start_path) {
+                    //     this.activeSpace = fallbackConfig.start_path;
+                    // }
                 },
 
                 refreshNotifications() {
@@ -2627,7 +2915,7 @@
                 },
 
                 get sourceExplorerSpaces() {
-                    return this.spaces.filter((space) => !space.is_archive);
+                    return this.spaces;
                 },
 
                 get archiveExplorerSpaces() {
@@ -2713,6 +3001,72 @@
         }
     </script>
 
+    <!-- Properties Modal -->
+    <div x-cloak
+         x-show="propertiesModal.open"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="transform opacity-0 scale-95"
+         x-transition:enter-end="transform opacity-100 scale-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="transform opacity-100 scale-100"
+         x-transition:leave-end="transform opacity-0 scale-95"
+         @click.away="closePropertiesModal()"
+         class="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm"
+         aria-labelledby="properties-modal-title"
+         role="dialog"
+         aria-modal="true">
+        <div class="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white p-8 shadow-2xl shadow-slate-900/20">
+            <div class="flex items-center justify-between">
+                <h2 id="properties-modal-title" class="text-xl font-semibold text-slate-900">Propriétés</h2>
+                <button @click="closePropertiesModal()" class="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <template x-if="propertiesModal.item">
+                <div class="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2">
+                    <div class="space-y-4">
+                        <div>
+                            <dt class="text-sm font-medium text-slate-500">Nom</dt>
+                            <dd class="mt-1 text-sm text-slate-900" x-text="propertiesModal.item.name"></dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-slate-500">Type</dt>
+                            <dd class="mt-1 text-sm text-slate-900">
+                                <template x-if="propertiesModal.item.is_directory">Dossier</template>
+                                <template x-if="!propertiesModal.item.is_directory">Fichier</template>
+                            </dd>
+                        </div>
+                        <div x-show="!propertiesModal.item.is_directory">
+                            <dt class="text-sm font-medium text-slate-500">Taille</dt>
+                            <dd class="mt-1 text-sm text-slate-900" x-text="formatBytes(propertiesModal.item.size || 0)"></dd>
+                        </div>
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <dt class="text-sm font-medium text-slate-500">Chemin</dt>
+                            <dd class="mt-1 break-all text-sm text-slate-900" x-text="propertiesModal.item.path"></dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-slate-500">Créé le</dt>
+                            <dd class="mt-1 text-sm text-slate-900" x-text="formatDate(propertiesModal.item.created_at)"></dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-slate-500">Modifié le</dt>
+                            <dd class="mt-1 text-sm text-slate-900" x-text="formatDate(propertiesModal.item.last_modified)"></dd>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-8 flex justify-end gap-3">
+                    <button @click="closePropertiesModal()" class="rounded-2xl border border-slate-300 bg-white px-6 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                        Fermer
+                    </button>
+                </div>
+            </template>
+        </div>
+    </div>
+
     <!-- Context Menu -->
     <div x-cloak
          x-show="contextMenu.open"
@@ -2731,18 +3085,18 @@
                     <i class="fas fa-eye w-[18px] text-center"></i>
                     <span>Prévisualiser</span>
                 </div>
-                <template x-if="contextMenu.panel === 'source' && !contextMenu.item.is_directory">
+                <template x-if="contextMenu.panel === 'source'">
                     <div class="flex items-center gap-2 px-3 py-2 hover:bg-slate-50" @click="contextArchiveItem()">
                         <i class="fas fa-archive w-[18px] text-center"></i>
                         <span>Archiver</span>
                     </div>
                 </template>
                 <div class="border-t border-slate-200 my-1"></div>
-                <div class="flex items-center gap-2 px-3 py-2 hover:bg-slate-50" @click="closeContextMenu()">
+                <div class="flex items-center gap-2 px-3 py-2 hover:bg-slate-50" @click="contextCopyName()">
                     <i class="fas fa-copy w-[18px] text-center"></i>
                     <span>Copier le nom</span>
                 </div>
-                <div class="flex items-center gap-2 px-3 py-2 hover:bg-slate-50" @click="closeContextMenu()">
+                <div class="flex items-center gap-2 px-3 py-2 hover:bg-slate-50" @click="contextShowProperties()">
                     <i class="fas fa-info-circle w-[18px] text-center"></i>
                     <span>Propriétés</span>
                 </div>
