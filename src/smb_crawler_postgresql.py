@@ -18,6 +18,7 @@ from pathlib import Path
 from queue import Queue, Empty
 from concurrent.futures import ThreadPoolExecutor
 import smbclient
+import pytz
 from logging_config import get_logger_manager
 from postgres_adapter import PostgreSQLAdapter
 from config_manager import ConfigManager
@@ -463,7 +464,14 @@ class SMBCrawlerPostgreSQL:
         if isinstance(value, datetime):
             return value
         try:
-            return datetime.fromisoformat(str(value))
+            dt = datetime.fromisoformat(str(value))
+            # Si le datetime n'a pas de timezone mais nous savons que les dates de la base sont offset-aware,
+            # nous devons ajouter un timezone pour permettre la comparaison
+            if dt.tzinfo is None:
+                # Utiliser le timezone UTC par défaut pour les dates sans timezone
+                import pytz
+                dt = pytz.UTC.localize(dt)
+            return dt
         except ValueError:
             return None
 
