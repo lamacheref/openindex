@@ -512,12 +512,26 @@
                                     Aucun élément indexé dans ce répertoire.
                                 </div>
                                 <div x-show="!fileExplorer.source.loading && fileExplorer.source.items.length > 0" class="h-[26rem] overflow-y-auto bg-white">
+                                    <div x-show="fileExplorer.source.selectedItems.length > 0" class="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-2 text-sm text-slate-600">
+                                        <span x-text="fileExplorer.source.selectedItems.length"></span> élément(s) sélectionné(s)
+                                        <button @click="clearExplorerSelection('source')" class="ml-3 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium hover:bg-slate-200">
+                                            Désélectionner tout
+                                        </button>
+                                        <button @click="archiveSelectedItems()" :disabled="archiveBusy" class="ml-2 rounded-full bg-teal-600 px-2 py-1 text-xs font-medium text-white hover:bg-teal-700 disabled:opacity-50">
+                                            Archiver la sélection
+                                        </button>
+                                    </div>
                                     <template x-for="item in fileExplorer.source.items" :key="item.path">
-                                        <button @click="selectExplorerItem('source', item)"
+                                        <button @click="selectExplorerItem('source', item, $event)"
                                                 @dblclick="item.is_directory ? openExplorerItem('source', item) : openPreview(item)"
                                                 class="grid w-full grid-cols-[minmax(0,1fr)_7rem_11rem] gap-3 border-t border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50"
                                                 :class="explorerRowClass('source', item)">
                                             <span class="flex min-w-0 items-center gap-3">
+                                                <input type="checkbox"
+                                                       @click.stop=""
+                                                       @change="selectExplorerItem('source', item, $event)"
+                                                       :checked="isExplorerItemSelected('source', item)"
+                                                       class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
                                                 <i class="fas" :class="item.is_directory ? 'fa-folder text-amber-500' : fileIconClass(item.path)"></i>
                                                 <span class="min-w-0">
                                                     <span class="truncate text-sm font-medium text-slate-800" x-text="item.name"></span>
@@ -658,12 +672,23 @@
                                     Aucun élément indexé dans ce répertoire d’archives.
                                 </div>
                                 <div x-show="!fileExplorer.archive.loading && fileExplorer.archive.items.length > 0" class="h-[26rem] overflow-y-auto bg-white">
+                                    <div x-show="fileExplorer.archive.selectedItems.length > 0" class="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-2 text-sm text-slate-600">
+                                        <span x-text="fileExplorer.archive.selectedItems.length"></span> élément(s) sélectionné(s)
+                                        <button @click="clearExplorerSelection('archive')" class="ml-3 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium hover:bg-slate-200">
+                                            Désélectionner tout
+                                        </button>
+                                    </div>
                                     <template x-for="item in fileExplorer.archive.items" :key="item.path">
-                                        <button @click="selectExplorerItem('archive', item)"
+                                        <button @click="selectExplorerItem('archive', item, $event)"
                                                 @dblclick="item.is_directory ? openExplorerItem('archive', item) : openPreview(item)"
                                                 class="grid w-full grid-cols-[minmax(0,1fr)_7rem_11rem] gap-3 border-t border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50"
                                                 :class="explorerRowClass('archive', item)">
                                             <span class="flex min-w-0 items-center gap-3">
+                                                <input type="checkbox"
+                                                       @click.stop=""
+                                                       @change="selectExplorerItem('archive', item, $event)"
+                                                       :checked="isExplorerItemSelected('archive', item)"
+                                                       class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
                                                 <i class="fas" :class="item.is_directory ? 'fa-folder text-amber-500' : fileIconClass(item.path)"></i>
                                                 <span class="min-w-0">
                                                     <span class="truncate text-sm font-medium text-slate-800" x-text="item.name"></span>
@@ -1167,6 +1192,7 @@
                         currentPath: '',
                         items: [],
                         selectedPath: '',
+                        selectedItems: [],
                         loading: false,
                         error: ''
                     },
@@ -1176,6 +1202,7 @@
                         currentPath: '',
                         items: [],
                         selectedPath: '',
+                        selectedItems: [],
                         loading: false,
                         error: ''
                     }
@@ -1660,11 +1687,64 @@
                             throw new Error(payload.detail || 'Chargement impossible');
                         }
                         panel.items = await response.json();
+                        this.clearExplorerSelection(panelName);
                     } catch (error) {
                         panel.items = [];
                         panel.error = error.message;
                     } finally {
                         panel.loading = false;
+                    }
+                },
+
+                getSelectedExplorerItems(panelName) {
+                    return this.fileExplorer[panelName].selectedItems;
+                },
+
+                async archiveSelectedItems() {
+                    const sourcePanel = this.fileExplorer.source;
+                    const selected = sourcePanel.selectedItems;
+                    if (selected.length === 0) {
+                        this.showNotification('Aucun fichier sélectionné', 'info');
+                        return;
+                    }
+                    
+                    const archivePanel = this.fileExplorer.archive;
+                    if (!archivePanel.root) {
+                        this.showNotification('Sélectionnez un espace d\'archivage', 'warning');
+                        return;
+                    }
+                    
+                    this.archiveBusy = true;
+                    this.archiveStatus = `Archivage de ${selected.length} fichiers...`;
+                    
+                    try {
+                        for (const item of selected) {
+                            if (item.is_directory) continue;
+                            
+                            const params = new URLSearchParams({
+                                source_path: item.path,
+                                dest_root: archivePanel.root,
+                                dest_path: archivePanel.currentPath,
+                                overwrite: 'skip'
+                            });
+                            
+                            const response = await fetch(`/api/archive/file?${params.toString()}`, {
+                                method: 'POST'
+                            });
+                            
+                            if (!response.ok) {
+                                throw new Error(`Échec pour ${item.name}: ${response.status}`);
+                            }
+                        }
+                        
+                        this.showNotification(`Archivage terminé (${selected.length} fichiers)`, 'success');
+                        await this.refreshExplorerPanel('source');
+                        await this.refreshExplorerPanel('archive');
+                    } catch (error) {
+                        this.showNotification(`Erreur: ${error.message}`, 'error');
+                    } finally {
+                        this.archiveBusy = false;
+                        this.archiveStatus = '';
                     }
                 },
 
@@ -1724,8 +1804,31 @@
                     return crumbs;
                 },
 
-                selectExplorerItem(panelName, item) {
-                    this.fileExplorer[panelName].selectedPath = item.path;
+                selectExplorerItem(panelName, item, event) {
+                    const panel = this.fileExplorer[panelName];
+                    const isMultiSelect = event && (event.ctrlKey || event.metaKey);
+                    
+                    if (isMultiSelect) {
+                        const index = panel.selectedItems.findIndex(i => i.path === item.path);
+                        if (index >= 0) {
+                            panel.selectedItems.splice(index, 1);
+                        } else {
+                            panel.selectedItems.push(item);
+                        }
+                    } else {
+                        panel.selectedItems = [item];
+                    }
+                    panel.selectedPath = item.path;
+                },
+
+                isExplorerItemSelected(panelName, item) {
+                    return this.fileExplorer[panelName].selectedItems.some(i => i.path === item.path);
+                },
+
+                clearExplorerSelection(panelName) {
+                    const panel = this.fileExplorer[panelName];
+                    panel.selectedItems = [];
+                    panel.selectedPath = '';
                 },
 
                 fileIconClass(path) {

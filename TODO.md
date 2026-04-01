@@ -150,7 +150,9 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
     - [x] Mode overwrite piloté pour les conflits de destination.
   - [x] Dette restante moyen terme :
     - [x] Navigation SMB live hors index (endpoint `/api/explorer/live-items` ajouté le `2026-03-31`, PR #62).
-    - [ ] Opérations de masse, menu contextuel type Explorateur Windows/Dolphin et meilleur traitement des erreurs SMB côté UI.
+    - [x] Opérations de masse (sélection multiple + archivage groupé implémentés le `2026-04-01`).
+    - [ ] Menu contextuel type Explorateur Windows/Dolphin.
+    - [ ] Meilleur traitement des erreurs SMB côté UI.
   - [x] PR fix/explorateur créée le `2026-03-31` avec version `0.4.1` (bump fix).
 
 - [ ] **T-16 — Concevoir la page de traitements des artefacts**
