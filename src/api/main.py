@@ -345,24 +345,46 @@ class UnixSocketHTTPConnection(http.client.HTTPConnection):
 
 
 def extract_space_prefix(path: str) -> Optional[str]:
+    """
+    Extract space prefix from file path, handling various formats including PKI paths.
+    
+    Examples:
+        \\server\share\folder\file.txt -> \\server\\share
+        /mount/share/folder/file.txt -> /mount
+        C:\\data\\file.txt -> C:
+        /pki/certs/server.crt -> /pki
+        server/share/folder -> server (relative path)
+    """
     normalized = path.strip()
     if not normalized:
         return None
 
+    # Handle Windows UNC paths (\\server\share...)
     if normalized.startswith("\\"):
         parts = [part for part in normalized.split("\\") if part]
         if len(parts) >= 2:
             return f"\\{parts[0]}\\{parts[1]}"
+        elif len(parts) == 1:
+            return f"\\{parts[0]}\"
         return None
 
+    # Handle Unix absolute paths (/path/to/file)
     if normalized.startswith("/"):
         parts = [part for part in normalized.split("/") if part]
         if parts:
             return f"/{parts[0]}"
         return "/"
 
+    # Handle Windows drive letters (C:\path\to\file)
+    if len(normalized) >= 2 and normalized[1] == ':':
+        drive_letter = normalized[:2].upper()
+        return drive_letter
+
+    # Handle relative paths (server/share or path/to/file)
     parts = [part for part in normalized.replace("\\", "/").split("/") if part]
     if parts:
+        # For potential PKI paths like "pki/certs", return "pki"
+        # For server/share patterns, return the first part
         return parts[0]
 
     return None
@@ -2041,6 +2063,9 @@ async def get_spaces():
                 spaces_map[prefix]["file_count"] += 1
             spaces = sorted(spaces_map.values(), key=lambda item: item["name"].lower())
 
+        # Log spaces for debugging PKI synchronization issues
+        logger.info(f"get_spaces: Found {len(spaces)} spaces: {[space['name'] for space in spaces]}")
+        
         return [SpaceInfo(**space) for space in spaces]
     except Exception as e:
         logger.error(f"Erreur get_spaces: {e}")

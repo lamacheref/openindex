@@ -2508,10 +2508,13 @@
                     const config = this.findConfigForSpace(this.activeSpace);
                     if (config) {
                         this.selectedConfigId = config.id;
+                        this.addLogEntry(`✅ Synchronisation réussie: Espace "${this.activeSpace}" → Config "${config.name || config.id}"`);
                         return;
                     }
 
                     if (this.selectedConfig) {
+                        // Garder la configuration actuelle si aucune correspondance n'est trouvée
+                        this.addLogEntry(`⚠️ Aucun config trouvé pour espace "${this.activeSpace}", conservation de la config actuelle: "${this.selectedConfig.name || this.selectedConfig.id}"`);
                         return;
                     }
 
@@ -2523,10 +2526,12 @@
                         if (!this.activeSpace) {
                             this.selectedConfigId = '';
                         }
+                        this.addLogEntry(`❌ Aucun config disponible et aucun espace actif`);
                         return;
                     }
 
                     this.selectedConfigId = fallbackConfig.id;
+                    this.addLogEntry(`ℹ️ Utilisation du config par défaut: "${fallbackConfig.name || fallbackConfig.id}" (espace actif: "${this.activeSpace || 'aucun'}")`);
                     // Ne plus modifier activeSpace ici pour éviter les réinitialisations intempestives
                     // if (!this.activeSpace && fallbackConfig.start_path) {
                     //     this.activeSpace = fallbackConfig.start_path;
@@ -2989,13 +2994,47 @@
                         return null;
                     }
                     const allConfigs = [...this.crawlOverview.configs, ...this.crawlConfigs];
-                    return allConfigs.find((config) => config.start_path === spacePath)
-                        || allConfigs.find((config) => {
-                            return config.start_path && (
-                                config.start_path.startsWith(spacePath) || spacePath.startsWith(config.start_path)
-                            );
-                        })
-                        || null;
+                    
+                    // 1. Exact match
+                    let config = allConfigs.find((config) => config.start_path === spacePath);
+                    if (config) return config;
+                    
+                    // 2. Normalize paths for comparison (handle mixed slashes, case sensitivity)
+                    const normalizePath = (path) => {
+                        if (!path) return '';
+                        return path.replace(/\\/g, '/').toLowerCase();
+                    };
+                    
+                    const normalizedSpacePath = normalizePath(spacePath);
+                    
+                    // 3. Exact match with normalized paths
+                    config = allConfigs.find((config) => 
+                        normalizePath(config.start_path) === normalizedSpacePath
+                    );
+                    if (config) return config;
+                    
+                    // 4. Partial matches with normalized paths
+                    config = allConfigs.find((config) => {
+                        const normalizedConfigPath = normalizePath(config.start_path);
+                        return normalizedConfigPath && (
+                            normalizedConfigPath.startsWith(normalizedSpacePath) ||
+                            normalizedSpacePath.startsWith(normalizedConfigPath) ||
+                            // Handle parent/child relationships
+                            normalizedSpacePath.replace(/\/$/, '') === normalizedConfigPath ||
+                            normalizedConfigPath.replace(/\/$/, '') === normalizedSpacePath
+                        );
+                    });
+                    if (config) return config;
+                    
+                    // 5. Fallback: try to find any config that contains the space path
+                    config = allConfigs.find((config) => {
+                        const normalizedConfigPath = normalizePath(config.start_path);
+                        return normalizedConfigPath && normalizedSpacePath && 
+                            (normalizedConfigPath.includes(normalizedSpacePath) || 
+                             normalizedSpacePath.includes(normalizedConfigPath));
+                    });
+                    
+                    return config || null;
                 }
             };
         }
