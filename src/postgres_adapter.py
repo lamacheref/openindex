@@ -816,6 +816,21 @@ class PostgreSQLAdapter:
             return None
         return {"run_id": row[0], "status": row[1]}
 
+    def get_stale_running_runs(self) -> List[Dict[str, Any]]:
+        """Récupère les runs qui sont en cours depuis trop longtemps."""
+        from typing import List
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT id, started_at
+                FROM crawl_runs
+                WHERE LOWER(status) IN ('running', 'in_progress')
+                ORDER BY started_at ASC
+                """
+            )
+            return [dict(id=row[0], started_at=row[1]) for row in cursor.fetchall()]
+
     def reset_stale_running_runs(self) -> None:
         with self.get_connection() as conn:
             cursor = conn.cursor()

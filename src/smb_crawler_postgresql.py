@@ -1274,12 +1274,49 @@ def run_single_crawl(run_payload):
     return stats
 
 
+def cleanup_stale_runs(adapter, interval_seconds=60):
+    """Tâche en arrière-plan pour corriger les statuts des runs bloqués."""
+    import time
+    from datetime import datetime, timedelta
+    
+    while True:
+        try:
+            # Trouver les runs qui sont en cours depuis trop longtemps
+            stale_runs = adapter.get_stale_running_runs()
+            
+            for run in stale_runs:
+                run_id = run['id']
+                started_at = datetime.fromisoformat(run['started_at'].replace('Z', '+00:00'))
+                duration = datetime.now() - started_at
+                
+                # Si un run est en cours depuis plus de 2 heures, le marquer comme cancelled
+                if duration > timedelta(hours=2):
+                    print(f"⚠️  Run {run_id} bloqué depuis {duration} - Correction du statut")
+                    adapter.update_crawl_run_status(run_id, "cancelled")
+                    print(f"✅ Run {run_id} marqué comme cancelled (blocage détecté)")
+                
+        except Exception as e:
+            print(f"❌ Erreur dans cleanup_stale_runs: {e}")
+        
+        time.sleep(interval_seconds)
+
+
 def worker_loop(poll_interval_seconds=5):
     """Boucle principale du service d'exploration, pilotée par crawl_runs."""
     adapter = PostgreSQLAdapter(build_postgres_config())
     adapter.initialize_database()
     adapter.reset_stale_running_runs()
     print("👂 Worker d'exploration prêt, en attente de runs...")
+    
+    # Lancer la tâche de nettoyage en arrière-plan
+    import threading
+    cleanup_thread = threading.Thread(
+        target=cleanup_stale_runs,
+        args=(adapter,),
+        daemon=True
+    )
+    cleanup_thread.start()
+    print("🔄 Tâche de nettoyage des runs lancée (vérification toutes les 60s)")
 
     while True:
         run_payload = adapter.wait_for_next_run(poll_interval_seconds=poll_interval_seconds)
