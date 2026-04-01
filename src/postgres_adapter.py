@@ -858,6 +858,55 @@ class PostgreSQLAdapter:
                 return run
             time.sleep(poll_interval_seconds)
 
+    def get_files_by_config(self, crawl_config_id: str) -> List[Dict[str, Any]]:
+        """
+        Récupère tous les fichiers pour une configuration de crawl donnée.
+        
+        Args:
+            crawl_config_id: ID de la configuration de crawl
+            
+        Returns:
+            Liste des fichiers avec leurs métadonnées
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT path, name, size, checksum, last_modified, is_directory
+                FROM files
+                WHERE crawl_config_id = %s
+                """,
+                (crawl_config_id,)
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def delete_files_by_paths(self, file_paths: List[str]) -> int:
+        """
+        Supprime les fichiers spécifiés de la base de données.
+        
+        Args:
+            file_paths: Liste des chemins de fichiers à supprimer
+            
+        Returns:
+            Nombre de fichiers supprimés
+        """
+        if not file_paths:
+            return 0
+            
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Utiliser une requête paramétrée pour éviter les injections SQL
+            cursor.execute(
+                """
+                DELETE FROM files
+                WHERE path = ANY(%s)
+                """,
+                (file_paths,)
+            )
+            conn.commit()
+            return cursor.rowcount
+
 # Fonction utilitaire pour créer l'adaptateur à partir de la configuration
 def create_postgres_adapter(config_manager) -> PostgreSQLAdapter:
     """

@@ -747,6 +747,11 @@ class SMBCrawlerPostgreSQL:
 
                         batch_files.append(file_data)
                         self.stats['processed_size'] += file_data.get('size', 0) or 0
+                        
+                        # Track processed files for cleanup
+                        if 'processed_files' not in self.stats:
+                            self.stats['processed_files'] = []
+                        self.stats['processed_files'].append(file_data['path'])
 
                         if len(batch_files) >= batch_size:
                             self._save_batch_to_postgres(batch_files)
@@ -859,7 +864,12 @@ class SMBCrawlerPostgreSQL:
 
                         batch_files.append(file_data)
                         self.stats['processed_size'] += file_data.get('size', 0) or 0
-
+                        
+                        # Track processed files for cleanup
+                        if 'processed_files' not in self.stats:
+                            self.stats['processed_files'] = []
+                        self.stats['processed_files'].append(file_data['path'])
+                        
                         if len(batch_files) >= batch_size:
                             self._save_batch_to_postgres(batch_files)
                             batch_files = []
@@ -885,6 +895,57 @@ class SMBCrawlerPostgreSQL:
             self.logger.debug(f"💾 Sauvegardé {count} fichiers dans PostgreSQL")
         except Exception as e:
             self.logger.error(f"Erreur sauvegarde PostgreSQL: {e}")
+            self.stats['errors'] += 1
+
+    def _cleanup_deleted_files(self):
+        """
+        Nettoie les fichiers qui existent dans la base mais plus dans le système de fichiers.
+        Seuls les fichiers de la configuration de crawl actuelle sont considérés.
+        """
+        try:
+            self.logger.info("🧹 Nettoyage des fichiers supprimés...")
+            
+            # Récupérer tous les fichiers existants dans la base pour cette configuration
+            existing_files = self.postgres_adapter.get_files_by_config(self.crawl_config_id)
+            
+            if not existing_files:
+                self.logger.info("📝 Aucun fichier existant trouvé pour cette configuration")
+                return
+            
+            # Créer un ensemble des chemins de fichiers traités pendant ce crawl
+            processed_paths = set()
+            # Ajouter les fichiers traités
+            processed_paths.update(self.stats.get('processed_files', []))
+            # Ajouter les fichiers en cours de traitement
+            processed_paths.update([file_data['path'] for file_data in list(self.file_queue.queue)])
+            
+            # Identifier les fichiers qui sont dans la base mais pas dans le crawl actuel
+            deleted_files = []
+            for db_file in existing_files:
+                file_path = db_file.get('path')
+                if file_path and file_path not in processed_paths:
+                    # Vérifier si le fichier existe vraiment en essayant d'y accéder
+                    try:
+                        file_unc_path = file_path if file_path.startswith('\\') else rf"\\{self.server}\\{self.share_name}\\{file_path.lstrip('/')}"
+                        # Essayer d'ouvrir le fichier pour vérifier son existence
+                        with smbclient.open_file(file_unc_path, mode='rb') as f:
+                            pass  # Fichier existe, ne rien faire
+                    except Exception:
+                        # Fichier n'existe pas, marquer pour suppression
+                        deleted_files.append(file_path)
+            
+            if deleted_files:
+                self.logger.info(f"🗑️ Trouvé {len(deleted_files)} fichiers supprimés à nettoyer")
+                
+                # Supprimer les fichiers de la base de données
+                deleted_count = self.postgres_adapter.delete_files_by_paths(deleted_files)
+                self.logger.info(f"🧹 {deleted_count} fichiers supprimés ont été nettoyés de la base")
+                self.stats['deleted_files_cleaned'] = deleted_count
+            else:
+                self.logger.info("📝 Aucun fichier supprimé trouvé")
+                
+        except Exception as e:
+            self.logger.error(f"❌ Erreur lors du nettoyage des fichiers supprimés: {e}")
             self.stats['errors'] += 1
 
     def _calculate_full_checksum(self, file_unc_path):
@@ -1095,6 +1156,10 @@ class SMBCrawlerPostgreSQL:
         # (et non pas à cause d'un vrai cancellation)
         if not self.user_cancelled:
             self.stats['cancelled'] = False
+        
+        # Nettoyer les fichiers supprimés (optionnel, peut être désactivé pour les gros crawls)
+        if self.crawl_config_id and not self.stats.get('timed_out', False):
+            self._cleanup_deleted_files()
         
         # Calculer les doublons
         self.logger.info("🔄 Calcul des doublons...")
