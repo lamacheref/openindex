@@ -6,6 +6,7 @@ psycopg2-binary==2.9.10
 smbprotocol==1.10.1
 python-dotenv==1.0.0
 configparser==6.0.0
+pytz==2023.3
 
 # Logging
 colorlog==6.8.0
