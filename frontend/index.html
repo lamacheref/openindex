@@ -546,7 +546,7 @@
                                             <span class="flex min-w-0 items-center gap-3">
                                                 <input type="checkbox"
                                                        @click.stop=""
-                                                       @change="selectExplorerItem('source', item, $event)"
+                                                       @change="toggleExplorerItemSelection('source', item)"
                                                        :checked="isExplorerItemSelected('source', item)"
                                                        class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
                                                 <i class="fas" :class="item.is_directory ? 'fa-folder text-amber-500' : fileIconClass(item.path)"></i>
@@ -720,7 +720,7 @@
                                             <span class="flex min-w-0 items-center gap-3">
                                                 <input type="checkbox"
                                                        @click.stop=""
-                                                       @change="selectExplorerItem('archive', item, $event)"
+                                                       @change="toggleExplorerItemSelection('archive', item)"
                                                        :checked="isExplorerItemSelected('archive', item)"
                                                        class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
                                                 <i class="fas" :class="item.is_directory ? 'fa-folder text-amber-500' : fileIconClass(item.path)"></i>
@@ -1864,6 +1864,17 @@
                         });
                     }
                     return crumbs;
+                },
+
+                toggleExplorerItemSelection(panelName, item) {
+                    const panel = this.fileExplorer[panelName];
+                    const index = panel.selectedItems.findIndex(i => i.path === item.path);
+                    if (index >= 0) {
+                        panel.selectedItems.splice(index, 1);
+                    } else {
+                        panel.selectedItems.push(item);
+                    }
+                    panel.selectedPath = panel.selectedItems.length === 1 ? item.path : '';
                 },
 
                 selectExplorerItem(panelName, item, event) {
