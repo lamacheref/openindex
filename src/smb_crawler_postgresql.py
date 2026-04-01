@@ -93,6 +93,7 @@ class SMBCrawlerPostgreSQL:
         
         # Événement pour arrêter le crawler
         self.stop_event = threading.Event()
+        self.user_cancelled = False  # Flag pour distinguer cancellation utilisateur vs fin normale
         self.activity_lock = threading.Lock()
         self.active_tasks = {
             'directories': 0,
@@ -1080,6 +1081,11 @@ class SMBCrawlerPostgreSQL:
             self.stats['final_status'] = 'pending'
             self.logger.info(f"🏁 Run mis en attente avec checkpoint={self.run_id}")
             return self.stats
+        
+        # Réinitialiser le flag cancelled si le run s'est terminé normalement
+        # (et non pas à cause d'un vrai cancellation)
+        if not self.user_cancelled:
+            self.stats['cancelled'] = False
         
         # Calculer les doublons
         self.logger.info("🔄 Calcul des doublons...")
