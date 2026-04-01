@@ -1261,6 +1261,10 @@ class SMBCrawlerPostgreSQL:
         if self.stats['large_files'] > 0:
             print(f"🐘 Pourcentage gros fichiers: {(self.stats['large_files']/self.stats['total_files']*100):.1f}%")
         
+        # Statistiques de nettoyage
+        if 'deleted_files_cleaned' in self.stats and self.stats['deleted_files_cleaned'] > 0:
+            print(f"🧹 Fichiers supprimés nettoyés: {self.stats['deleted_files_cleaned']:,}")
+        
         print("="*60)
 
     def stop(self):
