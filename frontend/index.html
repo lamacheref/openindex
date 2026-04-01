@@ -524,6 +524,7 @@
                                     <template x-for="item in fileExplorer.source.items" :key="item.path">
                                         <button @click="selectExplorerItem('source', item, $event)"
                                                 @dblclick="item.is_directory ? openExplorerItem('source', item) : openPreview(item)"
+                                                @contextmenu="openContextMenu('source', item, $event)"
                                                 class="grid w-full grid-cols-[minmax(0,1fr)_7rem_11rem] gap-3 border-t border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50"
                                                 :class="explorerRowClass('source', item)">
                                             <span class="flex min-w-0 items-center gap-3">
@@ -681,6 +682,7 @@
                                     <template x-for="item in fileExplorer.archive.items" :key="item.path">
                                         <button @click="selectExplorerItem('archive', item, $event)"
                                                 @dblclick="item.is_directory ? openExplorerItem('archive', item) : openPreview(item)"
+                                                @contextmenu="openContextMenu('archive', item, $event)"
                                                 class="grid w-full grid-cols-[minmax(0,1fr)_7rem_11rem] gap-3 border-t border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50"
                                                 :class="explorerRowClass('archive', item)">
                                             <span class="flex min-w-0 items-center gap-3">
@@ -1206,6 +1208,13 @@
                         loading: false,
                         error: ''
                     }
+                },
+                contextMenu: {
+                    open: false,
+                    x: 0,
+                    y: 0,
+                    panel: '',
+                    item: null
                 },
                 previewModal: {
                     open: false,
@@ -1819,6 +1828,75 @@
                         panel.selectedItems = [item];
                     }
                     panel.selectedPath = item.path;
+                },
+
+                openContextMenu(panelName, item, event) {
+                    event.preventDefault();
+                    this.contextMenu.open = true;
+                    this.contextMenu.panel = panelName;
+                    this.contextMenu.item = item;
+                    this.contextMenu.x = event.clientX;
+                    this.contextMenu.y = event.clientY;
+                },
+
+                closeContextMenu() {
+                    this.contextMenu.open = false;
+                },
+
+                async contextArchiveItem() {
+                    if (!this.contextMenu.item || this.contextMenu.item.is_directory) {
+                        this.closeContextMenu();
+                        return;
+                    }
+                    
+                    const sourcePanel = this.fileExplorer.source;
+                    const archivePanel = this.fileExplorer.archive;
+                    
+                    if (!archivePanel.root) {
+                        this.showNotification('Sélectionnez un espace d\'archivage', 'warning');
+                        this.closeContextMenu();
+                        return;
+                    }
+                    
+                    this.archiveBusy = true;
+                    this.archiveStatus = `Archivage de ${this.contextMenu.item.name}...`;
+                    
+                    try {
+                        const params = new URLSearchParams({
+                            source_path: this.contextMenu.item.path,
+                            dest_root: archivePanel.root,
+                            dest_path: archivePanel.currentPath,
+                            overwrite: 'skip'
+                        });
+                        
+                        const response = await fetch(`/api/archive/file?${params.toString()}`, {
+                            method: 'POST'
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error(`Échec pour ${this.contextMenu.item.name}`);
+                        }
+                        
+                        this.showNotification(`Archivage terminé: ${this.contextMenu.item.name}`, 'success');
+                        await this.refreshExplorerPanel('source');
+                        await this.refreshExplorerPanel('archive');
+                    } catch (error) {
+                        this.showNotification(`Erreur: ${error.message}`, 'error');
+                    } finally {
+                        this.archiveBusy = false;
+                        this.archiveStatus = '';
+                        this.closeContextMenu();
+                    }
+                },
+
+                async contextPreviewItem() {
+                    if (!this.contextMenu.item) {
+                        this.closeContextMenu();
+                        return;
+                    }
+                    
+                    this.openPreview(this.contextMenu.item);
+                    this.closeContextMenu();
                 },
 
                 isExplorerItemSelected(panelName, item) {
@@ -2581,5 +2659,42 @@
             };
         }
     </script>
+
+    <!-- Context Menu -->
+    <div x-cloak
+         x-show="contextMenu.open"
+         x-transition:enter="transition ease-out duration-100"
+         x-transition:enter-start="transform opacity-0 scale-95"
+         x-transition:enter-end="transform opacity-100 scale-100"
+         x-transition:leave="transition ease-in duration-75"
+         x-transition:leave-start="transform opacity-100 scale-100"
+         x-transition:leave-end="transform opacity-0 scale-95"
+         @click.away="closeContextMenu()"
+         class="fixed z-[90] rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/20"
+         :style="`left: ${contextMenu.x}px; top: ${contextMenu.y}px;`">
+        <template x-if="contextMenu.item">
+            <div class="p-2 text-sm text-slate-600">
+                <div class="flex items-center gap-2 px-3 py-2 hover:bg-slate-50" @click="contextPreviewItem()">
+                    <i class="fas fa-eye w-[18px] text-center"></i>
+                    <span>Prévisualiser</span>
+                </div>
+                <template x-if="contextMenu.panel === 'source' && !contextMenu.item.is_directory">
+                    <div class="flex items-center gap-2 px-3 py-2 hover:bg-slate-50" @click="contextArchiveItem()">
+                        <i class="fas fa-archive w-[18px] text-center"></i>
+                        <span>Archiver</span>
+                    </div>
+                </template>
+                <div class="border-t border-slate-200 my-1"></div>
+                <div class="flex items-center gap-2 px-3 py-2 hover:bg-slate-50" @click="closeContextMenu()">
+                    <i class="fas fa-copy w-[18px] text-center"></i>
+                    <span>Copier le nom</span>
+                </div>
+                <div class="flex items-center gap-2 px-3 py-2 hover:bg-slate-50" @click="closeContextMenu()">
+                    <i class="fas fa-info-circle w-[18px] text-center"></i>
+                    <span>Propriétés</span>
+                </div>
+            </div>
+        </template>
+    </div>
 </body>
 </html>

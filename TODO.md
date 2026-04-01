@@ -151,7 +151,7 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
   - [x] Dette restante moyen terme :
     - [x] Navigation SMB live hors index (endpoint `/api/explorer/live-items` ajouté le `2026-03-31`, PR #62).
     - [x] Opérations de masse (sélection multiple + archivage groupé implémentés le `2026-04-01`).
-    - [ ] Menu contextuel type Explorateur Windows/Dolphin.
+    - [x] Menu contextuel type Explorateur Windows/Dolphin (implémenté le `2026-04-01`).
     - [ ] Meilleur traitement des erreurs SMB côté UI.
   - [x] PR fix/explorateur créée le `2026-03-31` avec version `0.4.1` (bump fix).
 
