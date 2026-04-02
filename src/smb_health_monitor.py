@@ -11,7 +11,7 @@ from typing import Callable, Dict, List, Optional
 from dataclasses import dataclass
 from datetime import datetime
 import smbclient
-from smbprotocol.exceptions import SMBConnectionError
+from smbprotocol.exceptions import SMBConnectionClosed
 
 
 class SMBServerStatus(Enum):

@@ -80,7 +80,6 @@ class PostgreSQLAdapter:
         except Exception as e:
             if conn:
                 conn.rollback()
-                self.connection_pool.putconn(conn)
             self.logger.error(f"Erreur de connexion PostgreSQL: {e}")
             raise
         finally:

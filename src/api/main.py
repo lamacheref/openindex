@@ -24,6 +24,7 @@ import time
 import zipfile
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import quote
@@ -322,6 +323,69 @@ class OperationsStatus(BaseModel):
     runtime: CrawlerRuntime
     checks: List[OperationalCheck]
     incidents: List[OperationalIncident]
+
+
+# ============================================================
+# T-ARCH-01: Archive Queue Models
+# ============================================================
+
+class ArchiveJobType(str, Enum):
+    COPY = "copy"
+    MOVE = "move"
+    DELETE = "delete"
+
+
+class ArchiveJobStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class ArchiveJobCreate(BaseModel):
+    job_type: ArchiveJobType = ArchiveJobType.COPY
+    source_path: str
+    dest_path: Optional[str] = None
+    priority: int = Field(default=5, ge=1, le=10)
+
+
+class ArchiveJobResponse(BaseModel):
+    id: str
+    job_type: str
+    source_path: str
+    dest_path: Optional[str]
+    status: str
+    priority: int
+    retry_count: int
+    max_retries: int
+    error_message: Optional[str]
+    started_at: Optional[str]
+    completed_at: Optional[str]
+    created_at: str
+    source_size: Optional[int]
+    bytes_transferred: int
+
+
+class ArchiveJobList(BaseModel):
+    jobs: List[ArchiveJobResponse]
+    total: int
+
+
+class ArchiveJobStats(BaseModel):
+    pending: int
+    running: int
+    completed: int
+    failed: int
+    cancelled: int
+    total_size_pending: int
+    total_size_transferred: int
+
+
+class ArchiveJobActionResult(BaseModel):
+    job_id: str
+    success: bool
+    message: str
 
 
 STALE_RUN_TIMEOUT_SECONDS = int(os.getenv("OPENINDEX_CRAWLER_STALE_TIMEOUT_SECONDS", "1200"))
@@ -3278,6 +3342,379 @@ async def read_root():
     <html><head><title>OpenIndex API</title><meta charset="utf-8"></head>
     <body><h1>🚀 OpenIndex API</h1><p><a href="/docs">Swagger UI</a></p></body></html>
     """
+
+
+# ============================================================
+# T-ARCH-01: Archive Queue API Endpoints
+# ============================================================
+
+def _row_to_archive_job_response(row: tuple) -> ArchiveJobResponse:
+    """Convertit une ligne de résultat SQL en ArchiveJobResponse"""
+    return ArchiveJobResponse(
+        id=str(row[0]),
+        job_type=row[1],
+        source_path=row[2],
+        dest_path=row[3],
+        status=row[4],
+        priority=row[5],
+        retry_count=row[6],
+        max_retries=row[7],
+        error_message=row[8],
+        started_at=row[9].isoformat() if row[9] else None,
+        completed_at=row[10].isoformat() if row[10] else None,
+        created_at=row[11].isoformat() if row[11] else None,
+        source_size=row[12],
+        bytes_transferred=row[13] if len(row) > 13 else 0
+    )
+
+
+@app.post("/api/archive/queue", response_model=ArchiveJobResponse)
+async def create_archive_job(payload: ArchiveJobCreate):
+    """Crée un nouveau job d'archivage dans la queue"""
+    try:
+        db = get_db_adapter()
+        
+        # Validation: dest_path requis pour copy/move
+        if payload.job_type in [ArchiveJobType.COPY, ArchiveJobType.MOVE] and not payload.dest_path:
+            raise HTTPException(
+                status_code=422,
+                detail=f"dest_path est requis pour le job_type '{payload.job_type.value}'"
+            )
+        
+        # Insérer le job
+        query = """
+            INSERT INTO archive_jobs (
+                job_type, source_path, dest_path, status, priority,
+                retry_count, max_retries, created_at, updated_at
+            ) VALUES (
+                %s::archive_job_type, %s, %s, 'pending', %s,
+                0, 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            )
+            RETURNING id, job_type::text, source_path, dest_path, status::text, priority,
+                      retry_count, max_retries, error_message, started_at, completed_at,
+                      created_at, source_size, bytes_transferred
+        """
+        
+        results = db.execute_query(
+            query,
+            [
+                payload.job_type.value,
+                payload.source_path,
+                payload.dest_path,
+                payload.priority
+            ]
+        )
+        
+        if not results:
+            raise HTTPException(status_code=500, detail="Échec de la création du job")
+        
+        job = _row_to_archive_job_response(results[0])
+        logger.info(f"📦 Archive job created: {job.id} ({job.job_type}: {job.source_path})")
+        
+        return job
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur create_archive_job: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la création du job: {e}")
+
+
+@app.get("/api/archive/queue", response_model=ArchiveJobList)
+async def list_archive_jobs(
+    status: Optional[str] = Query(default=None, description="Filtrer par statut: pending, running, completed, failed, cancelled"),
+    job_type: Optional[str] = Query(default=None, description="Filtrer par type: copy, move, delete"),
+    priority: Optional[int] = Query(default=None, ge=1, le=10, description="Filtrer par priorité exacte"),
+    limit: int = Query(default=50, ge=1, le=1000, description="Nombre maximum de résultats"),
+    offset: int = Query(default=0, ge=0, description="Offset pour pagination"),
+    sort: str = Query(default="created_at", description="Champ de tri: created_at, priority, status"),
+    order: str = Query(default="desc", description="Ordre: asc, desc")
+):
+    """Liste les jobs d'archivage avec pagination et filtrage"""
+    try:
+        db = get_db_adapter()
+        
+        # Construire la clause WHERE
+        where_conditions = []
+        params = []
+        
+        if status:
+            where_conditions.append("status = %s::archive_job_status")
+            params.append(status)
+        
+        if job_type:
+            where_conditions.append("job_type = %s::archive_job_type")
+            params.append(job_type)
+        
+        if priority is not None:
+            where_conditions.append("priority = %s")
+            params.append(priority)
+        
+        where_clause = "WHERE " + " AND ".join(where_conditions) if where_conditions else ""
+        
+        # Validation du champ de tri
+        allowed_sort_fields = {"created_at", "priority", "status", "updated_at", "started_at"}
+        if sort not in allowed_sort_fields:
+            sort = "created_at"
+        
+        order_clause = "DESC" if order.lower() == "desc" else "ASC"
+        
+        # Requête pour les jobs
+        query = f"""
+            SELECT id, job_type::text, source_path, dest_path, status::text, priority,
+                   retry_count, max_retries, error_message, started_at, completed_at,
+                   created_at, source_size, bytes_transferred
+            FROM archive_jobs
+            {where_clause}
+            ORDER BY {sort} {order_clause}
+            LIMIT %s OFFSET %s
+        """
+        
+        params.extend([limit, offset])
+        results = db.execute_query(query, params)
+        
+        # Requête pour le total
+        count_query = f"""
+            SELECT COUNT(*) FROM archive_jobs {where_clause}
+        """
+        count_params = params[:-2]  # Exclure limit et offset
+        count_results = db.execute_query(count_query, count_params)
+        total = count_results[0][0] if count_results else 0
+        
+        jobs = [_row_to_archive_job_response(row) for row in results]
+        
+        return ArchiveJobList(jobs=jobs, total=total)
+        
+    except Exception as e:
+        logger.error(f"Erreur list_archive_jobs: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la récupération des jobs: {e}")
+
+
+@app.get("/api/archive/queue/{job_id}", response_model=ArchiveJobResponse)
+async def get_archive_job(job_id: str):
+    """Récupère les détails d'un job d'archivage spécifique"""
+    try:
+        db = get_db_adapter()
+        
+        query = """
+            SELECT id, job_type::text, source_path, dest_path, status::text, priority,
+                   retry_count, max_retries, error_message, started_at, completed_at,
+                   created_at, source_size, bytes_transferred
+            FROM archive_jobs
+            WHERE id = %s
+        """
+        
+        results = db.execute_query(query, [job_id])
+        
+        if not results:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} introuvable")
+        
+        return _row_to_archive_job_response(results[0])
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur get_archive_job: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la récupération du job: {e}")
+
+
+@app.delete("/api/archive/queue/{job_id}", response_model=ArchiveJobActionResult)
+async def cancel_archive_job(job_id: str):
+    """Annule un job d'archivage (si en attente ou en cours)"""
+    try:
+        db = get_db_adapter()
+        
+        # Vérifier le statut actuel
+        check_query = "SELECT status::text FROM archive_jobs WHERE id = %s"
+        check_results = db.execute_query(check_query, [job_id])
+        
+        if not check_results:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} introuvable")
+        
+        current_status = check_results[0][0]
+        
+        # Vérifier si le job peut être annulé
+        if current_status in ["completed", "failed", "cancelled"]:
+            return ArchiveJobActionResult(
+                job_id=job_id,
+                success=False,
+                message=f"Job déjà terminé avec statut '{current_status}'"
+            )
+        
+        # Annuler le job
+        update_query = """
+            UPDATE archive_jobs
+            SET status = 'cancelled',
+                completed_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        """
+        
+        db.execute_query(update_query, [job_id])
+        
+        logger.info(f"🚫 Archive job cancelled: {job_id}")
+        
+        return ArchiveJobActionResult(
+            job_id=job_id,
+            success=True,
+            message="Job annulé avec succès"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur cancel_archive_job: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de l'annulation du job: {e}")
+
+
+@app.get("/api/archive/queue/stats", response_model=ArchiveJobStats)
+async def get_archive_job_stats():
+    """Récupère les statistiques de la queue d'archivage"""
+    try:
+        db = get_db_adapter()
+        
+        # Utiliser la vue archive_jobs_stats si disponible
+        query = """
+            SELECT 
+                COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) as pending,
+                COALESCE(SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END), 0) as running,
+                COALESCE(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END), 0) as completed,
+                COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) as failed,
+                COALESCE(SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END), 0) as cancelled,
+                COALESCE(SUM(CASE WHEN status = 'pending' THEN COALESCE(source_size, 0) ELSE 0 END), 0) as total_size_pending,
+                COALESCE(SUM(bytes_transferred), 0) as total_size_transferred
+            FROM archive_jobs
+        """
+        
+        results = db.execute_query(query)
+        
+        if not results:
+            return ArchiveJobStats(
+                pending=0, running=0, completed=0, failed=0, cancelled=0,
+                total_size_pending=0, total_size_transferred=0
+            )
+        
+        row = results[0]
+        return ArchiveJobStats(
+            pending=row[0],
+            running=row[1],
+            completed=row[2],
+            failed=row[3],
+            cancelled=row[4],
+            total_size_pending=row[5],
+            total_size_transferred=row[6]
+        )
+        
+    except Exception as e:
+        logger.error(f"Erreur get_archive_job_stats: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la récupération des statistiques: {e}")
+
+
+@app.post("/api/archive/queue/{job_id}/retry", response_model=ArchiveJobActionResult)
+async def retry_archive_job(job_id: str):
+    """Réinitialise un job échoué pour qu'il soit réessayé"""
+    try:
+        db = get_db_adapter()
+        
+        # Vérifier le statut actuel
+        check_query = "SELECT status::text FROM archive_jobs WHERE id = %s"
+        check_results = db.execute_query(check_query, [job_id])
+        
+        if not check_results:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} introuvable")
+        
+        current_status = check_results[0][0]
+        
+        # Vérifier si le job peut être réessayé
+        if current_status not in ["failed", "cancelled"]:
+            return ArchiveJobActionResult(
+                job_id=job_id,
+                success=False,
+                message=f"Job ne peut pas être réessayé (statut: '{current_status}')"
+            )
+        
+        # Réinitialiser le job
+        update_query = """
+            UPDATE archive_jobs
+            SET status = 'pending',
+                retry_count = 0,
+                error_message = NULL,
+                started_at = NULL,
+                completed_at = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        """
+        
+        db.execute_query(update_query, [job_id])
+        
+        logger.info(f"🔄 Archive job reset for retry: {job_id}")
+        
+        return ArchiveJobActionResult(
+            job_id=job_id,
+            success=True,
+            message="Job réinitialisé pour retry"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur retry_archive_job: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors du retry du job: {e}")
+
+
+# ============================================================
+# T-ARCH-01: Transfer Worker Health Endpoint
+# ============================================================
+
+@app.get("/api/transfer/worker/health")
+async def get_transfer_worker_health():
+    """Récupère l'état de santé du transfer worker"""
+    try:
+        db = get_db_adapter()
+        
+        # Vérifier si des jobs sont en cours
+        running_count = db.execute_query(
+            "SELECT COUNT(*) FROM archive_jobs WHERE status = 'running'"
+        )[0][0]
+        
+        # Vérifier la taille de la queue
+        pending_count = db.execute_query(
+            "SELECT COUNT(*) FROM archive_jobs WHERE status = 'pending'"
+        )[0][0]
+        
+        # Calculer le taux de réussite récent (dernières 24h)
+        stats_query = """
+            SELECT 
+                COUNT(*) FILTER (WHERE status = 'completed') as completed,
+                COUNT(*) FILTER (WHERE status = 'failed') as failed,
+                COUNT(*) as total
+            FROM archive_jobs
+            WHERE updated_at > CURRENT_TIMESTAMP - INTERVAL '24 hours'
+        """
+        stats_results = db.execute_query(stats_query)
+        completed, failed, total = stats_results[0] if stats_results else (0, 0, 0)
+        
+        success_rate = completed / total if total > 0 else 1.0
+        
+        status = "healthy"
+        if failed > completed * 2:  # Plus de 2x d'échecs que de succès
+            status = "degraded"
+        if running_count == 0 and pending_count > 100:  # Queue bloquée
+            status = "unhealthy"
+        
+        return {
+            "status": status,
+            "running_jobs": running_count,
+            "pending_jobs": pending_count,
+            "success_rate_24h": success_rate,
+            "completed_24h": completed,
+            "failed_24h": failed,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Erreur get_transfer_worker_health: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la récupération de la santé du worker: {e}")
 
 
 if __name__ == "__main__":

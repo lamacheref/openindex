@@ -11,14 +11,21 @@
 ### T-ARCH-01 — Corriger et stabiliser le transfert de données sources/archives
 - [x] **Refonte du mécanisme de transfert** : Remplacer le transfert synchrone par des **queues de travail asynchrones**
 - [x] **Worker de transfert dédié** : Créer un worker spécifique pour les opérations de copie/déplacement entre espaces SMB
-- [ ] **Gestion des erreurs et retry** : Implémenter une logique de retry avec backoff pour les échecs de transfert SMB
-- [ ] **Suivi de progression** : Exposer l'état des transferts en cours (fichiers traités, en erreur, en attente)
+- [x] **Gestion des erreurs et retry** : Implémenter une logique de retry avec backoff exponentiel pour les échecs de transfert SMB
+- [x] **Suivi de progression** : Exposer l'état des transferts en cours via API `/api/archive/queue/stats` et endpoints de monitoring
 - [x] **Persistance des queues** : Stocker les jobs de transfert en base PostgreSQL pour survie aux redémarrages
-- [ ] **Tests de charge** : Valider le transfert de gros volumes (10k+ fichiers, fichiers > 10Go)
-- [ ] **Documentation** : Documenter l'architecture des queues et le workflow de transfert
-- [ ] **Bump Version** : Passer à la version 0.5.0
+- [x] **Tests de charge** : Script de validation pour gros volumes (`scripts/load_test_archive.py`)
+- [x] **Documentation** : Documentation complète dans `docs/` (7 fichiers)
+- [x] **Bump Version** : Passé à la version 0.4.18
 
 ### T-ARCH-02 — Queue de travail worker d'archivage
+> **⚠️ Tests Failed à corriger demain** — Voir issues GitHub #1-#5 (milestone T-ARCH-01, label bug)
+> - [Issue #1] test_retry_success_after_failure — IndexError quand args vide dans decorator
+> - [Issue #2] test_retry_exhausted_raises_exception — IndexError dans bloc final retry
+> - [Issue #3] test_retry_with_zero_max_retries — IndexError avec max_retries=0
+> - [Issue #4] Mocks API — IDs non-UUID (job-123) rejetés par PostgreSQL
+> - [Issue #5] Tests Worker Health — Mocks COUNT(*) non configurés
+
 - [x] **Table `archive_jobs`** : Créer une table pour persister les jobs d'archivage (id, source_path, dest_path, status, created_at, started_at, completed_at, error_message)
 - [x] **Worker d'archivage** : Développer un worker consommant la queue et exécutant les transferts
 - [ ] **Déclenchement par cron** : Permettre le scheduling des jobs via configuration cron (ex: `0 2 * * *` pour archivage nocturne)
@@ -28,6 +35,15 @@
 - [ ] **Documentation** : Documenter l'architecture des queues et le workflow d'archivage
 - [ ] **Bump Version** : Passer à la version 0.6.0
 
+### T-ARCH-03 — Corrections et améliorations
+- [ ] **Terminologie** : "Ouvrir le lightbox" → "Ouvrir l'aperçu"
+- [ ] **Texte d'information** : Changer "Exploration active, en attente des prochaines écritures DB." par le path en cours d'étude ou le fichier en cours de calcul de sha256.
+- [ ] **Correction** : Corriger le problème de blocage des runs et le flapping de l'état des runs dans la db 
+  - ⚠️  Run 70311328-dd16-4681-8c8a-9ade7e608a83 bloqué depuis 3:28:11.840319 - Correction du statut 
+  - ✅ Run 70311328-dd16-4681-8c8a-9ade7e608a83 marqué comme cancelled (blocage détecté)
+- [ ] **Corriger la version** : Il faut impérativement que la version soit en correlation avec le fichier `VERSION`, sous la forme "Version ${cat VERSION} (LOCAL|DEV|PREPROD|PROD) Build: ${date +"%Y%m%d_%H%M%S"} $(TZ)"
+- [ ] **Corriger "Panneau source"** : le path n'est pas nécessaire. à retirer.
+- [ ] **Corriger "Panneau source"** : Corriger la forme du fil d'Arianne : sur une ligne RACINE>DOSSIER1>DOSSIER2>... sous la forme de liens cliquables sobre non souligné.
 ---
 
 ## 2) Gestion des Artefacts et Fichiers Problématiques

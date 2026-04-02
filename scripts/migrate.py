@@ -44,8 +44,7 @@ class MigrationManager:
         """Récupère la liste des migrations déjà appliquées."""
         try:
             result = self.adapter.execute_query(
-                "SELECT version FROM schema_migrations ORDER BY version",
-                fetch=True
+                "SELECT version FROM schema_migrations ORDER BY version"
             )
             return [row[0] for row in result] if result else []
         except Exception:
@@ -175,8 +174,7 @@ class MigrationManager:
                     description TEXT,
                     checksum VARCHAR(64)
                 )
-                """,
-                fetch=False
+                """
             )
         except Exception as exc:
             print(f"⚠️  Erreur création table schema_migrations: {exc}")

@@ -18,7 +18,110 @@ from dataclasses import dataclass
 from enum import Enum
 
 import smbclient
-from smbprotocol.exceptions import SMBConnectionError, SMBAuthenticationError
+from smbprotocol.exceptions import SMBConnectionClosed, SMBAuthenticationError
+
+
+# Configuration du retry avec backoff exponentiel
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_BASE_DELAY = 1.0  # secondes
+DEFAULT_MAX_DELAY = 60.0  # secondes
+DEFAULT_EXPONENTIAL_BASE = 2.0
+
+
+def calculate_backoff_delay(
+    retry_count: int,
+    base_delay: float = DEFAULT_BASE_DELAY,
+    max_delay: float = DEFAULT_MAX_DELAY,
+    exponential_base: float = DEFAULT_EXPONENTIAL_BASE,
+    jitter: bool = True
+) -> float:
+    """
+    Calcule le délai de retry avec backoff exponentiel et jitter.
+    
+    Formule: min(base_delay * (exponential_base ^ retry_count), max_delay)
+    Avec jitter aléatoire pour éviter les thundering herds.
+    
+    Args:
+        retry_count: Numéro de la tentative (0-indexed)
+        base_delay: Délai de base en secondes
+        max_delay: Délai maximum en secondes
+        exponential_base: Base pour l'exponentiation
+        jitter: Ajouter un jitter aléatoire
+        
+    Returns:
+        Délai en secondes
+    """
+    # Calcul exponentiel
+    delay = base_delay * (exponential_base ** retry_count)
+    
+    # Cap à max_delay
+    delay = min(delay, max_delay)
+    
+    # Ajouter du jitter (±25% aléatoire) pour éviter les requêtes simultanées
+    if jitter:
+        jitter_factor = 0.75 + (random.random() * 0.5)  # 0.75 à 1.25
+        delay *= jitter_factor
+    
+    return delay
+
+
+def retry_with_backoff(
+    max_retries: int = DEFAULT_MAX_RETRIES,
+    base_delay: float = DEFAULT_BASE_DELAY,
+    max_delay: float = DEFAULT_MAX_DELAY,
+    retryable_exceptions: tuple = (SMBConnectionClosed, SMBAuthenticationError, OSError)
+):
+    """
+    Décorateur pour retry avec backoff exponentiel.
+    
+    Exemple:
+        @retry_with_backoff(max_retries=3)
+        def transfer_file(source, dest):
+            # code qui peut échouer
+            pass
+    """
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            
+            for attempt in range(max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except retryable_exceptions as exc:
+                    last_exception = exc
+                    
+                    if attempt < max_retries:
+                        delay = calculate_backoff_delay(
+                            retry_count=attempt,
+                            base_delay=base_delay,
+                            max_delay=max_delay
+                        )
+                        
+                        # Log le retry
+                        if args and hasattr(args[0], 'logger'):
+                            args[0].logger.warning(
+                                f"⚠️  {func.__name__} échoué (tentative {attempt + 1}/{max_retries + 1}): {exc}"
+                            )
+                            args[0].logger.info(f"⏳ Retry dans {delay:.2f}s...")
+                        else:
+                            print(f"⚠️  {func.__name__} échoué (tentative {attempt + 1}/{max_retries + 1}): {exc}")
+                            print(f"⏳ Retry dans {delay:.2f}s...")
+                        
+                        time.sleep(delay)
+                    else:
+                        # Dernière tentative échouée
+                        if args and hasattr(args[0], 'logger'):
+                            args[0].logger.error(
+                                f"❌ {func.__name__} échoué après {max_retries + 1} tentatives: {exc}"
+                            )
+                        else:
+                            print(f"❌ {func.__name__} échoué après {max_retries + 1} tentatives: {exc}")
+                        raise last_exception
+            
+            raise last_exception
+        
+        return wrapper
+    return decorator
 
 # Ajouter le dossier src au path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -237,8 +340,9 @@ class ArchiveTransferWorker:
             with self.lock:
                 self.active_transfers.pop(job.id, None)
 
+    @retry_with_backoff(max_retries=3, base_delay=1.0)
     def _copy_file(self, job: TransferJob) -> int:
-        """Copie un fichier via SMB avec suivi de progression."""
+        """Copie un fichier via SMB avec suivi de progression et retry."""
         source_size = job.source_size or 0
         bytes_copied = 0
 
@@ -270,8 +374,9 @@ class ArchiveTransferWorker:
 
         return bytes_copied
 
+    @retry_with_backoff(max_retries=3, base_delay=1.0)
     def _move_file(self, job: TransferJob) -> int:
-        """Déplace un fichier (copie + suppression source)."""
+        """Déplace un fichier (copie + suppression source) avec retry."""
         self.logger.info(f"📄 Déplacement: {job.source_path} -> {job.dest_path}")
 
         # Copier d'abord
@@ -283,8 +388,9 @@ class ArchiveTransferWorker:
 
         return bytes_moved
 
+    @retry_with_backoff(max_retries=3, base_delay=1.0)
     def _delete_file(self, job: TransferJob) -> int:
-        """Supprime un fichier."""
+        """Supprime un fichier avec retry."""
         self.logger.info(f"🗑️  Suppression: {job.source_path}")
         smbclient.remove(job.source_path)
         return 0

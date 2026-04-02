@@ -236,11 +236,21 @@ COMMENT ON VIEW file_size_distribution IS 'Distribution des fichiers par taille'
 -- T-ARCH-01 : Table des jobs d'archivage/transfert (Queue)
 -- ============================================================
 
--- Types de job possibles
-CREATE TYPE archive_job_type AS ENUM ('copy', 'move', 'delete');
+-- Types de job possibles (création conditionnelle)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'archive_job_type') THEN
+        CREATE TYPE archive_job_type AS ENUM ('copy', 'move', 'delete');
+    END IF;
+END $$;
 
--- Statuts possibles pour un job
-CREATE TYPE archive_job_status AS ENUM ('pending', 'running', 'completed', 'failed', 'cancelled');
+-- Statuts possibles pour un job (création conditionnelle)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'archive_job_status') THEN
+        CREATE TYPE archive_job_status AS ENUM ('pending', 'running', 'completed', 'failed', 'cancelled');
+    END IF;
+END $$;
 
 -- Table des jobs d'archivage avec persistance
 CREATE TABLE IF NOT EXISTS archive_jobs (
