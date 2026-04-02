@@ -9,18 +9,18 @@
 ## 1) Priorité Critique — Worker de Transfert et Queues 
 
 ### T-ARCH-01 — Corriger et stabiliser le transfert de données sources/archives
-- [ ] **Refonte du mécanisme de transfert** : Remplacer le transfert synchrone par des **queues de travail asynchrones**
-- [ ] **Worker de transfert dédié** : Créer un worker spécifique pour les opérations de copie/déplacement entre espaces SMB
+- [x] **Refonte du mécanisme de transfert** : Remplacer le transfert synchrone par des **queues de travail asynchrones**
+- [x] **Worker de transfert dédié** : Créer un worker spécifique pour les opérations de copie/déplacement entre espaces SMB
 - [ ] **Gestion des erreurs et retry** : Implémenter une logique de retry avec backoff pour les échecs de transfert SMB
 - [ ] **Suivi de progression** : Exposer l'état des transferts en cours (fichiers traités, en erreur, en attente)
-- [ ] **Persistance des queues** : Stocker les jobs de transfert en base PostgreSQL pour survie aux redémarrages
+- [x] **Persistance des queues** : Stocker les jobs de transfert en base PostgreSQL pour survie aux redémarrages
 - [ ] **Tests de charge** : Valider le transfert de gros volumes (10k+ fichiers, fichiers > 10Go)
 - [ ] **Documentation** : Documenter l'architecture des queues et le workflow de transfert
 - [ ] **Bump Version** : Passer à la version 0.5.0
 
 ### T-ARCH-02 — Queue de travail worker d'archivage
-- [ ] **Table `archive_jobs`** : Créer une table pour persister les jobs d'archivage (id, source_path, dest_path, status, created_at, started_at, completed_at, error_message)
-- [ ] **Worker d'archivage** : Développer un worker consommant la queue et exécutant les transferts
+- [x] **Table `archive_jobs`** : Créer une table pour persister les jobs d'archivage (id, source_path, dest_path, status, created_at, started_at, completed_at, error_message)
+- [x] **Worker d'archivage** : Développer un worker consommant la queue et exécutant les transferts
 - [ ] **Déclenchement par cron** : Permettre le scheduling des jobs via configuration cron (ex: `0 2 * * *` pour archivage nocturne)
 - [ ] **Configuration dans la DB** : Stocker les règles de scheduling et les paramètres d'archivage en base
 - [ ] **Endpoint API** : Exposer `/api/archive/queue` pour créer/annuler/lister les jobs d'archivage
@@ -163,6 +163,10 @@ Pour chaque tâche T-XXX :
 - Phase J4 : `124140d`, `17f5806`, `40c691b`, `ae508db`
 - Phase J5 : `1a2407a`, `f8fe00c`, `e9043f9`, `0ebbb4f`, `7bad65e`
 - Corrections CI : `480079d`, `0523dd8`
+- Migration système J6 : `pending`
+
+**Commit récents J6 (à compléter) :**
+- T-ARCH-01: Système de migrations et table archive_jobs - Commit: pending
 
 ### Phase J4 — Migration PostgreSQL (Terminée)
 - [x] **T-01** — Clôture CMD-12 avec preuves (`124140d`)
