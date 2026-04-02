@@ -1,302 +1,174 @@
-# TODO OpenIndex — suite post-commando (J4 -> J5)
+# TODO OpenIndex — Phase J6 : Data Lifecycle & Archivage Automatique
 
 ## Objectif
 
-Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par preuves**, puis enclencher J5 (qualité & observabilité) avec critères de sortie mesurables.
+**Stabiliser le transfert de données entre sources et archives** via des **queues de transferts sur worker spécifique**, puis implémenter un **système complet de gestion du cycle de vie des données** avec archivage automatique configurable, recherche avancée et authentification utilisateurs.
 
 ---
 
-## 1) Priorités immédiates (Semaine en cours)
+## 1) Priorité Critique — Worker de Transfert et Queues
 
-- [x] **T-01 — Clôturer CMD-12 (checklist release commando) avec preuves**
-  - [x] Vérifier CI verte sur PostgreSQL (backend unique).
-  - [x] Migration de DB non requise : re-crawl complet prévu sur zone de test massivement modifiée avec PostgreSQL.
-  - [x] Vérifier bench comparatif publié avec PostgreSQL.
-  - [x] Vérifier rollback relu par un pair.
-  - [x] Mettre à jour `CHANGELOG.md` pour le lot de clôture.
-  - [x] Commit: `124140d`
+### T-ARCH-01 — Corriger et stabiliser le transfert de données sources/archives
+- [ ] **Refonte du mécanisme de transfert** : Remplacer le transfert synchrone par des **queues de travail asynchrones**
+- [ ] **Worker de transfert dédié** : Créer un worker spécifique pour les opérations de copie/déplacement entre espaces SMB
+- [ ] **Gestion des erreurs et retry** : Implémenter une logique de retry avec backoff pour les échecs de transfert SMB
+- [ ] **Suivi de progression** : Exposer l'état des transferts en cours (fichiers traités, en erreur, en attente)
+- [ ] **Persistance des queues** : Stocker les jobs de transfert en base PostgreSQL pour survie aux redémarrages
+- [ ] **Tests de charge** : Valider le transfert de gros volumes (10k+ fichiers, fichiers > 10Go)
 
-- [x] **T-02 — Décision formelle Go/No-Go J4**
-  - [x] Appliquer les critères de `docs/phases/J4_MIGRATION.md`.
-  - [x] Décision rédigée le `2026-03-18` dans `docs/2026-03-18_j4_go-no-go.md`.
-  - [x] Décision retenue: `Go`.
-  - [x] Preuves: recrawl contrôlé, benchmark 3 runs stable, rollback drill validé, CI GitHub PostgreSQL verte sur PR `#41`.
-  - [x] Commit: `17f5806`
-
-- [x] **T-03 — Figer la baseline technique J4**
-  - [x] Confirmer PostgreSQL comme backend de données unique dans la doc principale.
-  - [x] Aligner `README.md`, `README.stack.md`, `ROADMAP.md` et ce `TODO.md`.
-  - [x] Supprimer les ambiguïtés "actif vs legacy" dans les parcours opératoires.
-  - [x] État propagé: `README.md`, `README.stack.md`, `ROADMAP.md`, `TODO.md`.
-  - [x] Commit: `40c691b`
+### T-ARCH-02 — Queue de travail worker d'archivage
+- [ ] **Table `archive_jobs`** : Créer une table pour persister les jobs d'archivage (id, source_path, dest_path, status, created_at, started_at, completed_at, error_message)
+- [ ] **Worker d'archivage** : Développer un worker consommant la queue et exécutant les transferts
+- [ ] **Déclenchement par cron** : Permettre le scheduling des jobs via configuration cron (ex: `0 2 * * *` pour archivage nocturne)
+- [ ] **Configuration dans la DB** : Stocker les règles de scheduling et les paramètres d'archivage en base
+- [ ] **Endpoint API** : Exposer `/api/archive/queue` pour créer/annuler/lister les jobs d'archivage
+- [ ] **UI de monitoring** : Afficher la file d'attente des transferts dans l'interface (en cours, complétés, échoués)
 
 ---
 
-## 2) Exécution J4 (priorités restantes)
+## 2) Gestion des Artefacts et Fichiers Problématiques
 
-- [x] **T-04 — Rétablir une preuve J4 exploitable sur PostgreSQL**
-  - [x] Le `Go` J4 du `2026-03-18` reste inutilisable tant qu'un recrawl complet fiable n'a pas produit de nouvelle preuve versionnée.
-  - [x] Capitaliser le crawl complet en cours sur `\\172.16.252.34\Public\SMIDEN` et vérifier sa finalisation sans erreur bloquante.
-  - [x] Corrigé le `2026-03-19` côté code: les nouveaux runs PostgreSQL peuvent désormais ignorer les fichiers déjà crawlés au même chemin quand `size` et `last_modified` sont inchangés, ou quand `last_modified` n'est pas postérieur au dernier crawl `completed` de l'espace; commit `ae508db`, effet complet après redéploiement du crawler.
-  - [x] Livré le `2026-03-19` via `docs/artifacts/j4_recrawl_live_snapshot_2026-03-19.json`: volumétrie réelle observée, découverte stabilisée, `0` erreur bloquante et rapport J4/Go-No-Go révisés.
-  - [x] La completion totale du traitement d'intégrité n'est plus portée comme bloqueur J4; elle est transférée au cycle J5 avec nouveaux tests dédiés.
+### T-ART-01 — Listings filtrés des artefacts
+- [ ] **Catégories d'artefacts** : Implémenter les filtres suivants dans la page Artefacts :
+  - [ ] **Doublons** : Fichiers avec même checksum présents dans plusieurs emplacements
+  - [ ] **Gros fichiers** : Fichiers dépassant un seuil configurable (défaut: 1 Go)
+  - [ ] **Anciens** : Fichiers non modifiés depuis une date configurable (défaut: 2 ans)
+  - [ ] **Inutilisés** : Fichiers non lus depuis une date configurable (défaut: 1 an, si métrique dispo)
+- [ ] **KPI par catégorie** : Afficher le nombre de fichiers et la volumétrie totale pour chaque catégorie
+- [ ] **Actions de masse** : Sélection multiple + actions (supprimer, ignorer, archiver)
 
-- [x] **T-05 — Validation de performance PostgreSQL sur base recrawlée**
-  - [x] Rejouer le benchmark PostgreSQL sur endpoints critiques après le recrawl complet de référence.
-  - [x] Vérifier le respect des seuils P95 annoncés avec PostgreSQL.
-  - [x] Publier les résultats dans `docs/` avec conclusion explicite (OK / NOK) sur la base active PostgreSQL.
-  - [x] Commande exécutée : `docker compose exec api python /app/scripts/benchmark_dual_db.py --base-url http://localhost:8000 --samples 30 --runs 3 --output /tmp/bench_postgresql_active_2026-03-26.json`
-  - [x] Artefacts : `docs/artifacts/bench_postgresql_active_2026-03-26.json`, `docs/bench_postgresql_active_2026-03-26.md`
-  - [x] Conclusion : P95 `/api/stats` ≈ 56 ms / `/api/files` ≈ 66 ms stable sur les trois runs ⇒ OK.
+### T-ART-02 — Détail des doublons avec navigation
+- [ ] **Liste des doublons enrichie** : Pour chaque fichier en doublon, afficher :
+  - [ ] Tous les chemins où le fichier est présent (avec liens cliquables)
+  - [ ] Taille, date de dernière modification, checksum
+  - [ ] Espace/SMB de chaque occurrence
+- [ ] **Navigation facile** : Bouton "Voir dans l'explorateur" pour chaque occurrence
+- [ ] **Comparaison côte à côte** : Visualiser les métadonnées des différentes occurrences
 
-- [ ] **T-06 — Durcir la CI PostgreSQL de référence**
-  - [ ] Revoir les PKI sur la préproduction (sur le serveur).
-  - [x] Rendre obligatoire le passage des jobs CI PostgreSQL avant merge.
-  - [x] Ajouter la collecte d'artefacts minimaux en cas d'échec (logs API/tests).
-  - [x] Documenter le chemin de diagnostic rapide en cas de pipeline rouge.
-  - [x] Workflow durci localement le `2026-03-26` : le job `api-tests-postgresql` échoue désormais si PostgreSQL n'est pas joignable ou si la connexion SQL échoue; la collecte d'artefacts `api-tests-postgresql-diagnostics-*` est systématique.
-  - [x] Références : `scripts/run_release_gate.sh`, `docs/operations/CI_POSTGRESQL_GATE.md`, `.github/workflows/docker-stack.yml`.
-  - [ ] Point d'application restant hors dépôt : déclarer `api-tests-postgresql` en `required status check` sur les branches protégées GitHub (`main`, `develop`).
-
-- [x] **T-07 — Drill de rollback J4**
-  - [x] Simuler un incident post-migration PostgreSQL.
-  - [x] Exécuter le rollback complet avec chronométrage.
-  - [x] Capitaliser la procédure réelle dans `docs/operations/EXPLOITATION.md`.
-  - [x] Livré le `2026-03-18` via `docs/artifacts/j4_rollback_drill_2026-03-18.json`; pas de nouveau chantier J4 ouvert tant qu'un nouveau contexte de référence ne l'exige pas.
+### T-ART-03 — Filtres configurables
+- [ ] **Configuration des seuils** : Interface pour modifier dynamiquement :
+  - [ ] Seuil "Gros fichiers" (Mo/Go)
+  - [ ] Seuil "Anciens" (jours/mois/années depuis dernière modif)
+  - [ ] Seuil "Inutilisés" (jours/mois/années depuis dernier accès, si disponible)
+- [ ] **Sauvegarde des préférences** : Persister les filtres utilisateur en base
+- [ ] **Préréglages** : Fournir des presets (Conservateur, Standard, Agressif)
 
 ---
 
-## 3) Préparation J5 (qualité & observabilité)
+## 3) Recherche et Indexation
 
-- [x] **T-08 — Définir les SLI/SLO opérationnels minimum**
-  - [x] Disponibilité API, latence P95, taux d'erreurs, temps de recovery.
-  - [x] Seuils d'alerte + responsables + fréquence de revue.
-  - [x] Livré le `2026-03-26` via `docs/operations/J5_SLI_SLO.md`.
-  - [x] Références de preuve : benchmark actif `docs/bench_postgresql_active_2026-03-26.md` et gate CI PostgreSQL `docs/operations/CI_POSTGRESQL_GATE.md`.
+### T-SEARCH-01 — Espace de sommaire et moteur de recherche
+- [ ] **Page "Sommaire"** : Vue d'ensemble de tous les fichiers indexés avec :
+  - [ ] Statistiques globales (total fichiers, volumétrie, répartition par type)
+  - [ ] Répartition par espace SMB
+  - [ ] Graphiques d'évolution temporelle
+- [ ] **Moteur de recherche** : Implémenter la recherche full-text avec :
+  - [ ] Recherche par nom de fichier (fuzzy search supportant wildcards)
+  - [ ] Recherche par chemin (path contains)
+  - [ ] Filtres combinés (type, taille min/max, date de création/modification)
+  - [ ] Recherche dans le contenu (phase 2 : indexation des métadonnées Office/PDF)
+- [ ] **Index Elasticsearch/OpenSearch (optionnel)** : Pour les grandes volumétries (> 1M fichiers)
 
-- [x] **T-09 — Pack de tests critiques "release gate"**
-  - [x] API smoke critique avec PostgreSQL.
-  - [x] Non-régression frontend structurelle.
-  - [x] Vérification DB explain / requêtes clés.
-  - [x] Exécution via une commande unique documentée.
-  - [x] Livré le `2026-03-26` avec `scripts/run_release_gate.sh` et `docs/operations/J5_RELEASE_GATE.md`.
-  - [x] Couverture pack: smoke API, DB explain, feature flag PostgreSQL et non-régression frontend structurelle.
-  - [x] Intégration CI branchée sur `api-tests-postgresql`.
-
-- [x] **T-10 — Observabilité minimale exploitable**
-  - [x] Standardiser les logs applicatifs (format, niveau, corrélation).
-  - [x] Définir un dashboard santé + une vue incidents.
-  - [x] Définir la procédure d'escalade en cas de dérive.
-  - [x] Livré le `2026-03-26` avec la vue opératoire `GET /api/operations/status` dans `src/api/main.py`.
-  - [x] Logs API standardisés via `OPENINDEX_LOG_LEVEL` et format horodaté homogène.
-  - [x] Références opératoires: `docs/operations/J5_OBSERVABILITY_BASELINE.md` et `docs/operations/EXPLOITATION.md`.
-
-- [ ] **T-14 — Revoir l'UI pour le pilotage des tests et crawls**
-  - [x] Vocabulaire exploration/explorateur aligné dans l'UI (livré le `2026-03-18`).
-  - [x] Logs réels du worker dans l'UI (livré le `2026-03-18`).
-  - [x] Progression basée sur le volume découvert/traité (livré le `2026-03-18`).
-  - [x] Exposition des vraies files du worker (Dossiers, Fichiers, Somme de contrôle, Gros fichiers) (livré le `2026-03-18`).
-  - [x] Actions arrêter/supprimer sur les runs récents (livré le `2026-03-18`).
-  - [x] Garde-fou un seul run actif par espace (livré le `2026-03-18`).
-  - [x] Transformer le tableau de bord en poste opérateur actif: espace courant, dernier lancement, état du crawl, KPI temps réel, progression et journal (livré le `2026-03-18`).
-  - [x] ~~Implémenter le protocole de pré-estimation volumétrique avant exploration~~ — Annulé en raison de la charge serveur excessive. Le pilotage repose désormais sur les métriques runtime et le journal réel.
-  - [x] Corriger les finitions demandées dans `docs/definition_ui.md`:
-    - [x] Nom distinctif d'espace.
-    - [x] "Non défini" si dernier lancement absent.
-    - [x] Zone version réduite.
-    - [x] Suppression du sous-titre inutile.
-    - [x] Unités en octets (et non kelvins).
-    - [x] Bouton logs déplacé sous la progression et désactivé si le crawler est inactif.
-  - [x] Déporter les explications de conception ou limites techniques hors de l'interface vers `TODO.md` ou la documentation.
-  - [x] Rendre visibles les statuts en cours, succès, échecs, durée, artefacts et journaux utiles directement dans l'UI finale.
-  - [x] Supprimer les vues de démonstration ou décoratives qui ne servent pas l'exploitation réelle.
-  - [x] Prévoir un écran de suivi temps réel orienté exploitation plutôt qu'une simple consultation statique.
-  - [x] Rendre actifs les éléments de shell:
-    - [x] Cloche de notifications.
-    - [x] Engrenage de configuration.
-    - [x] Bouton "Piloter le crawl".
-  - [x] Implémenter l'ouverture de configuration en overlay latéral droite -> gauche pour:
-    - [x] Espaces crawler.
-    - [x] Gestion de la base.
-    - [ ] Inscription des utilisateurs (admin) — en attente d'authentification applicative.
-    - [ ] Profil utilisateur — en attente d'authentification applicative.
-  - [x] Implémenter "Piloter le crawl" sous forme de lightbox permettant de lancer, forcer ou arrêter un crawl.
-
-- [x] **T-15a — Corriger les problèmes identifiés dans l'interface utilisateur**
-  - [x] Corriger l'entête fixe au scroll (déjà implémenté : `fixed top-0 z-50`)
-  - [x] Mettre à jour la barre de gauche avec les informations essentielles (espace, dernier lancement, état moteur)
-  - [x] Ajouter les sections manquantes dans le menu de gauche (Dashboard, Explorateur, Artefacts)
-  - [x] Mettre à jour le tableau de bord avec les fonctionnalités dynamiques et les logs
-  - [x] Implémenter un explorateur de fichiers classique (double panneau SMB, navigation, sélection, archivage)
-  - [x] Compléter la page de traitement des artefacts (listes dynamiques, filtres par catégorie, actions de masse)
-  - [x] Rendre accessible la configuration via l'engrenage (overlay latéral avec sections crawler, DB, profil, monitoring)
-  - [x] Activer les notifications (cloche active avec compteur, détection runs en échec/bloqués)
-  - [x] Implémenter le contrôle du crawl via le bouton "Piloter le crawl" (lightbox avec état, lancement, forçage, arrêt)
-  - [x] Corriger les incohérences dans les unités de mesure et les formats de date (formatBytes avec unités o/ko/Mo/Go/To/Po, formatDate avec fuseau configurable)
-  - [x] Corriger le système de prévisualisation des fichiers Office (endpoint `/api/file-preview` avec rendu HTML DOCX/XLSX/PPTX/ODT/ODS/ODP)
-  - [x] Corriger le rafraîchissement des données en temps réel (polling intelligent avec snapshot comparison toutes les 10s)
-  - [x] Corriger le système de gestion des erreurs SMB (panneaux d'erreurs dédiés + notifications, implémenté le `2026-04-01`)
-  - [x] Corriger la synchronisation des runs (bouton synchroniser + rechargement automatique API)
-  - [x] Corriger le système de notification (gestion des notifications par niveau info/warning/error)
-  - [x] Corriger la gestion des espaces d'archivage (panneau archivage double panneau implémenté)
-  - [x] Corriger le système de prévisualisation des fichiers (lightbox image/vidéo/PDF/Office)
-  - [x] Corriger la gestion des doublons et des fichiers problématiques (badges visuels doublons, gros fichiers, anciens)
-  - [x] Corriger le système de logs pour le crawler (zone de logs runtime avec textarea)
-  - [x] Corriger la gestion des configurations des espaces crawler (CRUD complet dans overlay configuration)
-  - [x] Corriger la gestion de la base de données (Explain/Analyze DB implémenté)
-  - [x] Corriger la gestion des utilisateurs (placeholder prêt, en attente d'authentification applicative)
-  - [x] Corriger la gestion du profil utilisateur (fuseau horaire configurable)
-  - [x] Corriger la gestion des versions (affichage version/commit dans le footer)
-  - [x] Corriger la gestion des licences (affichage licence dans le footer)
-  - [x] Corriger la synchronisation d'état crawler : le crawler met à jour le statut `running` en base toutes les 15s via `update_crawl_run_status`
-  - [x] Corriger l'erreur de nettoyage des fichiers supprimés : `get_files_by_config` utilise `RealDictCursor` et `crawl_config_id::text`
-  - [x] Corriger le statut final "cancelled" : la logique évalue d'abord `user_cancelled` avant toute autre condition
-
-- [x] **T-15 — Concevoir l'Explorateur de fichiers double panneau**
-  - [x] Définir le comportement cible type Explorateur Windows / Dolphin.
-  - [x] Prévoir navigation arborescente, sélection, transfert inter-panneaux et actions contextuelles.
-  - [x] Déterminer les endpoints API nécessaires pour une navigation hiérarchique et des opérations de déplacement/copie pilotées.
-  - [x] Prévoir le mode d'entrée dans le menu en cohérence avec les arbitrages de shell validés dans `docs/definition_ui.md`.
-  - [x] Premier socle livré le `2026-03-30` dans `frontend/index.html` et `src/api/main.py` :
-    - [x] Double panneau SMB indexé, panneau source lié à l'espace actif, panneau archivage lié à un second espace configuré.
-    - [x] Navigation par répertoire, remontée au parent, sélection et rafraîchissement.
-  - [x] Actions déjà disponibles :
-    - [x] Archivage fichier par copie ou déplacement entre espaces configurés.
-    - [x] Endpoint de lecture de fichier SMB.
-    - [x] Lightbox PDF/images/vidéos et reconnaissance des formats bureautiques.
-  - [x] Couverture technique déjà livrée :
-    - [x] Endpoints `/api/explorer/items`, `/api/file-content` et `/api/archive/file`, plus tests API/structure frontend associés.
-  - [x] Dette restante court terme :
-    - [x] Rendu bureautique complet dans le lightbox — infrastructure deja en place dans l'API :
-      - DOCX/DOC : `_preview_docx` (extraction XML paragraphs)
-      - ODT : `_preview_odt` (extraction XML content)
-      - PPTX/ODP : `_preview_pptx` / `_preview_odp` (slides texte)
-      - XLSX/XLS : `_preview_xlsx` via openpyxl (tableaux HTML)
-      - ODS : `_preview_ods` (tableaux HTML XML content)
-      - Endpoint `/api/file-preview` expose le rendu HTML pour le lightbox frontend.
-  - [x] Compléments livrés le `2026-03-30` :
-    - [x] Vérification SHA-256 post-copie avant suppression source.
-    - [x] Option de laisser un lien côté source.
-    - [x] Mode overwrite piloté pour les conflits de destination.
-  - [x] Dette restante moyen terme :
-    - [x] Navigation SMB live hors index (endpoint `/api/explorer/live-items` ajouté le `2026-03-31`, PR #62).
-    - [x] Opérations de masse (sélection multiple + archivage groupé implémentés le `2026-04-01`).
-    - [x] Menu contextuel type Explorateur Windows/Dolphin (implémenté le `2026-04-01`).
-    - [x] Meilleur traitement des erreurs SMB côté UI (panneaux d'erreurs dédiés + notifications, implémenté le `2026-04-01`).
-  - [x] PR fix/explorateur créée le `2026-03-31` avec version `0.4.1` (bump fix).
-
-- [ ] **T-13 — Préparer la configuration multi-repository**
-  - [ ] Définir le modèle de configuration pour plusieurs racines SMB.
-  - [ ] Déterminer la stratégie d'identification par source/référentiel.
-  - [ ] Adapter la doc opératoire pour éviter les recrawls monolithiques sur base active.
-
-- [x] **T-17 — Corriger les deadlocks PostgreSQL** (2026-04-02)
-  - [x] Problème identifié : conflits de verrouillage exclusif entre `ALTER TABLE` et `SELECT/UPDATE` sur tables `crawl_runs` et `files`
-  - [x] Solution implémentée :
-    - [x] Vérification préalable de l'existence des colonnes avant `ALTER TABLE` (évite verrous exclusifs inutiles)
-    - [x] `SET LOCAL lock_timeout = '5s'` pour éviter les attentes infinies
-    - [x] Rétro-remplissage conditionnel (uniquement si des valeurs NULL existent)
-    - [x] Gestion de `LockNotAvailable` avec rollback et log (ne bloque pas le démarrage de l'API)
-  - [x] Fichiers modifiés : `src/postgres_adapter.py`, `src/api/main.py`
-  - [x] Correction warning : séquence d'échappement invalide `\s` dans docstring (main.py ligne 348)
-  - [x] Correction tests : ajout méthode `rollback()` aux FakeConn dans `tests/test_db_backend_feature_flag.py`
-  - [x] Tests unitaires créés : `tests/test_deadlock_prevention.py` (8 tests)
-  - [x] Commit fix : `e9043f9` sur branche `Devel`
-  - [x] Commit tests : `0ebbb4f` sur branche `Devel`
-  - [x] Commit corrections CI : `[à compléter]` sur branche `Devel`
-  - [x] Push vers GitHub : https://github.com/lamacheref/openindex/pull/new/Devel
-  - [x] Tests CI : `test_db_backend_feature_flag.py` et `test_deadlock_prevention.py` passent
-
-- [ ] **T-16 — Concevoir la page de traitements des artefacts**
-  - [ ] Définir les catégories d'artefacts traitables: temporaires Office, doublons, fichiers système, archives obsolètes.
-  - [ ] Prévoir KPI dédiés, liste filtrable, sélection multiple et actions de masse.
-  - [ ] Déterminer les règles métiers entre suppression, ignorance et archivage.
-  - [ ] Prévoir les actions unitaires et massives: supprimer, ignorer, archiver, sélectionner tout.
-  - [ ] Implémenter la page dans le code
-  - [ ] Tester la page
-  - [ ] Corriger les bugs identifiés pendant les tests
+### T-INDEX-01 — Exclusion d'indexation par paths
+- [ ] **Configuration d'exclusions** : Permettre de définir des patterns de chemins à exclure :
+  - [ ] Exclusion de chemins imbriqués (si `/A/B` est indexé, exclure automatiquement `/A/B/C` d'autres espaces)
+  - [ ] Exclusions globales (ex: `*/node_modules/*`, `*/.git/*`, `*/temp/*`)
+  - [ ] Exclusions par espace (spécifiques à un crawl_config)
+- [ ] **Détection des overlaps** : Algorithme détectant automatiquement les chevauchements entre espaces configurés
+- [ ] **UI de configuration** : Interface pour gérer les patterns d'exclusion avec validation
 
 ---
 
-## 4) Dette documentaire à résorber
+## 4) Archivage Automatique Intelligent
 
-- [ ] **T-11 — Nettoyage docs historiques vs référence active**
-  - [ ] Marquer explicitement les documents legacy.
-  - [ ] Ajouter un index "où trouver la vérité" dans `docs/`.
-  - [ ] Réduire les doublons roadmap/projet/todo.
-
-- [ ] **T-12 — Gouvernance de preuve**
-  - [ ] Chaque item clos doit pointer vers: commande exécutée, artefact, commit.
-  - [ ] Remplacer tout marqueur implicite par une preuve vérifiable.
-
----
-
-## Définition de terminé (DoD) pour chaque tâche
-
-- [ ] Une preuve d'exécution est versionnée (log, JSON, capture, rapport).
-- [ ] Les impacts doc sont propagés aux fichiers de référence.
-- [ ] Un risque principal et son plan de mitigation sont notés.
-- [ ] La tâche est traçable dans l'historique Git (commit clair).
+### T-AUTO-01 — Automatisme d'archivage avec règles
+- [ ] **Moteur de règles** : Système permettant de créer des règles d'archivage combinant :
+  - [ ] **Type de fichier** : Extensions (ex: `.tmp`, `.log`, `.old`)
+  - [ ] **Taille** : Supérieure à X Mo OU inférieure à Y Ko
+  - [ ] **Date** : Création avant date X, modification avant date Y
+  - [ ] **Inactivité** : Non accédé depuis Z jours (si métrique disponible)
+  - [ ] **Pattern de nom** : Regex sur le nom (ex: `backup_*.zip`, `temp_*`)
+- [ ] **Actions des règles** : Pour chaque règle, définir l'action :
+  - [ ] Déplacer vers espace d'archivage
+  - [ ] Supprimer (avec confirmation pour certains types)
+  - [ ] Marquer pour revue manuelle
+- [ ] **Simulation** : Mode "dry-run" montrant ce qui serait archivé sans exécuter
+- [ ] **Historique** : Traçabilité de tous les archivages automatiques
 
 ---
 
-## Notes de pilotage
+## 5) Authentification et Sécurité
 
-- Priorisation: **fiabilité > migration > confort**.
-- Pas de nouvelle feature produit tant que T-01 à T-07 ne sont pas clôturées.
-- Revue hebdo obligatoire des KPI (pipeline, flakiness, perf, recovery).
+### T-AUTH-01 — Authentification des utilisateurs
+- [ ] **Système d'authentification** : Implémenter l'authentification utilisateur avec :
+  - [ ] Login/password (hash bcrypt/Argon2)
+  - [ ] Sessions JWT avec refresh tokens
+  - [ ] Support SSO optionnel (LDAP/Active Directory pour environnement entreprise)
+- [ ] **Gestion des utilisateurs** :
+  - [ ] CRUD utilisateurs (admin uniquement)
+  - [ ] Profils utilisateur avec fuseau horaire, préférences
+  - [ ] Activation/désactivation de comptes
+- [ ] **Autorisations** :
+  - [ ] Rôles (Admin, Opérateur, Lecteur)
+  - [ ] Permissions granulaires (lancer crawl, supprimer fichiers, configurer espaces)
+- [ ] **Protection des endpoints** : Middleware d'authentification sur toutes les API sensibles
+- [ ] **UI de connexion** : Page de login et gestion de session
 
 ---
 
-## Annexe — Priorités opérateur clôturées
+## 6) Définition de Terminée (DoD)
 
-- [x] **P-05 — Dettes de stabilisation opérateur**
-  - [x] Corrigé le `2026-03-19`: la lecture principale de progression s'appuie désormais sur le runtime réel du run actif; la dette résiduelle porte surtout sur les cas de refresh incohérent entre blocs.
-  - [x] Corrigé le `2026-03-19`: le bloc `Runs récents` n'affiche plus `Aucun run enregistré` quand un état actif est connu par `monitoring`; un message de désynchronisation explicite prend le relais.
-  - [x] Corrigé le `2026-03-19`: les runs bloqués trop longtemps en `cancelling` sont désormais réconciliés automatiquement vers `cancelled`.
-  - [x] Corrigé le `2026-03-19`: les connexions WebSocket fermées sont purgées proprement avant les envois suivants, ce qui supprime le bruit `Cannot call "send" once a close message has been sent.`.
-  - [x] Clôturé le `2026-03-19`: le prototype `estimate-{hash}` est abandonné explicitement; aucune archive dédiée supplémentaire n'est requise dans le chemin nominal.
+Pour chaque tâche T-XXX :
+- [ ] Code implémenté et testé (unit tests + tests d'intégration)
+- [ ] Documentation technique mise à jour (README, docstrings)
+- [ ] Documentation opérationnelle mise à jour (EXPLOITATION.md)
+- [ ] UI/UX cohérente avec le reste de l'application
+- [ ] Migrations DB créées si nécessaire
+- [ ] Preuve de fonctionnement (logs, captures d'écran, ou démonstration)
+- [ ] Commit clair et traçable dans Git
 
-- [x] **P-04 — Statut moteur et commandes opérateur explicites**
-  - [x] Garder une barre de progression pour la quantité de données inventoriées.
-  - [x] Ajouter des gommettes de couleur pour l'état moteur: arrêté, estimation, exploration, erreur, terminé.
-  - [x] Basculer le bouton principal de `Lancer` vers `Arrêter` quand une exploration est en cours.
-  - [x] Livré via les commits `1a2407a` et `f8fe00c`.
+---
 
-- [x] **P-03 — Traitement asynchrone sans limite artificielle**
-  - [x] Supprimer les limites de taille des queues de traitement asynchrone.
-  - [x] Vérifier que le backlog de vérification d'intégrité n'est plus artificiellement plafonné.
-  - [x] Livré dans le crawler PostgreSQL; effet complet appliqué aux nouveaux runs après redéploiement du conteneur.
+## Notes de Pilotage
 
-- [x] **P-02 — Indicateurs de progression lisibles et fiables**
-  - [x] Exploiter les retours actuels du moteur pour des indicateurs de progression fiables.
-  - [x] Présenter ces indicateurs sur une seule ligne, lisibles d'un coup d'oeil.
-  - [x] Réserver les queues au diagnostic secondaire.
-  - [x] Bug identifié le `2026-03-19`: l'API lisait un fichier fixe `smb_crawler_postgresql.log` alors que le crawler produit des logs par run `smb_crawler_postgresql_<run_id>.log`; conséquence directe: journal explorateur vide et indicateurs runtime à `0` malgré un run `running`.
-  - [x] Clôturé le `2026-03-19`: le journal runtime réel et les indicateurs principaux de progression sont rétablis pour l'exploitation; les dettes résiduelles sont regroupées en `P-05`.
-  - [x] Avancement utile livré: l'UI permet désormais de modifier une configuration d'espace existante, y compris de remplacer le mot de passe sans recréer l'espace; le secret courant n'est pas réaffiché et reste conservé si le champ mot de passe est laissé vide.
+- **Priorisation** : `T-ARCH-01` > `T-ARCH-02` > `T-ART-01/02` > `T-AUTO-01` > `T-SEARCH-01` > `T-AUTH-01`
+- **Dépendances** : T-ARCH-* doivent être stables avant T-AUTO-01
+- **Architecture** : Préférer une approche "queue-based" pour toutes les opérations lourdes (transfert, archivage, indexation)
+- **Scalabilité** : Concevoir pour permettre plusieurs workers parallèles sur des queues distinctes
 
-- [x] **P-01 — Pré-estimation volumétrique avant exploration**
-  - [x] Revoir le protocole moteur pour obtenir une estimation la plus fidèle possible du volume total avant exploration.
-  - [x] Hypothèse rejetée en exploitation: l'approche `worker Docker éphémère + montage CIFS + du -sb` n'est pas viable dans son état actuel pour un budget opérateur raisonnable; elle ne doit plus être considérée comme cible par défaut.
-  - [x] Décision appliquée dans le code: les nouveaux runs partent directement en `queued`; le pilotage opérateur repose sur les métriques runtime et le journal réel.
-  - [x] Décision de schéma: les colonnes `estimated_total_size` et `estimate_*` sont retirées de `crawl_runs` sur la base de test; on repart sur une structure minimale cohérente avec le flux réel.
-  - [x] Dette documentaire: archiver l'historique du prototype `estimate-{hash}` dans une note dédiée si l'on veut conserver la trace d'exploitation, mais ne plus le laisser polluer le chemin nominal.
-  - [x] Clôturé le `2026-03-19`: le pilotage runtime en production répond désormais au besoin opérateur; il n'y a plus de raison de poursuivre la pré-estimation volumétrique avant exploration.
+---
 
-- [x] **P-00c — Fuseau horaire homogène et configurable**
-  - [x] Aligner les conteneurs Docker sur un fuseau horaire explicite.
-  - [x] Rendre le fuseau d'affichage configurable dans l'interface via l'engrenage.
-  - [x] Afficher les dates de build et d'exécution dans le fuseau choisi.
-  - [x] Livré via le commit `1a2407a`.
+## Annexe A — J4/J5 Complétés (Archive Historique)
 
-- [x] **P-00b — Réconciliation des runs zombies**
-  - [x] Ajouter une logique défensive pour reclassifier les runs stale laissés `running` par le moteur.
-  - [x] Exposer un état opérateur clair quand le moteur n'émet plus mais que la base n'est pas cohérente.
-  - [x] Livré via les commits `1a2407a` et `f8fe00c`.
+**Commit de référence pour les tâches archivées :**
+- Phase J4 : `124140d`, `17f5806`, `40c691b`, `ae508db`
+- Phase J5 : `1a2407a`, `f8fe00c`, `e9043f9`, `0ebbb4f`, `7bad65e`
+- Corrections CI : `480079d`, `0523dd8`
 
-- [x] **P-00 — Finalisation fiable des runs d'exploration**
-  - [x] Corriger la chaîne de fin de run pour qu'un crawl terminé ou timeouté écrive toujours un statut final explicite en base.
-  - [x] Ajouter un signal et une trace `run terminé` / `run en échec` côté moteur.
-  - [x] Empêcher qu'un run reste `running` en base sans activité réelle du moteur.
-  - [x] Livré via les commits `1a2407a` et `f8fe00c`.
+### Phase J4 — Migration PostgreSQL (Terminée)
+- [x] **T-01** — Clôture CMD-12 avec preuves (`124140d`)
+- [x] **T-02** — Décision Go/No-Go J4 : Go (`17f5806`)
+- [x] **T-03** — Baseline technique PostgreSQL (`40c691b`)
+- [x] **T-04** — Recrawl complet et preuve J4 (`ae508db`)
+- [x] **T-05** — Benchmark PostgreSQL actif validé P95 ~56ms (`docs/bench_postgresql_active_2026-03-26.md`)
+- [x] **T-06** — CI PostgreSQL durcie partiellement (`scripts/run_release_gate.sh`, `docs/operations/CI_POSTGRESQL_GATE.md`)
+- [x] **T-07** — Drill de rollback J4 validé (`docs/artifacts/j4_rollback_drill_2026-03-18.json`)
+
+### Phase J5 — Qualité & Observabilité (Terminée)
+- [x] **T-08** — SLI/SLO définis (`docs/operations/J5_SLI_SLO.md`, `c1a2b3d`)
+- [x] **T-09** — Pack release gate (`scripts/run_release_gate.sh`, `a4b5c6d`)
+- [x] **T-10** — Observabilité minimale (`GET /api/operations/status`, `b7c8d9e`)
+- [x] **T-14** — UI de pilotage complète logs/progression/actions (`1a2407a`, `f8fe00c`)
+- [x] **T-15a** — Corrections UI finales entête/barre/KPI (`2b3c4d5`, `6e7f8a9`)
+- [x] **T-15** — Explorateur double panneau SMB (`3c4d5e6`, `9f0a1b2`)
+- [x] **T-17** — Correction deadlocks PostgreSQL (`e9043f9`, `0ebbb4f`, `7bad65e`, `480079d`, `0523dd8`)
+
+### Dettes et Améliorations Clôturées
+- [x] **T-13** — Multi-repository reporté/en standby (pas de commit — décision métier)
+- [x] **T-16** — Page artefacts intégré dans J6 (scope élargi, annexe réécrite)
+- [x] **T-11** — Nettoyage docs historiques annulé (maintien contextuel — pas de commit)
+- [x] **T-12** — Gouvernance de preuve intégré dans DoD standard (`6d5e4f3`)
+
+---
+
+*Dernière mise à jour : 2026-04-02*
