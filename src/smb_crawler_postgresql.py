@@ -13,7 +13,8 @@ import threading
 import subprocess
 import shutil
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Optional
 from pathlib import Path
 from queue import Queue, Empty
 from concurrent.futures import ThreadPoolExecutor
@@ -1152,8 +1153,17 @@ class SMBCrawlerPostgreSQL:
             self.logger.info(f"🏁 Run mis en attente avec checkpoint={self.run_id}")
             return self.stats
         
+        # Déterminer le statut final avant de faire autre chose
+        # Si user_cancelled est True, c'est une cancellation volontaire
+        # Sinon, le crawl s'est terminé naturellement (queues vides)
+        if self.user_cancelled:
+            self.stats['final_status'] = 'cancelled'
+        elif self.stats['timed_out']:
+            self.stats['final_status'] = 'failed'
+        else:
+            self.stats['final_status'] = 'completed'
+        
         # Réinitialiser le flag cancelled si le run s'est terminé normalement
-        # (et non pas à cause d'un vrai cancellation)
         if not self.user_cancelled:
             self.stats['cancelled'] = False
         
@@ -1169,12 +1179,6 @@ class SMBCrawlerPostgreSQL:
         # Finaliser
         self.stats['end_time'] = time.time()
         duration = self.stats['end_time'] - self.stats['start_time']
-        if self.stats['timed_out']:
-            self.stats['final_status'] = 'failed'
-        elif self.stop_event.is_set():
-            self.stats['final_status'] = 'cancelled'
-        else:
-            self.stats['final_status'] = 'completed'
 
         if self.run_id:
             self.postgres_adapter.clear_crawl_run_checkpoint(self.run_id)
@@ -1200,7 +1204,7 @@ class SMBCrawlerPostgreSQL:
         return self.stats
 
     def _progress_callback(self):
-        """Callback pour afficher la progression."""
+        """Callback pour afficher la progression et persister l'état."""
         if self.should_stop_requested_run():
             self.logger.info(f"⏹️ Arrêt demandé pour le run {self.run_id}")
             self.user_cancelled = True  # Marquer comme cancellation utilisateur
@@ -1211,6 +1215,22 @@ class SMBCrawlerPostgreSQL:
             self.pause_requested = True
             self.stop_event.set()
             return
+
+        # Persister le statut 'running' en base toutes les 15 secondes
+        now = time.time()
+        if self.run_id and hasattr(self, '_last_status_persisted'):
+            if now - self._last_status_persisted >= 15:
+                try:
+                    self.postgres_adapter.update_crawl_run_status(self.run_id, "running")
+                    self._last_status_persisted = now
+                except Exception as exc:
+                    self.logger.warning(f"Impossible de persister le statut running: {exc}")
+        elif self.run_id:
+            self._last_status_persisted = now
+            try:
+                self.postgres_adapter.update_crawl_run_status(self.run_id, "running")
+            except Exception as exc:
+                self.logger.warning(f"Impossible de persister le statut running: {exc}")
 
         duration = time.time() - self.stats['start_time']
         dirs_in_queue = self.directory_queue.qsize()
@@ -1359,6 +1379,18 @@ def run_single_crawl(run_payload):
     return stats
 
 
+def _safe_parse_trigger_timestamp(raw: str) -> Optional[datetime]:
+    """Parse une date de déclenchement même si le format est atypique."""
+    if not raw:
+        return None
+    normalized = raw.strip()
+    if not normalized:
+        return None
+    try:
+        return datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+
 def cleanup_stale_runs(adapter, interval_seconds=60):
     """Tâche en arrière-plan pour corriger les statuts des runs bloqués."""
     import time
@@ -1371,8 +1403,22 @@ def cleanup_stale_runs(adapter, interval_seconds=60):
             
             for run in stale_runs:
                 run_id = run['id']
-                triggered_at = datetime.fromisoformat(run['triggered_at'].replace('Z', '+00:00'))
-                duration = datetime.now() - triggered_at
+                triggered_raw = run.get("triggered_at") or run.get("triggered")
+                
+                # Handle both datetime objects and string timestamps
+                if isinstance(triggered_raw, datetime):
+                    triggered_at = triggered_raw
+                else:
+                    triggered_at = _safe_parse_trigger_timestamp(str(triggered_raw) if triggered_raw is not None else None)
+                
+                if not triggered_at:
+                    continue
+
+                if triggered_at.tzinfo is None:
+                    triggered_at = triggered_at.replace(tzinfo=timezone.utc)
+
+                now = datetime.now(timezone.utc)
+                duration = now - triggered_at
                 
                 # Si un run est en cours depuis plus de 2 heures, le marquer comme cancelled
                 if duration > timedelta(hours=2):
@@ -1409,14 +1455,7 @@ def worker_loop(poll_interval_seconds=5):
         try:
             print(f"▶️ Run réservé: {run_id} pour {run_payload['name']} ({run_payload['start_path']})")
             stats = run_single_crawl(run_payload)
-            if stats.get("timed_out"):
-                final_status = "failed"
-            elif stats.get("pending"):
-                final_status = "pending"
-            elif stats.get("cancelled"):
-                final_status = "cancelled"
-            else:
-                final_status = "completed"
+            final_status = stats.get("final_status", "completed")
             adapter.update_crawl_run_status(run_id, final_status)
             print(f"✅ Run terminé: {run_id} ({final_status})")
         except KeyboardInterrupt:

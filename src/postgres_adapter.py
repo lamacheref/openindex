@@ -41,6 +41,10 @@ class PostgreSQLAdapter:
                 password=self.config.get('password', 'openindex_secure_password')
             )
             conn.autocommit = False
+            # Set transaction isolation level to SERIALIZABLE for stronger consistency
+            cursor = conn.cursor()
+            cursor.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
+            cursor.close()
             yield conn
         except Exception as e:
             if conn:
@@ -869,12 +873,12 @@ class PostgreSQLAdapter:
             Liste des fichiers avec leurs métadonnées
         """
         with self.get_connection() as conn:
-            cursor = conn.cursor()
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             cursor.execute(
                 """
                 SELECT path, name, size, checksum, last_modified, is_directory
                 FROM files
-                WHERE crawl_config_id = %s
+                WHERE crawl_config_id::text = %s
                 """,
                 (crawl_config_id,)
             )

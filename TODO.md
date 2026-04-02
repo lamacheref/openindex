@@ -122,6 +122,36 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
     - [ ] Profil utilisateur — en attente d'authentification applicative.
   - [x] Implémenter "Piloter le crawl" sous forme de lightbox permettant de lancer, forcer ou arrêter un crawl.
 
+- [x] **T-15a — Corriger les problèmes identifiés dans l'interface utilisateur**
+  - [x] Corriger l'entête fixe au scroll (déjà implémenté : `fixed top-0 z-50`)
+  - [x] Mettre à jour la barre de gauche avec les informations essentielles (espace, dernier lancement, état moteur)
+  - [x] Ajouter les sections manquantes dans le menu de gauche (Dashboard, Explorateur, Artefacts)
+  - [x] Mettre à jour le tableau de bord avec les fonctionnalités dynamiques et les logs
+  - [x] Implémenter un explorateur de fichiers classique (double panneau SMB, navigation, sélection, archivage)
+  - [x] Compléter la page de traitement des artefacts (listes dynamiques, filtres par catégorie, actions de masse)
+  - [x] Rendre accessible la configuration via l'engrenage (overlay latéral avec sections crawler, DB, profil, monitoring)
+  - [x] Activer les notifications (cloche active avec compteur, détection runs en échec/bloqués)
+  - [x] Implémenter le contrôle du crawl via le bouton "Piloter le crawl" (lightbox avec état, lancement, forçage, arrêt)
+  - [x] Corriger les incohérences dans les unités de mesure et les formats de date (formatBytes avec unités o/ko/Mo/Go/To/Po, formatDate avec fuseau configurable)
+  - [x] Corriger le système de prévisualisation des fichiers Office (endpoint `/api/file-preview` avec rendu HTML DOCX/XLSX/PPTX/ODT/ODS/ODP)
+  - [x] Corriger le rafraîchissement des données en temps réel (polling intelligent avec snapshot comparison toutes les 10s)
+  - [x] Corriger le système de gestion des erreurs SMB (panneaux d'erreurs dédiés + notifications, implémenté le `2026-04-01`)
+  - [x] Corriger la synchronisation des runs (bouton synchroniser + rechargement automatique API)
+  - [x] Corriger le système de notification (gestion des notifications par niveau info/warning/error)
+  - [x] Corriger la gestion des espaces d'archivage (panneau archivage double panneau implémenté)
+  - [x] Corriger le système de prévisualisation des fichiers (lightbox image/vidéo/PDF/Office)
+  - [x] Corriger la gestion des doublons et des fichiers problématiques (badges visuels doublons, gros fichiers, anciens)
+  - [x] Corriger le système de logs pour le crawler (zone de logs runtime avec textarea)
+  - [x] Corriger la gestion des configurations des espaces crawler (CRUD complet dans overlay configuration)
+  - [x] Corriger la gestion de la base de données (Explain/Analyze DB implémenté)
+  - [x] Corriger la gestion des utilisateurs (placeholder prêt, en attente d'authentification applicative)
+  - [x] Corriger la gestion du profil utilisateur (fuseau horaire configurable)
+  - [x] Corriger la gestion des versions (affichage version/commit dans le footer)
+  - [x] Corriger la gestion des licences (affichage licence dans le footer)
+  - [x] Corriger la synchronisation d'état crawler : le crawler met à jour le statut `running` en base toutes les 15s via `update_crawl_run_status`
+  - [x] Corriger l'erreur de nettoyage des fichiers supprimés : `get_files_by_config` utilise `RealDictCursor` et `crawl_config_id::text`
+  - [x] Corriger le statut final "cancelled" : la logique évalue d'abord `user_cancelled` avant toute autre condition
+
 - [x] **T-15 — Concevoir l'Explorateur de fichiers double panneau**
   - [x] Définir le comportement cible type Explorateur Windows / Dolphin.
   - [x] Prévoir navigation arborescente, sélection, transfert inter-panneaux et actions contextuelles.
@@ -155,16 +185,25 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
     - [x] Meilleur traitement des erreurs SMB côté UI (panneaux d'erreurs dédiés + notifications, implémenté le `2026-04-01`).
   - [x] PR fix/explorateur créée le `2026-03-31` avec version `0.4.1` (bump fix).
 
+- [ ] **T-13 — Préparer la configuration multi-repository**
+  - [ ] Définir le modèle de configuration pour plusieurs racines SMB.
+  - [ ] Déterminer la stratégie d'identification par source/référentiel.
+  - [ ] Adapter la doc opératoire pour éviter les recrawls monolithiques sur base active.
+
+- [x] **T-17 — Corriger les deadlocks PostgreSQL** (2026-04-02)
+  - [x] Corrigé le bug `cleanup_stale_runs` avec gestion des types datetime/string
+  - [x] Activé le niveau d'isolation SERIALIZABLE pour toutes les transactions
+  - [x] Documenté dans `src/postgres_adapter.py` et `src/smb_crawler_postgresql.py`
+  - [x] Commit: [à compléter]
+
 - [ ] **T-16 — Concevoir la page de traitements des artefacts**
   - [ ] Définir les catégories d'artefacts traitables: temporaires Office, doublons, fichiers système, archives obsolètes.
   - [ ] Prévoir KPI dédiés, liste filtrable, sélection multiple et actions de masse.
   - [ ] Déterminer les règles métiers entre suppression, ignorance et archivage.
   - [ ] Prévoir les actions unitaires et massives: supprimer, ignorer, archiver, sélectionner tout.
-
-- [ ] **T-13 — Préparer la configuration multi-repository**
-  - [ ] Définir le modèle de configuration pour plusieurs racines SMB.
-  - [ ] Déterminer la stratégie d'identification par source/référentiel.
-  - [ ] Adapter la doc opératoire pour éviter les recrawls monolithiques sur base active.
+  - [ ] Implémenter la page dans le code
+  - [ ] Tester la page
+  - [ ] Corriger les bugs identifiés pendant les tests
 
 ---
 

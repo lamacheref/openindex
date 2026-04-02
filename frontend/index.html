@@ -532,13 +532,32 @@
                                     Aucun élément indexé dans ce répertoire.
                                 </div>
                                 <div x-show="!fileExplorer.source.loading && fileExplorer.source.items.length > 0" class="h-[26rem] overflow-y-auto bg-white">
-                                    <div x-show="fileExplorer.source.selectedItems.length > 0" class="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-2 text-sm text-slate-600">
-                                        <span x-text="fileExplorer.source.selectedItems.length"></span> élément(s) sélectionné(s)
-                                        <button @click="clearExplorerSelection('source')" class="ml-3 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium hover:bg-slate-200">
-                                            Désélectionner tout
+                                    <div class="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-2 text-sm text-slate-600">
+                                        <span x-show="fileExplorer.source.selectedItems.length > 0" x-text="fileExplorer.source.selectedItems.length"></span>
+                                        <span x-show="fileExplorer.source.selectedItems.length === 0">Aucun</span>
+                                        élément(s) sélectionné(s)
+
+                                        <button
+                                            @click="fileExplorer.source.selectedItems.length > 0 ? clearExplorerSelection('source') : selectAllExplorerItems('source')"
+                                            class="ml-3 rounded-full px-2 py-1 text-xs font-medium transition"
+                                            :class="fileExplorer.source.selectedItems.length > 0 ? 'bg-slate-100 hover:bg-slate-200' : 'bg-teal-100 hover:bg-teal-200'">
+                                            <span x-text="fileExplorer.source.selectedItems.length > 0 ? 'Désélectionner tout' : 'Sélectionner tout'"></span>
                                         </button>
-                                        <button @click="archiveSelectedItems()" :disabled="archiveBusy" class="ml-2 rounded-full bg-teal-600 px-2 py-1 text-xs font-medium text-white hover:bg-teal-700 disabled:opacity-50">
+
+                                        <button
+                                            @click="archiveSelectedItems()"
+                                            :disabled="fileExplorer.source.selectedItems.length === 0 || archiveBusy"
+                                            class="ml-2 rounded-full px-2 py-1 text-xs font-medium text-white transition"
+                                            :class="fileExplorer.source.selectedItems.length > 0 ? 'bg-teal-600 hover:bg-teal-700' : 'bg-slate-400 cursor-not-allowed'">
                                             Archiver la sélection
+                                        </button>
+                                        
+                                        <button
+                                            @click="showDeleteConfirmation('source')"
+                                            :disabled="fileExplorer.source.selectedItems.length === 0"
+                                            class="ml-2 rounded-full px-2 py-1 text-xs font-medium text-white transition"
+                                            :class="fileExplorer.source.selectedItems.length > 0 ? 'bg-red-600 hover:bg-red-700' : 'bg-slate-400 cursor-not-allowed'">
+                                            Supprimer la sélection
                                         </button>
                                     </div>
                                     <template x-for="item in fileExplorer.source.items" :key="item.path">
@@ -706,10 +725,24 @@
                                     Aucun élément indexé dans ce répertoire d’archives.
                                 </div>
                                 <div x-show="!fileExplorer.archive.loading && fileExplorer.archive.items.length > 0" class="h-[26rem] overflow-y-auto bg-white">
-                                    <div x-show="fileExplorer.archive.selectedItems.length > 0" class="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-2 text-sm text-slate-600">
-                                        <span x-text="fileExplorer.archive.selectedItems.length"></span> élément(s) sélectionné(s)
-                                        <button @click="clearExplorerSelection('archive')" class="ml-3 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium hover:bg-slate-200">
-                                            Désélectionner tout
+                                    <div class="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-2 text-sm text-slate-600">
+                                        <span x-show="fileExplorer.archive.selectedItems.length > 0" x-text="fileExplorer.archive.selectedItems.length"></span>
+                                        <span x-show="fileExplorer.archive.selectedItems.length === 0">Aucun</span>
+                                        élément(s) sélectionné(s)
+
+                                        <button
+                                            @click="fileExplorer.archive.selectedItems.length > 0 ? clearExplorerSelection('archive') : selectAllExplorerItems('archive')"
+                                            class="ml-3 rounded-full px-2 py-1 text-xs font-medium transition"
+                                            :class="fileExplorer.archive.selectedItems.length > 0 ? 'bg-slate-100 hover:bg-slate-200' : 'bg-teal-100 hover:bg-teal-200'">
+                                            <span x-text="fileExplorer.archive.selectedItems.length > 0 ? 'Désélectionner tout' : 'Sélectionner tout'"></span>
+                                        </button>
+                                        
+                                        <button
+                                            @click="showDeleteConfirmation('archive')"
+                                            :disabled="fileExplorer.archive.selectedItems.length === 0"
+                                            class="ml-2 rounded-full px-2 py-1 text-xs font-medium text-white transition"
+                                            :class="fileExplorer.archive.selectedItems.length > 0 ? 'bg-red-600 hover:bg-red-700' : 'bg-slate-400 cursor-not-allowed'">
+                                            Supprimer la sélection
                                         </button>
                                     </div>
                                     <template x-for="item in fileExplorer.archive.items" :key="item.path">
@@ -748,32 +781,101 @@
 
                 <div x-show="currentView === 'artifacts'" class="fade-in">
                     <div class="pt-2">
-                        <h2 class="text-3xl font-bold tracking-tight">Traitements des artefacts</h2>
+                        <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                            <div>
+                                <h2 class="text-3xl font-bold tracking-tight">Traitements des artefacts</h2>
+                                <p class="mt-2 text-sm text-slate-500">Nettoyage et catégorisation des fichiers non essentiels.</p>
+                            </div>
+                            <div class="flex flex-wrap gap-3">
+                                <button @click="loadArtifacts()" class="rounded-2xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-800">
+                                    <i class="fas fa-rotate mr-2"></i>Rafraîchir
+                                </button>
+                                <button @click="applyArtifactAction('delete')" :disabled="selectedArtifacts.length === 0 || artifactActionBusy" class="rounded-2xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:bg-slate-300">
+                                    <i class="fas fa-trash mr-2"></i>Supprimer la sélection
+                                </button>
+                                <button @click="applyArtifactAction('ignore')" :disabled="selectedArtifacts.length === 0 || artifactActionBusy" class="rounded-2xl bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-700 disabled:bg-slate-300">
+                                    <i class="fas fa-eye-slash mr-2"></i>Ignorer la sélection
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <div class="mt-6 grid grid-cols-1 gap-5 md:grid-cols-3">
-                        <div class="card p-6">
+
+                    <div x-show="artifactActionStatus" class="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600" x-text="artifactActionStatus"></div>
+
+                    <section class="mt-6 grid grid-cols-1 gap-5 md:grid-cols-4">
+                        <button @click="artifactFilter = 'all'" class="card p-6 text-left transition" :class="artifactFilter === 'all' ? 'ring-2 ring-teal-500' : ''">
+                            <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Total artefacts</p>
+                            <p class="mt-3 text-3xl font-semibold" x-text="artifacts.length.toLocaleString() || '0'"></p>
+                        </button>
+                        <button @click="artifactFilter = 'temp'" class="card p-6 text-left transition" :class="artifactFilter === 'temp' ? 'ring-2 ring-amber-500' : ''">
                             <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Temporaires Office</p>
-                            <p class="mt-3 text-3xl font-semibold">-</p>
-                        </div>
-                        <div class="card p-6">
-                            <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Doublons</p>
-                            <p class="mt-3 text-3xl font-semibold">-</p>
-                        </div>
-                        <div class="card p-6">
+                            <p class="mt-3 text-3xl font-semibold text-amber-600" x-text="artifactCounts.temp.toLocaleString()"></p>
+                        </button>
+                        <button @click="artifactFilter = 'duplicate'" class="card p-6 text-left transition" :class="artifactFilter === 'duplicate' ? 'ring-2 ring-sky-500' : ''">
+                            <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Doublons détectés</p>
+                            <p class="mt-3 text-3xl font-semibold text-sky-600" x-text="artifactCounts.duplicate.toLocaleString()"></p>
+                        </button>
+                        <button @click="artifactFilter = 'system'" class="card p-6 text-left transition" :class="artifactFilter === 'system' ? 'ring-2 ring-slate-500' : ''">
                             <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Fichiers système</p>
-                            <p class="mt-3 text-3xl font-semibold">-</p>
-                        </div>
-                    </div>
+                            <p class="mt-3 text-3xl font-semibold text-slate-600" x-text="artifactCounts.system.toLocaleString()"></p>
+                        </button>
+                    </section>
+
                     <div class="mt-6 card p-6">
-                        <div class="flex items-center justify-between">
-                            <h3 class="text-lg font-semibold">Liste d’artefacts</h3>
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div class="flex flex-wrap items-center gap-3">
+                                <label class="text-sm text-slate-600">Filtre :</label>
+                                <select x-model="artifactFilter" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
+                                    <option value="all">Tous</option>
+                                    <option value="temp">Temporaires Office</option>
+                                    <option value="duplicate">Doublons</option>
+                                    <option value="system">Fichiers système</option>
+                                </select>
+                            </div>
                             <label class="flex items-center gap-2 text-sm text-slate-600">
-                                <input type="checkbox">
+                                <input type="checkbox" @change="toggleAllArtifacts($event)" :checked="selectedArtifacts.length === filteredArtifacts.length && filteredArtifacts.length > 0" class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
                                 <span>Sélectionner tout</span>
                             </label>
                         </div>
-                        <div class="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-sm text-slate-500">
-                            La vue finale présentera les actions Supprimer, Ignorer et Archiver, en masse ou fichier par fichier.
+
+                        <div x-show="loadingArtifacts" class="py-8 text-center">
+                            <div class="loading"></div>
+                        </div>
+
+                        <div x-show="!loadingArtifacts && filteredArtifacts.length === 0" class="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm text-slate-500">
+                            Aucun artefact détecté dans cette catégorie.
+                        </div>
+
+                        <div x-show="!loadingArtifacts && filteredArtifacts.length > 0" class="mt-4 overflow-hidden rounded-2xl border border-slate-200">
+                            <div class="grid grid-cols-[minmax(0,1fr)_10rem_8rem_6rem_12rem] bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                                <span>Nom / Chemin</span>
+                                <span>Taille</span>
+                                <span>Catégorie</span>
+                                <span>Statut</span>
+                                <span>Modifié le</span>
+                            </div>
+                            <div class="h-[32rem] overflow-y-auto bg-white">
+                                <template x-for="artifact in filteredArtifacts" :key="artifact.id">
+                                    <div class="grid w-full grid-cols-[minmax(0,1fr)_10rem_8rem_6rem_12rem] gap-3 border-t border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50"
+                                         :class="selectedArtifacts.includes(artifact.id) ? 'bg-teal-50' : 'bg-white'">
+                                        <span class="flex min-w-0 items-center gap-3">
+                                            <input type="checkbox"
+                                                   @change="toggleArtifactSelection(artifact.id, $event)"
+                                                   :checked="selectedArtifacts.includes(artifact.id)"
+                                                   class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
+                                            <i class="fas" :class="getArtifactIconClass(artifact)"></i>
+                                            <span class="min-w-0">
+                                                <span class="truncate text-sm font-medium text-slate-800" x-text="artifact.name"></span>
+                                                <span class="mt-1 block truncate text-xs text-slate-500" x-text="artifact.path"></span>
+                                            </span>
+                                        </span>
+                                        <span class="text-sm text-slate-500" x-text="formatBytes(artifact.size || 0)"></span>
+                                        <span class="text-sm" :class="getArtifactCategoryClass(artifact.category)" x-text="getArtifactCategoryLabel(artifact.category)"></span>
+                                        <span class="text-sm" :class="getArtifactStatusClass(artifact.status)" x-text="getArtifactStatusLabel(artifact.status)"></span>
+                                        <span class="text-sm text-slate-500" x-text="formatDate(artifact.last_modified)"></span>
+                                    </div>
+                                </template>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1088,10 +1190,17 @@
                     <img :src="previewInlineUrl" :alt="previewModal.name" class="max-h-[70vh] max-w-full rounded-2xl object-contain">
                 </div>
                 <div x-show="previewModal.kind === 'video'" class="rounded-3xl bg-slate-950 p-4">
-                    <video :src="previewInlineUrl" controls class="max-h-[70vh] w-full rounded-2xl"></video>
+                    <video :src="previewInlineUrl" controls class="max-h-[70vh] w-full rounded-2xl">
+                        Votre navigateur ne supporte pas la lecture de vidéo.
+                    </video>
                 </div>
                 <div x-show="previewModal.kind === 'pdf'" class="rounded-3xl bg-slate-100 p-2">
                     <iframe :src="previewInlineUrl" class="h-[75vh] w-full rounded-2xl bg-white"></iframe>
+                </div>
+                <div x-show="previewModal.kind === 'text'" class="rounded-3xl bg-slate-900 p-4">
+                    <div class="max-h-[70vh] overflow-auto rounded-2xl bg-slate-800 p-4 font-mono">
+                        <pre x-text="previewTextContent" class="whitespace-pre-wrap text-sm text-green-400"></pre>
+                    </div>
                 </div>
                 <div x-show="previewModal.kind === 'office'" class="rounded-3xl bg-slate-100 p-2">
                     <iframe :src="previewOfficeUrl" class="h-[75vh] w-full rounded-2xl bg-white"></iframe>
@@ -1256,7 +1365,8 @@
                     path: '',
                     name: '',
                     kind: 'unsupported',
-                    previewError: ''
+                    previewError: '',
+                    textContent: ''
                 },
                 propertiesModal: {
                     open: false,
@@ -1273,6 +1383,16 @@
                         domain: ''
                     }
                 },
+                // Artifacts page properties
+                artifacts: [],
+                artifactFilter: 'all',
+                selectedArtifacts: [],
+                loadingArtifacts: false,
+                artifactActionBusy: false,
+                artifactActionStatus: '',
+                // Polling state
+                _lastRuntimeSnapshot: null,
+                _lastOverviewSnapshot: null,
 
                 async init() {
                     this.displayTimezone = localStorage.getItem('openindex.displayTimezone') || 'Europe/Paris';
@@ -1357,6 +1477,13 @@
                         const response = await fetch('/api/spaces');
                         const newSpaces = await response.json();
                         
+                        // Vérifier si les espaces ont réellement changé
+                        const spacesChanged = JSON.stringify(newSpaces) !== JSON.stringify(this.spaces);
+                        
+                        if (!spacesChanged) {
+                            return; // Pas de changement, pas de rafraîchissement
+                        }
+                        
                         // Conserver l'espace actif actuel si possible
                         const currentSpaceStillExists = this.activeSpace !== null && 
                             newSpaces.some(space => space.path_prefix === this.activeSpace);
@@ -1393,11 +1520,13 @@
                 async loadCrawlConfigs() {
                     try {
                         const response = await fetch('/api/crawl-configs');
-                        this.crawlConfigs = await response.json();
+                        const data = await response.json();
+                        this.crawlConfigs = Array.isArray(data) ? data : [];
                         this.syncSelectedConfigWithActiveSpace();
                         this.syncExplorerRoots();
                     } catch (error) {
                         console.error('Erreur configs exploration:', error);
+                        this.crawlConfigs = [];
                         this.addLogEntry(`Erreur configs exploration: ${error.message}`);
                     }
                 },
@@ -1959,6 +2088,12 @@
                     return crumbs;
                 },
 
+                selectAllExplorerItems(panelName) {
+                    const panel = this.fileExplorer[panelName];
+                    panel.selectedItems = [...panel.items];
+                    panel.selectedPath = '';
+                },
+
                 toggleExplorerItemSelection(panelName, item) {
                     const panel = this.fileExplorer[panelName];
                     const index = panel.selectedItems.findIndex(i => i.path === item.path);
@@ -2180,6 +2315,7 @@
                     if (['mp4', 'webm', 'ogg', 'mov', 'm4v'].includes(extension)) return 'video';
                     if (extension === 'pdf') return 'pdf';
                     if (['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp'].includes(extension)) return 'office';
+                    if (['txt', 'log', 'md', 'csv', 'json', 'xml', 'html', 'htm', 'css', 'js', 'py', 'java', 'c', 'cpp', 'h', 'hpp', 'sh', 'sql', 'yml', 'yaml', 'ini', 'conf', 'config'].includes(extension)) return 'text';
                     return 'unsupported';
                 },
 
@@ -2189,6 +2325,7 @@
                     if (previewKind === 'video') return 'Vidéo';
                     if (previewKind === 'pdf') return 'PDF';
                     if (previewKind === 'office') return 'Document bureautique';
+                    if (previewKind === 'text') return 'Fichier texte';
                     return 'Aperçu limité';
                 },
 
@@ -2197,15 +2334,42 @@
                     this.openPreview(this.selectedSourceFile);
                 },
 
+                get previewTextContent() {
+                    return this.previewModal.textContent;
+                },
+
                 openPreview(item) {
                     if (!item || item.is_directory) return;
+                    
+                    const kind = this.previewKindForPath(item.path);
                     this.previewModal = {
                         open: true,
                         path: item.path,
                         name: item.name,
-                        kind: this.previewKindForPath(item.path),
-                        previewError: ''
+                        kind: kind,
+                        previewError: '',
+                        textContent: ''
                     };
+                    
+                    // Charger le contenu texte si c'est un fichier texte
+                    if (kind === 'text') {
+                        this.loadTextFileContent(item.path);
+                    }
+                },
+
+                async loadTextFileContent(path) {
+                    try {
+                        const response = await fetch(`/api/file-content?path=${encodeURIComponent(path)}&as_text=true`);
+                        if (!response.ok) {
+                            throw new Error(`Erreur ${response.status}`);
+                        }
+                        const text = await response.text();
+                        this.previewModal.textContent = text;
+                    } catch (error) {
+                        this.previewModal.previewError = `Erreur de chargement: ${error.message}`;
+                        this.previewModal.textContent = `❌ Impossible de charger le fichier: ${error.message}`;
+                        this.showAppNotification(`❌ Erreur chargement fichier texte: ${error.message}`, 'error');
+                    }
                 },
 
                 closePreview() {
@@ -2332,15 +2496,91 @@
                     if (this.operationsPollTimerId) {
                         clearInterval(this.operationsPollTimerId);
                     }
+                    this._lastRuntimeSnapshot = null;
+                    this._lastOverviewSnapshot = null;
                     this.operationsPollTimerId = setInterval(async () => {
                         if (document.hidden) {
                             return;
                         }
-                        await this.loadCrawlerRuntime();
+                        await this._pollCrawlerRuntime();
                         if (!this.loadingOverview) {
-                            await this.loadCrawlOverview();
+                            await this._pollCrawlOverview();
                         }
-                    }, 5000);
+                    }, 10000);
+                },
+
+                _objectsEqualSnapshot(a, b) {
+                    if (a === b) return true;
+                    if (!a || !b) return false;
+                    try {
+                        return JSON.stringify(a) === JSON.stringify(b);
+                    } catch {
+                        return false;
+                    }
+                },
+
+                async _pollCrawlerRuntime() {
+                    try {
+                        const response = await fetch('/api/crawler/runtime?log_limit=120');
+                        if (!response.ok) return;
+                        const runtime = await response.json();
+                        const snapshot = {
+                            active: runtime.active,
+                            idle: runtime.idle,
+                            latest_status: runtime.latest_status,
+                            status_label: runtime.status_label,
+                            progress_percent: runtime.progress_percent,
+                            processed_bytes: runtime.processed_bytes,
+                            discovered_bytes: runtime.discovered_bytes,
+                            discovered_files: runtime.discovered_files,
+                            discovered_directories: runtime.discovered_directories,
+                            large_files_detected: runtime.large_files_detected,
+                            large_files_bytes: runtime.large_files_bytes,
+                            progress_hint: runtime.progress_hint,
+                            last_activity_at: runtime.last_activity_at,
+                            db_write_active: runtime.db_write_active,
+                            db_recent_writes: runtime.db_recent_writes,
+                            db_last_write_at: runtime.db_last_write_at,
+                            db_activity_hint: runtime.db_activity_hint,
+                            activity_warning: runtime.activity_warning,
+                            log_lines_count: runtime.log_lines.length,
+                        };
+                        if (this._lastRuntimeSnapshot && this._objectsEqualSnapshot(this._lastRuntimeSnapshot, snapshot)) {
+                            return;
+                        }
+                        this._lastRuntimeSnapshot = snapshot;
+                        this.crawlerRuntime = runtime;
+                        this.animateVolumeCounters(
+                            runtime.processed_bytes ?? 0,
+                            runtime.discovered_bytes ?? 0
+                        );
+                        await this.ensureOverviewSync();
+                    } catch (error) {
+                        console.error('Erreur polling runtime:', error);
+                    }
+                },
+
+                async _pollCrawlOverview() {
+                    try {
+                        const response = await fetch('/api/crawls/overview?limit=8');
+                        if (!response.ok) return;
+                        const overview = await response.json();
+                        const snapshot = {
+                            monitoring_latest_status: overview.monitoring?.latest_run_status,
+                            monitoring_run_count: overview.monitoring?.total_runs,
+                            recent_runs_count: overview.recent_runs?.length,
+                            recent_runs_ids: (overview.recent_runs || []).map(r => r.run_id).join(','),
+                        };
+                        if (this._lastOverviewSnapshot && this._objectsEqualSnapshot(this._lastOverviewSnapshot, snapshot)) {
+                            return;
+                        }
+                        this._lastOverviewSnapshot = snapshot;
+                        this.crawlOverview = overview;
+                        this.syncSelectedConfigWithActiveSpace();
+                        this.refreshNotifications();
+                    } catch (error) {
+                        console.error('Erreur polling overview:', error);
+                    }
                 },
 
                 startAutoRefresh() {
@@ -2860,8 +3100,21 @@
 
                 get runtimeHasResidualActivity() {
                     const normalized = (this.crawlOverview.monitoring.latest_run_status || '').toLowerCase();
-                    return ['failed', 'error', 'completed', 'cancelled'].includes(normalized)
-                        && (this.crawlIsActive || this.crawlerRuntime.db_write_active);
+                    // Ne pas afficher si le run est terminé normalement sans activité réelle
+                    if (normalized === 'completed') {
+                        const lastActivity = this.crawlerRuntime.last_activity_at;
+                        if (lastActivity) {
+                            const lastActivityTime = new Date(lastActivity).getTime();
+                            const now = Date.now();
+                            // Considérez comme inactif si dernière activité > 60s
+                            if (now - lastActivityTime > 60000) {
+                                return false;
+                            }
+                        }
+                        return this.crawlerRuntime.db_write_active && this.crawlerRuntime.db_recent_writes > 0;
+                    }
+                    return ['failed', 'error', 'cancelled'].includes(normalized)
+                        && (this.crawlIsActive || (this.crawlerRuntime.db_write_active && this.crawlerRuntime.db_recent_writes > 0));
                 },
 
                 get databaseActivityLabel() {
@@ -3035,6 +3288,220 @@
                     });
                     
                     return config || null;
+                },
+
+                // === Artifacts page methods ===
+                get artifactCounts() {
+                    return {
+                        all: this.artifacts.length,
+                        temp: this.artifacts.filter(a => a.category === 'temp').length,
+                        duplicate: this.artifacts.filter(a => a.category === 'duplicate').length,
+                        system: this.artifacts.filter(a => a.category === 'system').length
+                    };
+                },
+
+                get filteredArtifacts() {
+                    if (this.artifactFilter === 'all') {
+                        return this.artifacts;
+                    }
+                    return this.artifacts.filter(a => a.category === this.artifactFilter);
+                },
+
+                async loadArtifacts() {
+                    this.loadingArtifacts = true;
+                    this.artifactActionStatus = '';
+                    try {
+                        const params = new URLSearchParams();
+                        if (this.activeSpace) {
+                            params.append('space', this.activeSpace);
+                        }
+                        const response = await fetch(`/api/artifacts?${params}`);
+                        if (!response.ok) {
+                            this.artifacts = [];
+                            return;
+                        }
+                        const data = await response.json();
+                        this.artifacts = data.artifacts || [];
+                    } catch (error) {
+                        console.error('Erreur chargement artefacts:', error);
+                        this.artifacts = [];
+                    } finally {
+                        this.loadingArtifacts = false;
+                    }
+                },
+
+                toggleArtifactSelection(id, event) {
+                    const index = this.selectedArtifacts.indexOf(id);
+                    if (index >= 0) {
+                        this.selectedArtifacts.splice(index, 1);
+                    } else {
+                        this.selectedArtifacts.push(id);
+                    }
+                },
+
+                toggleAllArtifacts(event) {
+                    if (event.target.checked) {
+                        this.selectedArtifacts = this.filteredArtifacts.map(a => a.id);
+                    } else {
+                        this.selectedArtifacts = [];
+                    }
+                },
+
+                async applyArtifactAction(action) {
+                    if (this.selectedArtifacts.length === 0 || this.artifactActionBusy) return;
+
+                    this.artifactActionBusy = true;
+                    this.artifactActionStatus = `Traitement en cours (${action}) pour ${this.selectedArtifacts.length} élément(s)...`;
+
+                    try {
+                        const response = await fetch('/api/artifacts/action', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                action: action,
+                                artifact_ids: this.selectedArtifacts
+                            })
+                        });
+                        const result = await response.json();
+                        if (!response.ok) {
+                            throw new Error(result.detail || 'Erreur lors de l\'action');
+                        }
+                        this.artifactActionStatus = `✅ ${result.message || 'Action terminée'}`;
+                        this.selectedArtifacts = [];
+                        await this.loadArtifacts();
+                    } catch (error) {
+                        this.artifactActionStatus = `❌ Erreur: ${error.message}`;
+                    } finally {
+                        this.artifactActionBusy = false;
+                    }
+                },
+
+                getArtifactIconClass(artifact) {
+                    const category = artifact.category || '';
+                    const name = artifact.name || '';
+                    const ext = (name.split('.').pop() || '').toLowerCase();
+
+                    if (category === 'temp') return 'fa-file-word text-amber-500';
+                    if (category === 'duplicate') return 'fa-files text-sky-500';
+                    if (category === 'system') return 'fa-gear text-slate-500';
+
+                    if (['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'svg'].includes(ext)) return 'fa-file-image text-cyan-600';
+                    if (['mp4', 'webm', 'ogg', 'mov', 'm4v'].includes(ext)) return 'fa-file-video text-rose-600';
+                    if (ext === 'pdf') return 'fa-file-pdf text-red-600';
+                    if (['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp'].includes(ext)) return 'fa-file-word text-blue-600';
+                    return 'fa-file text-slate-500';
+                },
+
+                getArtifactCategoryLabel(category) {
+                    const labels = {
+                        temp: 'Temporaire',
+                        duplicate: 'Doublon',
+                        system: 'Système'
+                    };
+                    return labels[category] || category;
+                },
+
+                getArtifactCategoryClass(category) {
+                    const classes = {
+                        temp: 'text-amber-600',
+                        duplicate: 'text-sky-600',
+                        system: 'text-slate-600'
+                    };
+                    return classes[category] || 'text-slate-600';
+                },
+
+                getArtifactStatusLabel(status) {
+                    const labels = {
+                        pending: 'En attente',
+                        processed: 'Traité',
+                        ignored: 'Ignoré',
+                        archived: 'Archivé',
+                        deleted: 'Supprimé'
+                    };
+                    return labels[status] || 'Nouveau';
+                },
+
+                getArtifactStatusClass(status) {
+                    const classes = {
+                        pending: 'text-amber-600',
+                        processed: 'text-emerald-600',
+                        ignored: 'text-slate-600',
+                        archived: 'text-blue-600',
+                        deleted: 'text-red-600'
+                    };
+                    return classes[status] || 'text-slate-600';
+                },
+
+                // Delete confirmation dialog state
+                showDeleteDialog: false,
+                deleteDialogPanel: null,
+                deleteConfirmationText: '',
+
+                showDeleteConfirmation(panelName) {
+                    this.deleteDialogPanel = panelName;
+                    this.deleteConfirmationText = '';
+                    this.showDeleteDialog = true;
+                },
+
+                cancelDelete() {
+                    this.showDeleteDialog = false;
+                    this.deleteDialogPanel = null;
+                    this.deleteConfirmationText = '';
+                },
+
+                get deleteDialogItemCount() {
+                    if (!this.deleteDialogPanel) return 0;
+                    return this.fileExplorer[this.deleteDialogPanel]?.selectedItems?.length || 0;
+                },
+
+                async executeDelete() {
+                    if (this.deleteDialogItemCount > 1 && this.deleteConfirmationText !== 'oui') {
+                        this.showAppNotification('❌ Vous devez taper "oui" explicitement pour confirmer la suppression multiple.', 'error');
+                        return;
+                    }
+
+                    try {
+                        const panel = this.fileExplorer[this.deleteDialogPanel];
+                        const itemCount = panel.selectedItems.length;
+                        const panelName = this.deleteDialogPanel === 'source' ? 'source' : 'archive';
+
+                        // Appeler l'API de suppression
+                        const response = await fetch('/api/delete-items', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                panel: panelName,
+                                items: panel.selectedItems.map(item => item.path)
+                            })
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`Erreur serveur: ${response.status}`);
+                        }
+
+                        const result = await response.json();
+                        
+                        // Rafraîchir l'explorateur
+                        await this.refreshExplorerPanel(this.deleteDialogPanel);
+                        
+                        this.showAppNotification(
+                            `✅ ${itemCount} élément(s) supprimé(s) avec succès`, 
+                            'success'
+                        );
+                        
+                        this.addLogEntry(`🗑️ Suppression de ${itemCount} élément(s) depuis le panneau ${panelName}`);
+                        
+                    } catch (error) {
+                        this.showAppNotification(
+                            `❌ Échec de la suppression: ${error.message}`, 
+                            'error'
+                        );
+                        this.addLogEntry(`❌ Erreur suppression: ${error.message}`);
+                    } finally {
+                        this.cancelDelete();
+                    }
                 }
             };
         }
@@ -3141,6 +3608,52 @@
                 </div>
             </div>
         </template>
+    </div>
+    
+    <!-- Delete Confirmation Dialog -->
+    <div x-show="showDeleteDialog" @click.away="cancelDelete" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+        <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl" @click.stop>
+            <div class="mb-4 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-slate-800">⚠️ Confirmation de suppression</h3>
+                <button @click="cancelDelete" class="text-slate-400 hover:text-slate-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="mb-6 rounded-lg bg-rose-50 p-4">
+                <p class="text-sm font-medium text-rose-800">
+                    ⚠️ ATTENTION : Cette opération est <strong>DÉFINITIVE</strong> et <strong>IRRÉVERSIBLE</strong>.
+                </p>
+                <p class="mt-2 text-sm text-rose-700">
+                    Vous allez supprimer <strong x-text="deleteDialogItemCount"></strong> fichier(s) sélectionné(s).
+                </p>
+                <p class="mt-2 text-sm text-rose-700">
+                    Les données seront <strong>perdues définitivement</strong> et ne pourront pas être récupérées.
+                </p>
+            </div>
+            
+            <div x-show="deleteDialogItemCount > 1" class="mb-6">
+                <label class="block text-sm font-medium text-slate-700 mb-2">
+                    Pour confirmer, tapez "oui" explicitement :
+                </label>
+                <input type="text" x-model="deleteConfirmationText"
+                       @keyup.enter="executeDelete"
+                       class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-teal-500"
+                       placeholder="Tapez 'oui' pour confirmer">
+            </div>
+            
+            <div class="flex justify-end gap-3">
+                <button @click="cancelDelete" class="rounded-lg px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                    Annuler
+                </button>
+                <button @click="executeDelete"
+                        :disabled="deleteDialogItemCount > 1 && deleteConfirmationText !== 'oui'"
+                        class="rounded-lg px-4 py-2 text-sm font-medium text-white transition"
+                        :class="deleteDialogItemCount > 1 && deleteConfirmationText !== 'oui' ? 'bg-rose-300 cursor-not-allowed' : 'bg-rose-600 hover:bg-rose-700'">
+                    Supprimer définitivement
+                </button>
+            </div>
+        </div>
     </div>
 </body>
 </html>
