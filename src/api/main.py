@@ -345,7 +345,7 @@ class UnixSocketHTTPConnection(http.client.HTTPConnection):
 
 
 def extract_space_prefix(path: str) -> Optional[str]:
-    """
+    r"""
     Extract space prefix from file path, handling various formats including PKI paths.
     
     Examples:
@@ -365,7 +365,7 @@ def extract_space_prefix(path: str) -> Optional[str]:
         if len(parts) >= 2:
             return f"\\{parts[0]}\\{parts[1]}"
         elif len(parts) == 1:
-            return f"\\{parts[0]}\"
+            return f"\\{parts[0]}\\"
         return None
 
     # Handle Unix absolute paths (/path/to/file)
@@ -395,6 +395,7 @@ class PostgreSQLAdapter:
     def __init__(self, config: Dict[str, Any]):
         self.config = config
         self._pool = None
+        self.logger = logging.getLogger(__name__)
 
     def _get_pool(self):
         if self._pool is None:
@@ -607,7 +608,14 @@ class PostgreSQLAdapter:
 
 
     def ensure_crawl_tables(self) -> None:
-        statements = [
+        """Initialise les tables de crawl avec protection contre les deadlocks.
+        
+        Cette méthode est protégée contre les deadlocks par:
+        - Vérification préalable de l'existence des colonnes (évite ALTER TABLE inutile)
+        - Lock timeout de 5 secondes (évite attente infinie)
+        - Exécution des ALTER TABLE seulement si nécessaire
+        """
+        ddl_statements = [
             """
             CREATE TABLE IF NOT EXISTS crawl_configs (
                 id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -664,39 +672,102 @@ class PostgreSQLAdapter:
             """,
             "CREATE INDEX IF NOT EXISTS idx_crawl_run_queue_items_run_id ON crawl_run_queue_items(run_id)",
             "CREATE INDEX IF NOT EXISTS idx_crawl_run_queue_items_run_queue ON crawl_run_queue_items(run_id, queue_name)",
-            """
-            ALTER TABLE files
-            ADD COLUMN IF NOT EXISTS crawl_config_id UUID REFERENCES crawl_configs(id) ON DELETE SET NULL
-            """,
-            """
-            ALTER TABLE crawl_configs
-            ADD COLUMN IF NOT EXISTS is_archive BOOLEAN NOT NULL DEFAULT FALSE
-            """,
-            "CREATE INDEX IF NOT EXISTS idx_files_crawl_config_id ON files(crawl_config_id)",
         ]
+        
         with self.get_connection() as conn:
             with conn.cursor() as cursor:
-                for statement in statements:
-                    cursor.execute(statement)
-                cursor.execute(
-                    """
-                    UPDATE files AS f
-                    SET crawl_config_id = matched.config_id
-                    FROM (
-                        SELECT DISTINCT ON (f.id)
-                            f.id AS file_id,
-                            c.id AS config_id
-                        FROM files AS f
-                        JOIN crawl_configs AS c
-                          ON f.path LIKE c.start_path || '%%'
-                        WHERE f.crawl_config_id IS NULL
-                        ORDER BY f.id, LENGTH(c.start_path) DESC, c.created_at DESC
-                    ) AS matched
-                    WHERE f.id = matched.file_id
-                      AND f.crawl_config_id IS NULL
-                    """
-                )
-            conn.commit()
+                try:
+                    # Set lock timeout to avoid infinite waits
+                    cursor.execute("SET LOCAL lock_timeout = '5s'")
+                    
+                    # Execute DDL statements (CREATE TABLE, CREATE INDEX - idempotents)
+                    for statement in ddl_statements:
+                        cursor.execute(statement)
+                    
+                    # Vérifier si la colonne crawl_config_id existe déjà sur files
+                    cursor.execute(
+                        """
+                        SELECT EXISTS (
+                            SELECT 1 
+                            FROM information_schema.columns 
+                            WHERE table_name = 'files' 
+                            AND column_name = 'crawl_config_id'
+                        )
+                        """
+                    )
+                    has_crawl_config_id = cursor.fetchone()[0]
+                    
+                    if not has_crawl_config_id:
+                        cursor.execute(
+                            """
+                            ALTER TABLE files
+                            ADD COLUMN crawl_config_id UUID REFERENCES crawl_configs(id) ON DELETE SET NULL
+                            """
+                        )
+                        self.logger.info("Colonne crawl_config_id ajoutée à files via ensure_crawl_tables")
+                    
+                    # Vérifier si la colonne is_archive existe déjà sur crawl_configs
+                    cursor.execute(
+                        """
+                        SELECT EXISTS (
+                            SELECT 1 
+                            FROM information_schema.columns 
+                            WHERE table_name = 'crawl_configs' 
+                            AND column_name = 'is_archive'
+                        )
+                        """
+                    )
+                    has_is_archive = cursor.fetchone()[0]
+                    
+                    if not has_is_archive:
+                        cursor.execute(
+                            """
+                            ALTER TABLE crawl_configs
+                            ADD COLUMN is_archive BOOLEAN NOT NULL DEFAULT FALSE
+                            """
+                        )
+                        self.logger.info("Colonne is_archive ajoutée à crawl_configs via ensure_crawl_tables")
+                    
+                    # Créer l'index si nécessaire
+                    cursor.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_files_crawl_config_id ON files(crawl_config_id)"
+                    )
+                    
+                    # Rétro-remplissage uniquement si des lignes n'ont pas de crawl_config_id
+                    cursor.execute("SELECT EXISTS (SELECT 1 FROM files WHERE crawl_config_id IS NULL LIMIT 1)")
+                    needs_backfill = cursor.fetchone()[0]
+                    
+                    if needs_backfill:
+                        cursor.execute(
+                            """
+                            UPDATE files AS f
+                            SET crawl_config_id = matched.config_id
+                            FROM (
+                                SELECT DISTINCT ON (f.id)
+                                    f.id AS file_id,
+                                    c.id AS config_id
+                                FROM files AS f
+                                JOIN crawl_configs AS c
+                                  ON f.path LIKE c.start_path || '%%'
+                                WHERE f.crawl_config_id IS NULL
+                                ORDER BY f.id, LENGTH(c.start_path) DESC, c.created_at DESC
+                            ) AS matched
+                            WHERE f.id = matched.file_id
+                              AND f.crawl_config_id IS NULL
+                            """
+                        )
+                        self.logger.info(f"Rétro-remplissage de {cursor.rowcount} fichiers via ensure_crawl_tables")
+                    
+                    conn.commit()
+                    
+                except psycopg2.errors.LockNotAvailable:
+                    # Lock timeout reached - rollback and continue
+                    conn.rollback()
+                    self.logger.warning("Lock timeout dans ensure_crawl_tables - schema update reporté")
+                    # Ne pas propager l'erreur pour permettre le démarrage de l'API
+                except Exception:
+                    conn.rollback()
+                    raise
 
     def list_crawl_configs(self) -> List[Dict[str, Any]]:
         query = """

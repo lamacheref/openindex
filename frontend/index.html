@@ -532,33 +532,33 @@
                                     Aucun élément indexé dans ce répertoire.
                                 </div>
                                 <div x-show="!fileExplorer.source.loading && fileExplorer.source.items.length > 0" class="h-[26rem] overflow-y-auto bg-white">
-                                    <div class="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-2 text-sm text-slate-600">
-                                        <span x-show="fileExplorer.source.selectedItems.length > 0" x-text="fileExplorer.source.selectedItems.length"></span>
-                                        <span x-show="fileExplorer.source.selectedItems.length === 0">Aucun</span>
-                                        élément(s) sélectionné(s)
-
-                                        <button
-                                            @click="fileExplorer.source.selectedItems.length > 0 ? clearExplorerSelection('source') : selectAllExplorerItems('source')"
-                                            class="ml-3 rounded-full px-2 py-1 text-xs font-medium transition"
-                                            :class="fileExplorer.source.selectedItems.length > 0 ? 'bg-slate-100 hover:bg-slate-200' : 'bg-teal-100 hover:bg-teal-200'">
-                                            <span x-text="fileExplorer.source.selectedItems.length > 0 ? 'Désélectionner tout' : 'Sélectionner tout'"></span>
-                                        </button>
-
-                                        <button
-                                            @click="archiveSelectedItems()"
-                                            :disabled="fileExplorer.source.selectedItems.length === 0 || archiveBusy"
-                                            class="ml-2 rounded-full px-2 py-1 text-xs font-medium text-white transition"
-                                            :class="fileExplorer.source.selectedItems.length > 0 ? 'bg-teal-600 hover:bg-teal-700' : 'bg-slate-400 cursor-not-allowed'">
-                                            Archiver la sélection
-                                        </button>
-                                        
-                                        <button
-                                            @click="showDeleteConfirmation('source')"
-                                            :disabled="fileExplorer.source.selectedItems.length === 0"
-                                            class="ml-2 rounded-full px-2 py-1 text-xs font-medium text-white transition"
-                                            :class="fileExplorer.source.selectedItems.length > 0 ? 'bg-red-600 hover:bg-red-700' : 'bg-slate-400 cursor-not-allowed'">
-                                            Supprimer la sélection
-                                        </button>
+                                    <!-- Barre d'actions fixe -->
+                                    <div class="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-2">
+                                        <div class="flex items-center gap-2 flex-wrap">
+                                            <button
+                                                @click="fileExplorer.source.selectedItems.length > 0 ? clearExplorerSelection('source') : selectAllExplorerItems('source')"
+                                                class="rounded-full px-3 py-1.5 text-xs font-medium transition"
+                                                :class="fileExplorer.source.selectedItems.length > 0 ? 'bg-slate-100 hover:bg-slate-200 text-slate-700' : 'bg-teal-100 hover:bg-teal-200 text-teal-700'">
+                                                <span x-text="fileExplorer.source.selectedItems.length > 0 ? 'Désélectionner tout' : 'Sélectionner tout'"></span>
+                                            </button>
+                                            <button
+                                                @click="archiveSelectedItems()"
+                                                :disabled="fileExplorer.source.selectedItems.length === 0 || archiveBusy"
+                                                class="rounded-full px-3 py-1.5 text-xs font-medium text-white transition"
+                                                :class="fileExplorer.source.selectedItems.length > 0 ? 'bg-teal-600 hover:bg-teal-700' : 'bg-slate-400 cursor-not-allowed'">
+                                                Archiver la sélection
+                                            </button>
+                                            <button
+                                                @click="showDeleteConfirmation('source')"
+                                                :disabled="fileExplorer.source.selectedItems.length === 0"
+                                                class="rounded-full px-3 py-1.5 text-xs font-medium text-white transition"
+                                                :class="fileExplorer.source.selectedItems.length > 0 ? 'bg-red-600 hover:bg-red-700' : 'bg-slate-400 cursor-not-allowed'">
+                                                Supprimer la sélection
+                                            </button>
+                                            <span class="ml-auto text-[9px] text-slate-500">
+                                                <span x-text="fileExplorer.source.selectedItems.length"></span> élément(s) sélectionné(s)
+                                            </span>
+                                        </div>
                                     </div>
                                     <template x-for="item in fileExplorer.source.items" :key="item.path">
                                         <button @click="selectExplorerItem('source', item, $event)"
@@ -725,25 +725,26 @@
                                     Aucun élément indexé dans ce répertoire d’archives.
                                 </div>
                                 <div x-show="!fileExplorer.archive.loading && fileExplorer.archive.items.length > 0" class="h-[26rem] overflow-y-auto bg-white">
-                                    <div class="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-2 text-sm text-slate-600">
-                                        <span x-show="fileExplorer.archive.selectedItems.length > 0" x-text="fileExplorer.archive.selectedItems.length"></span>
-                                        <span x-show="fileExplorer.archive.selectedItems.length === 0">Aucun</span>
-                                        élément(s) sélectionné(s)
-
-                                        <button
-                                            @click="fileExplorer.archive.selectedItems.length > 0 ? clearExplorerSelection('archive') : selectAllExplorerItems('archive')"
-                                            class="ml-3 rounded-full px-2 py-1 text-xs font-medium transition"
-                                            :class="fileExplorer.archive.selectedItems.length > 0 ? 'bg-slate-100 hover:bg-slate-200' : 'bg-teal-100 hover:bg-teal-200'">
-                                            <span x-text="fileExplorer.archive.selectedItems.length > 0 ? 'Désélectionner tout' : 'Sélectionner tout'"></span>
-                                        </button>
-                                        
-                                        <button
-                                            @click="showDeleteConfirmation('archive')"
-                                            :disabled="fileExplorer.archive.selectedItems.length === 0"
-                                            class="ml-2 rounded-full px-2 py-1 text-xs font-medium text-white transition"
-                                            :class="fileExplorer.archive.selectedItems.length > 0 ? 'bg-red-600 hover:bg-red-700' : 'bg-slate-400 cursor-not-allowed'">
-                                            Supprimer la sélection
-                                        </button>
+                                    <!-- Barre d'actions fixe -->
+                                    <div class="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-2">
+                                        <div class="flex items-center gap-2 flex-wrap">
+                                            <button
+                                                @click="fileExplorer.archive.selectedItems.length > 0 ? clearExplorerSelection('archive') : selectAllExplorerItems('archive')"
+                                                class="rounded-full px-3 py-1.5 text-xs font-medium transition"
+                                                :class="fileExplorer.archive.selectedItems.length > 0 ? 'bg-slate-100 hover:bg-slate-200 text-slate-700' : 'bg-teal-100 hover:bg-teal-200 text-teal-700'">
+                                                <span x-text="fileExplorer.archive.selectedItems.length > 0 ? 'Désélectionner tout' : 'Sélectionner tout'"></span>
+                                            </button>
+                                            <button
+                                                @click="showDeleteConfirmation('archive')"
+                                                :disabled="fileExplorer.archive.selectedItems.length === 0"
+                                                class="rounded-full px-3 py-1.5 text-xs font-medium text-white transition"
+                                                :class="fileExplorer.archive.selectedItems.length > 0 ? 'bg-red-600 hover:bg-red-700' : 'bg-slate-400 cursor-not-allowed'">
+                                                Supprimer la sélection
+                                            </button>
+                                            <span class="ml-auto text-[9px] text-slate-500">
+                                                <span x-text="fileExplorer.archive.selectedItems.length"></span> élément(s) sélectionné(s)
+                                            </span>
+                                        </div>
                                     </div>
                                     <template x-for="item in fileExplorer.archive.items" :key="item.path">
                                         <button @click="selectExplorerItem('archive', item, $event)"
@@ -1475,7 +1476,19 @@
                 async loadSpaces() {
                     try {
                         const response = await fetch('/api/spaces');
+                        
+                        if (!response.ok) {
+                            throw new Error(`Erreur HTTP ${response.status}`);
+                        }
+                        
                         const newSpaces = await response.json();
+                        
+                        // S'assurer que c'est un tableau
+                        if (!Array.isArray(newSpaces)) {
+                            console.warn('Réponse /api/spaces non tableau:', newSpaces);
+                            this.spaces = [];
+                            return;
+                        }
                         
                         // Vérifier si les espaces ont réellement changé
                         const spacesChanged = JSON.stringify(newSpaces) !== JSON.stringify(this.spaces);
