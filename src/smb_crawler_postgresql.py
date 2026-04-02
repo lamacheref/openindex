@@ -23,6 +23,7 @@ import pytz
 from logging_config import get_logger_manager
 from postgres_adapter import PostgreSQLAdapter
 from config_manager import ConfigManager
+from smb_health_monitor import SMBHealthMonitor, SMBServerStatus
 
 
 class SMBCrawlerPostgreSQL:
@@ -134,6 +135,10 @@ class SMBCrawlerPostgreSQL:
         self.last_completed_crawl_triggered_at = None
         self.pause_requested = False
         self.base_path = None
+        
+        # Health monitoring for SMB server
+        self.health_monitor = None
+        self.server_down_start_time = None
 
     def setup_logging(self):
         """Configure le logging avec rotation automatique."""
