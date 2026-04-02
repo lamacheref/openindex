@@ -198,10 +198,14 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
     - [x] Rétro-remplissage conditionnel (uniquement si des valeurs NULL existent)
     - [x] Gestion de `LockNotAvailable` avec rollback et log (ne bloque pas le démarrage de l'API)
   - [x] Fichiers modifiés : `src/postgres_adapter.py`, `src/api/main.py`
+  - [x] Correction warning : séquence d'échappement invalide `\s` dans docstring (main.py ligne 348)
+  - [x] Correction tests : ajout méthode `rollback()` aux FakeConn dans `tests/test_db_backend_feature_flag.py`
   - [x] Tests unitaires créés : `tests/test_deadlock_prevention.py` (8 tests)
   - [x] Commit fix : `e9043f9` sur branche `Devel`
   - [x] Commit tests : `0ebbb4f` sur branche `Devel`
+  - [x] Commit corrections CI : `[à compléter]` sur branche `Devel`
   - [x] Push vers GitHub : https://github.com/lamacheref/openindex/pull/new/Devel
+  - [x] Tests CI : `test_db_backend_feature_flag.py` et `test_deadlock_prevention.py` passent
 
 - [ ] **T-16 — Concevoir la page de traitements des artefacts**
   - [ ] Définir les catégories d'artefacts traitables: temporaires Office, doublons, fichiers système, archives obsolètes.

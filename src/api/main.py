@@ -345,7 +345,7 @@ class UnixSocketHTTPConnection(http.client.HTTPConnection):
 
 
 def extract_space_prefix(path: str) -> Optional[str]:
-    """
+    r"""
     Extract space prefix from file path, handling various formats including PKI paths.
     
     Examples:

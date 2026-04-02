@@ -25,6 +25,8 @@ def test_get_db_adapter_postgresql(monkeypatch):
 
     class FakeCursor:
         def execute(self, query):
+            if 'SET LOCAL lock_timeout' in query:
+                return
             if 'CREATE TABLE IF NOT EXISTS crawl_configs' in query:
                 return
             if 'CREATE INDEX IF NOT EXISTS idx_crawl_configs_created_at' in query:
@@ -49,6 +51,8 @@ def test_get_db_adapter_postgresql(monkeypatch):
                 return
             if 'UPDATE files AS f' in query:
                 return
+            if 'SELECT EXISTS' in query:
+                return
             raise AssertionError(f"Unexpected query: {query}")
 
         def __enter__(self):
@@ -68,6 +72,9 @@ def test_get_db_adapter_postgresql(monkeypatch):
             return False
 
         def commit(self):
+            pass
+
+        def rollback(self):
             pass
 
     class FakePool:
@@ -120,6 +127,12 @@ def test_postgresql_execute_query_returns_empty_list_when_cursor_has_no_result_s
 
         def __exit__(self, exc_type, exc, tb):
             return False
+
+        def commit(self):
+            pass
+
+        def rollback(self):
+            pass
 
     adapter = api_main.PostgreSQLAdapter({})
     monkeypatch.setattr(adapter, "get_connection", lambda: FakeConn())
