@@ -191,10 +191,17 @@ Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par pr
   - [ ] Adapter la doc opératoire pour éviter les recrawls monolithiques sur base active.
 
 - [x] **T-17 — Corriger les deadlocks PostgreSQL** (2026-04-02)
-  - [x] Corrigé le bug `cleanup_stale_runs` avec gestion des types datetime/string
-  - [x] Activé le niveau d'isolation SERIALIZABLE pour toutes les transactions
-  - [x] Documenté dans `src/postgres_adapter.py` et `src/smb_crawler_postgresql.py`
-  - [x] Commit: [à compléter]
+  - [x] Problème identifié : conflits de verrouillage exclusif entre `ALTER TABLE` et `SELECT/UPDATE` sur tables `crawl_runs` et `files`
+  - [x] Solution implémentée :
+    - [x] Vérification préalable de l'existence des colonnes avant `ALTER TABLE` (évite verrous exclusifs inutiles)
+    - [x] `SET LOCAL lock_timeout = '5s'` pour éviter les attentes infinies
+    - [x] Rétro-remplissage conditionnel (uniquement si des valeurs NULL existent)
+    - [x] Gestion de `LockNotAvailable` avec rollback et log (ne bloque pas le démarrage de l'API)
+  - [x] Fichiers modifiés : `src/postgres_adapter.py`, `src/api/main.py`
+  - [x] Tests unitaires créés : `tests/test_deadlock_prevention.py` (8 tests)
+  - [x] Commit fix : `e9043f9` sur branche `Devel`
+  - [x] Commit tests : `0ebbb4f` sur branche `Devel`
+  - [x] Push vers GitHub : https://github.com/lamacheref/openindex/pull/new/Devel
 
 - [ ] **T-16 — Concevoir la page de traitements des artefacts**
   - [ ] Définir les catégories d'artefacts traitables: temporaires Office, doublons, fichiers système, archives obsolètes.

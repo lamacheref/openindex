@@ -195,6 +195,12 @@ class TestLockNotAvailableHandling:
                     return
                 if "information_schema.columns" in query:
                     raise psycopg2.errors.LockNotAvailable("lock timeout")
+            
+            def __enter__(self):
+                return self
+            
+            def __exit__(self, exc_type, exc, tb):
+                return False
         
         cursor = LockTimeoutCursor(column_exists=True, has_null_values=False)
         conn = FakeConn(cursor)
@@ -214,6 +220,7 @@ class TestEnsureCrawlTables:
     def test_column_checks_before_alter_table(self, monkeypatch):
         """Vérifie que les colonnes sont checkées avant ALTER TABLE."""
         import main as api_main
+        import logging
         
         calls = {'queries': []}
         
@@ -254,6 +261,12 @@ class TestEnsureCrawlTables:
             @property
             def rowcount(self):
                 return 0
+            
+            def __enter__(self):
+                return self
+            
+            def __exit__(self, exc_type, exc, tb):
+                return False
         
         class FakeConn:
             def cursor(self):
@@ -268,6 +281,8 @@ class TestEnsureCrawlTables:
                 return False
         
         adapter = api_main.PostgreSQLAdapter({})
+        # Mock the logger to avoid attribute errors
+        adapter.logger = logging.getLogger(__name__)
         monkeypatch.setattr(adapter, 'get_connection', lambda: FakeConn())
         
         adapter.ensure_crawl_tables()
@@ -282,6 +297,7 @@ class TestEnsureCrawlTables:
         """LockNotAvailable ne doit pas propager l'erreur (permettre le démarrage de l'API)."""
         import main as api_main
         import psycopg2.errors
+        import logging
         
         class LockTimeoutCursor:
             def execute(self, query, params=None):
@@ -297,6 +313,12 @@ class TestEnsureCrawlTables:
             @property
             def rowcount(self):
                 return 0
+            
+            def __enter__(self):
+                return self
+            
+            def __exit__(self, exc_type, exc, tb):
+                return False
         
         class FakeConn:
             def cursor(self):
@@ -311,6 +333,8 @@ class TestEnsureCrawlTables:
                 return False
         
         adapter = api_main.PostgreSQLAdapter({})
+        # Mock the logger to avoid attribute errors
+        adapter.logger = logging.getLogger(__name__)
         monkeypatch.setattr(adapter, 'get_connection', lambda: FakeConn())
         
         # Ne doit pas lever d'exception
