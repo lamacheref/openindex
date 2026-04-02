@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import logging
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src' / 'api'))
@@ -55,6 +56,13 @@ def test_get_db_adapter_postgresql(monkeypatch):
                 return
             raise AssertionError(f"Unexpected query: {query}")
 
+        def fetchone(self):
+            return [True]
+
+        @property
+        def rowcount(self):
+            return 0
+
         def __enter__(self):
             return self
 
@@ -97,6 +105,8 @@ def test_get_db_adapter_postgresql(monkeypatch):
     monkeypatch.setattr(api_main, 'SimpleConnectionPool', FakePool)
 
     adapter = api_main.get_db_adapter()
+    # Mock the logger to avoid attribute errors
+    adapter.logger = logging.getLogger(__name__)
     assert isinstance(adapter, api_main.PostgreSQLAdapter)
     assert calls['count'] == 1
 

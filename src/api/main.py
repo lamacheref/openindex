@@ -395,6 +395,7 @@ class PostgreSQLAdapter:
     def __init__(self, config: Dict[str, Any]):
         self.config = config
         self._pool = None
+        self.logger = logging.getLogger(__name__)
 
     def _get_pool(self):
         if self._pool is None:
