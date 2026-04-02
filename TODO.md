@@ -6,7 +6,7 @@
 
 ---
 
-## 1) Priorité Critique — Worker de Transfert et Queues
+## 1) Priorité Critique — Worker de Transfert et Queues 
 
 ### T-ARCH-01 — Corriger et stabiliser le transfert de données sources/archives
 - [ ] **Refonte du mécanisme de transfert** : Remplacer le transfert synchrone par des **queues de travail asynchrones**
@@ -15,6 +15,8 @@
 - [ ] **Suivi de progression** : Exposer l'état des transferts en cours (fichiers traités, en erreur, en attente)
 - [ ] **Persistance des queues** : Stocker les jobs de transfert en base PostgreSQL pour survie aux redémarrages
 - [ ] **Tests de charge** : Valider le transfert de gros volumes (10k+ fichiers, fichiers > 10Go)
+- [ ] **Documentation** : Documenter l'architecture des queues et le workflow de transfert
+- [ ] **Bump Version** : Passer à la version 0.5.0
 
 ### T-ARCH-02 — Queue de travail worker d'archivage
 - [ ] **Table `archive_jobs`** : Créer une table pour persister les jobs d'archivage (id, source_path, dest_path, status, created_at, started_at, completed_at, error_message)
@@ -23,6 +25,8 @@
 - [ ] **Configuration dans la DB** : Stocker les règles de scheduling et les paramètres d'archivage en base
 - [ ] **Endpoint API** : Exposer `/api/archive/queue` pour créer/annuler/lister les jobs d'archivage
 - [ ] **UI de monitoring** : Afficher la file d'attente des transferts dans l'interface (en cours, complétés, échoués)
+- [ ] **Documentation** : Documenter l'architecture des queues et le workflow d'archivage
+- [ ] **Bump Version** : Passer à la version 0.6.0
 
 ---
 
@@ -36,6 +40,8 @@
   - [ ] **Inutilisés** : Fichiers non lus depuis une date configurable (défaut: 1 an, si métrique dispo)
 - [ ] **KPI par catégorie** : Afficher le nombre de fichiers et la volumétrie totale pour chaque catégorie
 - [ ] **Actions de masse** : Sélection multiple + actions (supprimer, ignorer, archiver)
+- [ ] **Documentation** : Documenter les filtres et les seuils configurables
+- [ ] **Bump Version** : Passer à la version 0.7.0
 
 ### T-ART-02 — Détail des doublons avec navigation
 - [ ] **Liste des doublons enrichie** : Pour chaque fichier en doublon, afficher :
@@ -44,6 +50,8 @@
   - [ ] Espace/SMB de chaque occurrence
 - [ ] **Navigation facile** : Bouton "Voir dans l'explorateur" pour chaque occurrence
 - [ ] **Comparaison côte à côte** : Visualiser les métadonnées des différentes occurrences
+- [ ] **Documentation** : Documenter la navigation et les actions disponibles
+- [ ] **Bump Version** : Passer à la version 0.8.0
 
 ### T-ART-03 — Filtres configurables
 - [ ] **Configuration des seuils** : Interface pour modifier dynamiquement :
@@ -52,6 +60,8 @@
   - [ ] Seuil "Inutilisés" (jours/mois/années depuis dernier accès, si disponible)
 - [ ] **Sauvegarde des préférences** : Persister les filtres utilisateur en base
 - [ ] **Préréglages** : Fournir des presets (Conservateur, Standard, Agressif)
+- [ ] **Documentation** : Documenter les filtres et les seuils configurables
+- [ ] **Bump Version** : Passer à la version 0.9.0
 
 ---
 
@@ -67,7 +77,8 @@
   - [ ] Recherche par chemin (path contains)
   - [ ] Filtres combinés (type, taille min/max, date de création/modification)
   - [ ] Recherche dans le contenu (phase 2 : indexation des métadonnées Office/PDF)
-- [ ] **Index Elasticsearch/OpenSearch (optionnel)** : Pour les grandes volumétries (> 1M fichiers)
+- [ ] **Documentation** : Documenter les filtres et les seuils configurables
+- [ ] **Bump Version** : Passer à la version 0.10.0
 
 ### T-INDEX-01 — Exclusion d'indexation par paths
 - [ ] **Configuration d'exclusions** : Permettre de définir des patterns de chemins à exclure :
@@ -76,6 +87,8 @@
   - [ ] Exclusions par espace (spécifiques à un crawl_config)
 - [ ] **Détection des overlaps** : Algorithme détectant automatiquement les chevauchements entre espaces configurés
 - [ ] **UI de configuration** : Interface pour gérer les patterns d'exclusion avec validation
+- [ ] **Documentation** : Documenter les filtres et les seuils configurables
+- [ ] **Bump Version** : Passer à la version 0.11.0
 
 ---
 
@@ -94,6 +107,8 @@
   - [ ] Marquer pour revue manuelle
 - [ ] **Simulation** : Mode "dry-run" montrant ce qui serait archivé sans exécuter
 - [ ] **Historique** : Traçabilité de tous les archivages automatiques
+- [ ] **Documentation** : Documenter les filtres et les seuils configurables
+- [ ] **Bump Version** : Passer à la version 0.12.0
 
 ---
 
@@ -113,6 +128,8 @@
   - [ ] Permissions granulaires (lancer crawl, supprimer fichiers, configurer espaces)
 - [ ] **Protection des endpoints** : Middleware d'authentification sur toutes les API sensibles
 - [ ] **UI de connexion** : Page de login et gestion de session
+- [ ] **Documentation** : Documenter les filtres et les seuils configurables
+- [ ] **Bump Version** : Passer à la version 0.13.0
 
 ---
 
@@ -126,6 +143,8 @@ Pour chaque tâche T-XXX :
 - [ ] Migrations DB créées si nécessaire
 - [ ] Preuve de fonctionnement (logs, captures d'écran, ou démonstration)
 - [ ] Commit clair et traçable dans Git
+- [ ] Milestone approprié assigné
+- [ ] Tags appropriés assignés
 
 ---
 
