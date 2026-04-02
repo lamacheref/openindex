@@ -7,13 +7,40 @@ Remplace les fonctions SQLite par des équivalents PostgreSQL
 import psycopg2
 import psycopg2.extras
 from psycopg2.extras import execute_values
+from psycopg2.pool import SimpleConnectionPool
 import os
 import logging
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Callable
 from contextlib import contextmanager
+from functools import wraps
+
+def retry_on_deadlock(max_retries: int = 3, delay: float = 0.1):
+    """Decorator to retry database operations on deadlock errors."""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except psycopg2.errors.DeadlockDetected as e:
+                    last_exception = e
+                    if attempt < max_retries - 1:
+                        time.sleep(delay * (2 ** attempt))  # Exponential backoff
+                        continue
+                    raise
+                except psycopg2.errors.SerializationFailure as e:
+                    last_exception = e
+                    if attempt < max_retries - 1:
+                        time.sleep(delay * (2 ** attempt))  # Exponential backoff
+                        continue
+                    raise
+            raise last_exception if last_exception else Exception("Unknown error")
+        return wrapper
+    return decorator
 
 class PostgreSQLAdapter:
     """Adaptateur PostgreSQL pour OpenIndex"""
@@ -27,33 +54,38 @@ class PostgreSQLAdapter:
         """
         self.config = config
         self.logger = logging.getLogger(__name__)
+        # Create connection pool
+        self.connection_pool = SimpleConnectionPool(
+            minconn=1,
+            maxconn=10,
+            host=self.config.get('host', 'localhost'),
+            port=self.config.get('port', 5432),
+            database=self.config.get('database', 'openindex'),
+            user=self.config.get('user', 'openindex_user'),
+            password=self.config.get('password', 'openindex_secure_password')
+        )
         
     @contextmanager
     def get_connection(self):
         """Context manager pour la connexion PostgreSQL"""
         conn = None
         try:
-            conn = psycopg2.connect(
-                host=self.config.get('host', 'localhost'),
-                port=self.config.get('port', 5432),
-                database=self.config.get('database', 'openindex'),
-                user=self.config.get('user', 'openindex_user'),
-                password=self.config.get('password', 'openindex_secure_password')
-            )
+            conn = self.connection_pool.getconn()
             conn.autocommit = False
-            # Set transaction isolation level to SERIALIZABLE for stronger consistency
+            # Set transaction isolation level to READ COMMITTED to reduce deadlocks
             cursor = conn.cursor()
-            cursor.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
+            cursor.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
             cursor.close()
             yield conn
         except Exception as e:
             if conn:
                 conn.rollback()
+                self.connection_pool.putconn(conn)
             self.logger.error(f"Erreur de connexion PostgreSQL: {e}")
             raise
         finally:
             if conn:
-                conn.close()
+                self.connection_pool.putconn(conn)
     
     def initialize_database(self):
         """Initialise la base de données (crée les tables si nécessaire)"""
@@ -87,37 +119,81 @@ class PostgreSQLAdapter:
         self.ensure_file_space_linking()
 
     def ensure_file_space_linking(self):
-        """Ajoute et rétro-remplit le lien entre fichiers et configuration de crawl."""
+        """Ajoute et rétro-remplit le lien entre fichiers et configuration de crawl.
+        
+        Cette méthode est protégée contre les deadlocks par:
+        - Vérification préalable de l'existence de la colonne (évite ALTER TABLE inutile)
+        - Lock timeout de 5 secondes (évite attente infinie)
+        """
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                """
-                ALTER TABLE files
-                ADD COLUMN IF NOT EXISTS crawl_config_id UUID REFERENCES crawl_configs(id) ON DELETE SET NULL
-                """
-            )
-            cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_files_crawl_config_id ON files(crawl_config_id)"
-            )
-            cursor.execute(
-                """
-                UPDATE files AS f
-                SET crawl_config_id = matched.config_id
-                FROM (
-                    SELECT DISTINCT ON (f.id)
-                        f.id AS file_id,
-                        c.id AS config_id
-                    FROM files AS f
-                    JOIN crawl_configs AS c
-                      ON f.path LIKE c.start_path || '%%'
-                    WHERE f.crawl_config_id IS NULL
-                    ORDER BY f.id, LENGTH(c.start_path) DESC, c.created_at DESC
-                ) AS matched
-                WHERE f.id = matched.file_id
-                  AND f.crawl_config_id IS NULL
-                """
-            )
-            conn.commit()
+            try:
+                # Set lock timeout to avoid infinite waits
+                cursor.execute("SET LOCAL lock_timeout = '5s'")
+                
+                # Vérifier si la colonne existe déjà (évite le verrou exclusif d'ALTER TABLE)
+                cursor.execute(
+                    """
+                    SELECT EXISTS (
+                        SELECT 1 
+                        FROM information_schema.columns 
+                        WHERE table_name = 'files' 
+                        AND column_name = 'crawl_config_id'
+                    )
+                    """
+                )
+                column_exists = cursor.fetchone()[0]
+                
+                if not column_exists:
+                    cursor.execute(
+                        """
+                        ALTER TABLE files
+                        ADD COLUMN crawl_config_id UUID REFERENCES crawl_configs(id) ON DELETE SET NULL
+                        """
+                    )
+                    self.logger.info("Colonne crawl_config_id ajoutée à la table files")
+                
+                # Créer l'index si nécessaire (idempotent, pas de verrou exclusif)
+                cursor.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_files_crawl_config_id ON files(crawl_config_id)"
+                )
+                
+                # Rétro-remplissage uniquement si des lignes n'ont pas de crawl_config_id
+                cursor.execute(
+                    "SELECT EXISTS (SELECT 1 FROM files WHERE crawl_config_id IS NULL LIMIT 1)"
+                )
+                has_null_values = cursor.fetchone()[0]
+                
+                if has_null_values:
+                    cursor.execute(
+                        """
+                        UPDATE files AS f
+                        SET crawl_config_id = matched.config_id
+                        FROM (
+                            SELECT DISTINCT ON (f.id)
+                                f.id AS file_id,
+                                c.id AS config_id
+                            FROM files AS f
+                            JOIN crawl_configs AS c
+                              ON f.path LIKE c.start_path || '%%'
+                            WHERE f.crawl_config_id IS NULL
+                            ORDER BY f.id, LENGTH(c.start_path) DESC, c.created_at DESC
+                        ) AS matched
+                        WHERE f.id = matched.file_id
+                          AND f.crawl_config_id IS NULL
+                        """
+                    )
+                    self.logger.info(f"Rétro-remplissage de {cursor.rowcount} fichiers avec crawl_config_id")
+                
+                conn.commit()
+            except psycopg2.errors.LockNotAvailable:
+                # Lock timeout reached - retry later
+                conn.rollback()
+                self.logger.warning("Lock timeout dans ensure_file_space_linking - report au prochain cycle")
+                raise
+            except Exception:
+                conn.rollback()
+                raise
 
     def _normalize_timestamp_value(self, value: Any) -> Optional[datetime]:
         if value is None or value == "":
@@ -138,6 +214,7 @@ class PostgreSQLAdapter:
             conn.commit()
             return rows
     
+    @retry_on_deadlock(max_retries=5, delay=0.05)
     def save_files_batch(self, files_data: List[Dict[str, Any]]) -> int:
         """
         Sauvegarde un lot de fichiers dans PostgreSQL
@@ -204,6 +281,7 @@ class PostgreSQLAdapter:
                 self.logger.error(f"Erreur lors de la sauvegarde du lot: {e}")
                 raise
 
+    @retry_on_deadlock(max_retries=5, delay=0.05)
     def get_files_by_paths(
         self,
         paths: List[str],
@@ -258,6 +336,7 @@ class PostgreSQLAdapter:
                 return None
             return row[0]
     
+    @retry_on_deadlock(max_retries=5, delay=0.1)
     def calculate_duplicates(self) -> int:
         """
         Calcule et marque les doublons
@@ -672,6 +751,11 @@ class PostgreSQLAdapter:
                 conn.rollback()
                 raise
     
+    def close(self):
+        """Fermeture propre du pool de connexions"""
+        if hasattr(self, 'connection_pool') and self.connection_pool:
+            self.connection_pool.closeall()
+
     def test_connection(self) -> bool:
         """
         Teste la connexion à la base de données
