@@ -1,4 +1,4 @@
-# ROADMAP OpenIndex (J4 validé — mars 2026)
+# ROADMAP OpenIndex (J6 — avril 2026)
 
 ## Vision
 
@@ -7,7 +7,6 @@ Industrialiser OpenIndex pour un usage régulier en environnement SMB volumineux
 ## Phases
 
 ## Phase J1 (historique) — Kickoff opérationnel
-
 ### Objectifs J1
 - Cadrer les priorités de sprint et les responsabilités.
 - Rendre la documentation de pilotage totalement alignée.
@@ -19,27 +18,23 @@ Industrialiser OpenIndex pour un usage régulier en environnement SMB volumineux
 - Plan de passage J1 -> J2 validé.
 
 ## Phase J2 (historique) — Fiabilisation
-
 - Renforcer les tests API/front essentiels.
-- Formaliser procédures d’incident sur la base active.
+- Formaliser procédures d'incident sur la base active.
 - Clarifier les workflows CI utiles et déprécier les parcours legacy.
 
 ## Phase de stabilisation initiale (historique)
-
 - Exploitation robuste initiale de la stack API + frontend avant bascule PostgreSQL.
 - Optimisation des performances de consultation.
 - Durcissement des exécutions longues côté crawler.
 
 ## Phase J4 — Consolidation PostgreSQL (validée)
-
 - Opérer le backend de données principal en PostgreSQL avec vérification de la disponibilité et stabilité.
-- Stabiliser le schéma et la stratégie d’indexation dans PostgreSQL.
+- Stabiliser le schéma et la stratégie d'indexation dans PostgreSQL.
 - Exécuter des recrawls complets sur zones de test avec PostgreSQL.
 - Décision `Go` documentée le `2026-03-18`.
 - Lot correctif opérateur clôturé le `2026-03-19` : progression runtime fiable, cohérence UI renforcée, réconciliation des runs `cancelling`, purge WebSocket des clients fermés, abandon explicite du prototype `estimate-{hash}`.
 
 ## Phase J5 (prochaine) — Qualité et observabilité
-
 - Couverture de tests mesurée et suivie.
 - Dashboards de santé et alerting.
 - Processus de release strict (DoD + checklist publication).
@@ -47,3 +42,29 @@ Industrialiser OpenIndex pour un usage régulier en environnement SMB volumineux
 - Préparer la configuration multi-repository et la segmentation des sources de crawl.
 - Faire converger l'UI finale vers une console opératoire active, centrée sur le crawl réel et l'exploitation.
 - Concevoir un explorateur de fichiers double panneau et une page dédiée aux traitements des artefacts.
+
+## Phase J6 — Data Lifecycle & Archivage Automatique (en cours)
+### Objectifs J6
+- Stabiliser le transfert de données entre sources et archives via queues de travail.
+- Implémenter un système complet de gestion du cycle de vie des données.
+- Mettre en place l'archivage automatique configurable.
+
+### Livraisons J6
+- **T-ARCH-01** (✅ complété 2026-04-02) : Archive Queue System
+  - Queue de jobs persistants en PostgreSQL
+  - Transfer Worker avec retry exponentiel + jitter
+  - API REST complète (7 endpoints)
+  - Monitoring temps réel et health checks
+  - Suite de tests complète (22+31+4 tests)
+  - Documentation technique complète
+
+- **T-ARCH-02** (en cours) : Scheduling et configuration
+  - Déclenchement par cron des jobs d'archivage
+  - Configuration des règles en base de données
+  - UI de monitoring des files d'attente
+
+### Prochaines livraisons prévues
+- **T-ART-01/02/03** : Gestion des artefacts et doublons
+- **T-SEARCH-01** : Moteur de recherche et sommaire
+- **T-AUTO-01** : Archivage automatique intelligent
+- **T-AUTH-01** : Authentification et sécurité

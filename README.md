@@ -2,14 +2,35 @@
 
 Solution d’indexation de partages SMB avec **crawler Python**, **API FastAPI**, **frontend statique** et **PostgreSQL**.
 
-## État actuel (J4 en revalidation — mars 2026)
+## État actuel (J6 — avril 2026)
 
-Le projet tourne sur une base **PostgreSQL** stabilisée, mais la preuve J4 doit encore être régénérée sur un recrawl complet de référence avant de rétablir une décision formelle exploitable.
+Le projet dispose désormais d'un **système complet de queue d'archivage** avec worker dédié, retry automatique et monitoring temps réel.
 
-La base active à date est :
+### Dernière livrason majeure — T-ARCH-01 (2026-04-02)
+- **Commit:** `70312f587e2f4ebb10bd7fad453e0f751220cf30`
+- **Version:** 0.4.18
+- **Status:** ✅ Opérationnel avec corrections critiques appliquées
+
+**Nouvelles fonctionnalités T-ARCH-01:**
+- **Archive Queue System** : Queue de jobs persistants en PostgreSQL
+- **Transfer Worker** : Worker dédié avec retry exponentiel + jitter
+- **API REST** : 7 endpoints pour gestion des jobs (`/api/archive/queue/*`)
+- **Monitoring** : Stats en temps réel et health checks
+- **Tests complets** : Unitaires, intégration, charge (22+31+4 tests)
+
+**Corrections critiques appliquées:**
+- PoolError PostgreSQL (double putconn)
+- SMBConnectionError → SMBConnectionClosed
+- CREATE TYPE idempotent dans init.sql
+- IndexError dans retry decorator
+- Import Enum manquant dans API
+
+### Infrastructure actuelle
 
 - API FastAPI (`src/api/main.py`) avec base de données **PostgreSQL** via `OPENINDEX_DB_BACKEND=postgresql`.
 - Frontend statique (`frontend/index.html`) servi par Nginx.
+- **Archive Transfer Worker** (`src/archive_transfer_worker.py`) avec retry et backoff exponentiel.
+- **SMB Health Monitor** (`src/smb_health_monitor.py`) pour surveillance serveurs.
 - Endpoint de diagnostic SQL `GET /api/db-explain` avec vue frontend associée.
 - Orchestration recommandée : `docker-compose.yml` (stack complète PostgreSQL).
 - Build/push d’images automatisé via GitHub Actions (`.github/workflows/docker-stack.yml`).
@@ -34,6 +55,11 @@ La base active à date est :
 - **Nettoyage automatique des runs bloqués** : Le crawler détecte et corrige périodiquement les runs qui restent dans un état "running" alors qu'ils sont terminés côté serveur.
 - **Synchronisation manuelle des statuts** : Bouton "Synchroniser" dans l'interface pour forcer le rafraîchissement de l'état des runs.
 - **Notifications améliorées** : Meilleure visibilité des changements de statut des runs avec notifications contextuelles.
+- **Archive Queue System** : Queue de jobs persistants en PostgreSQL pour transferts entre espaces.
+- **Transfer Worker** : Worker dédié avec retry exponentiel + jitter pour opérations de transfert.
+- **API REST Archive** : 7 endpoints pour gestion des jobs (`/api/archive/queue/*`).
+- **Monitoring Archive** : Stats en temps réel et health checks pour le worker d'archivage.
+- **Tests complets** : Suite de tests unitaires, d'intégration et de charge.
 
 ## Installation
 

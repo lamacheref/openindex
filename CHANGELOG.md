@@ -1,5 +1,52 @@
 # Changelog OpenIndex avec PostgreSQL
 
+## 2026-04-02 — T-ARCH-01 Archive Queue System (v0.4.18)
+
+### Nouvelles fonctionnalités majeures
+- **Archive Queue System** : Implémentation complète d'une queue de jobs persistants en PostgreSQL
+- **Transfer Worker** : Worker dédié avec retry exponentiel (+ jitter) pour opérations de transfert SMB
+- **API REST Archive** : 7 endpoints pour gestion des jobs (`/api/archive/queue/*`)
+  - `POST /api/archive/queue` : Créer un job d'archivage
+  - `GET /api/archive/queue` : Lister les jobs avec filtres
+  - `GET /api/archive/queue/{id}` : Détails d'un job
+  - `DELETE /api/archive/queue/{id}` : Annuler un job
+  - `POST /api/archive/queue/{id}/retry` : Relancer un job échoué
+  - `GET /api/archive/queue/stats` : Statistiques des jobs
+  - `GET /api/transfer/worker/health` : Health du worker
+- **Monitoring temps réel** : Stats en temps réel et health checks
+- **Suite de tests complète** : 22 tests unitaires worker + 31 tests API + 4 tests intégration + 4 tests charge
+
+### Corrections critiques
+- **PoolError PostgreSQL** : Correction double putconn dans postgres_adapter.py
+- **SMBConnectionError** : Remplacement par SMBConnectionClosed (smbprotocol)
+- **CREATE TYPE idempotent** : Blocs DO $$ avec IF NOT EXISTS dans init.sql
+- **IndexError retry decorator** : Ajout vérification args vide
+- **Import Enum manquant** : Ajout dans api/main.py
+- **migrate.py paramètre fetch** : Suppression paramètre inexistant
+
+### Documentation
+- **7 fichiers docs créés** : Architecture complète, API, monitoring, migrations
+- **Rapport d'audit** : `docs/audit/T-ARCH-01-audit-2026-04-02.md`
+- **Issues GitHub** : #68-#72 créées pour tests failed
+
+### Fichiers ajoutés/modifiés
+- `src/archive_transfer_worker.py` : Worker avec retry et backoff
+- `src/smb_health_monitor.py` : Monitoring santé serveurs SMB
+- `src/postgres_adapter.py` : Corrections pool et migrations
+- `src/api/main.py` : Endpoints archive queue + import Enum
+- `database/init.sql` : Types idempotents et tables archive_jobs
+- `scripts/migrate.py` : Corrections paramètres
+- `tests/` : Suite complète de tests T-ARCH-01
+- `docs/` : Documentation technique complète
+- `scripts/load_test_archive.py` : Tests de charge
+
+### Infrastructure
+- **Docker** : Images mises à jour avec corrections
+- **Base de données** : Schéma étendu avec archive_jobs
+- **API** : 7 nouveaux endpoints opérationnels
+
+---
+
 ## 2026-04-01 — Mise à jour des informations de build Docker
 
 - **Dockerfiles mis à jour** : `Dockerfile.api`, `Dockerfile.crawler`, `Dockerfile.frontend`.
