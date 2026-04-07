@@ -2806,7 +2806,7 @@ def _extract_large_file_metrics(raw_log_lines: List[str]) -> Dict[str, int]:
 def _build_system_status_payload() -> SystemStatus:
     # Lire la version depuis le fichier VERSION
     try:
-        from versioning import get_current_version
+        from src.versioning import get_current_version
         version_from_file = get_current_version()
     except ImportError:
         version_from_file = "0.4.19"
