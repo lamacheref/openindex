@@ -98,24 +98,26 @@ def retry_with_backoff(
                         )
                         
                         # Log le retry
+                        func_name = getattr(func, '__name__', 'decorated_function')
                         if args and hasattr(args[0], 'logger'):
                             args[0].logger.warning(
-                                f"⚠️  {func.__name__} échoué (tentative {attempt + 1}/{max_retries + 1}): {exc}"
+                                f"â ï¸  {func_name} ï¿½chouï¿½ (tentative {attempt + 1}/{max_retries + 1}): {exc}"
                             )
-                            args[0].logger.info(f"⏳ Retry dans {delay:.2f}s...")
+                            args[0].logger.info(f"â³ï¸ Retry dans {delay:.2f}s...")
                         else:
-                            print(f"⚠️  {func.__name__} échoué (tentative {attempt + 1}/{max_retries + 1}): {exc}")
-                            print(f"⏳ Retry dans {delay:.2f}s...")
+                            print(f"â ï¸  {func_name} ï¿½chouï¿½ (tentative {attempt + 1}/{max_retries + 1}): {exc}")
+                            print(f"â³ï¸ Retry dans {delay:.2f}s...")
                         
                         time.sleep(delay)
                     else:
                         # Dernière tentative échouée
+                        func_name = getattr(func, '__name__', 'decorated_function')
                         if args and hasattr(args[0], 'logger'):
                             args[0].logger.error(
-                                f"❌ {func.__name__} échoué après {max_retries + 1} tentatives: {exc}"
+                                f"â  {func_name} ï¿½chouï¿½ aprï¿½s {max_retries + 1} tentatives: {exc}"
                             )
                         else:
-                            print(f"❌ {func.__name__} échoué après {max_retries + 1} tentatives: {exc}")
+                            print(f"â  {func_name} ï¿½chouï¿½ aprï¿½s {max_retries + 1} tentatives: {exc}")
                         raise last_exception
             
             raise last_exception
