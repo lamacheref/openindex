@@ -215,14 +215,22 @@ class TestListArchiveJobs:
         """Test filtrage par type de job."""
         from datetime import datetime
         
-        # Mock simple pour le test
-        mock_adapter.execute_query.return_value = [
-            ("550e8400-e29b-41d4-a716-446655440001", "copy", "\\\\src\\1.txt", "\\\\dst\\1.txt", "pending", 5, 0, 3, None, None, None, datetime(2026, 4, 7, 13, 0, 0), None, 0)
-        ]
+        # Mock pour la requête principale
+        def mock_execute_query(query, params=None):
+            if "job_type = %s::archive_job_type" in query and "ORDER BY" in query:
+                return [
+                    ("550e8400-e29b-41d4-a716-446655440001", "copy", "\\\\src\\1.txt", "\\\\dst\\1.txt", "pending", 5, 0, 3, None, None, None, datetime(2026, 4, 7, 13, 0, 0), None, 0)
+                ]
+            elif "SELECT COUNT(*)" in query:
+                return [(1,)]
+            return []
+        
+        mock_adapter.execute_query.side_effect = mock_execute_query
         
         response = client.get("/api/archive/queue?job_type=copy")
         
         assert response.status_code == 200
+        # Vérifier que le mock a été appelé
         assert mock_adapter.execute_query.called
 
     def test_list_jobs_pagination(self):
@@ -293,6 +301,7 @@ class TestCancelArchiveJob:
         """Test annulation d'un job en attente."""
         from unittest.mock import patch
         
+        # Utiliser patch.object sur le mock global existant
         with patch.object(mock_adapter, 'execute_query') as mock_execute:
             mock_execute.side_effect = [
                 [("pending",)],  # Statut actuel
@@ -396,17 +405,21 @@ class TestRetryArchiveJob:
 
     def test_retry_failed_job(self):
         """Test retry d'un job en échec."""
-        mock_adapter.execute_query.side_effect = [
-            [("failed",)],  # Statut actuel
-            None  # Update
-        ]
+        from unittest.mock import patch
         
-        response = client.post("/api/archive/queue/550e8400-e29b-41d4-a716-446655440004/retry")
-        
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-        assert "réinitialisé" in data["message"]
+        # Utiliser patch.object sur le mock global existant
+        with patch.object(mock_adapter, 'execute_query') as mock_execute:
+            mock_execute.side_effect = [
+                [("failed",)],  # Statut actuel
+                None  # Update
+            ]
+            
+            response = client.post("/api/archive/queue/550e8400-e29b-41d4-a716-446655440004/retry")
+            
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is True
+            assert "réinitialisé" in data["message"]
 
     def test_retry_cancelled_job(self):
         """Test retry d'un job annulé."""
