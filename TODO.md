@@ -42,6 +42,32 @@
 **Statut : COMPLÉTÉ sur le plan technique**
 **Issues GitHub :** #73 (commentée avec progression 83%)
 
+### Tests Pytest Complexes - Investigation (EN COURS)
+**Issue #75** : Tests pytest complexes - Mocks side_effect
+- [ ] **test_list_jobs_with_job_type_filter** : Mock non appelé (problème de configuration side_effect)
+- [ ] **test_cancel_pending_job** : Erreur 404 (mock patch.object non fonctionnel)
+- [ ] **test_retry_failed_job** : Erreur 404 (même problème que cancel)
+- [ ] **test_worker_health_healthy** : running_jobs = 0 au lieu de 2 (mock ne retourne pas les bonnes valeurs)
+
+**Analyse :** Les tests complexes utilisent des mocks `side_effect` qui ne fonctionnent pas correctement dans pytest. Les tests simples avec `return_value` passent (27/31 tests).
+
+**Solution requise :** Refactoriser les tests pour utiliser des fixtures pytest ou patcher `get_db_adapter` au niveau module.
+
+**Statut :** Investigation terminée, solution à implémenter dans prochaine session
+**Référence :** Commit `468d6a5` - Investigation et tentatives de correction
+
+### Investigation Runs Manquants - Issue #74 (TERMINÉE)
+**Issue #74** : Investigation runs manquants en base PostgreSQL
+
+**Résultat :**
+- Run `70311328-dd16-4681-8c8a-9ade7e608a83` **non trouvé** en base PostgreSQL
+- Aucun run bloqué détecté dans la table `crawl_runs`
+- Configuration MCP PostgreSQL **fonctionnelle**
+
+**Conclusion :** Le run mentionné dans TODO.md a probablement été supprimé lors d'une maintenance ou nettoyé par un processus de purge. Aucun problème de blocage actuel.
+
+**Statut :** ✅ Investigation terminée - Issue commentée et à fermer
+
 ---
 
 ## 2) Gestion des Artefacts et Fichiers Problématiques
