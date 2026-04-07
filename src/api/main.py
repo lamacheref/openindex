@@ -2804,10 +2804,22 @@ def _extract_large_file_metrics(raw_log_lines: List[str]) -> Dict[str, int]:
 
 
 def _build_system_status_payload() -> SystemStatus:
-    version = os.getenv("OPENINDEX_APP_VERSION", app.version)
-    commit_hash = os.getenv("OPENINDEX_BUILD_COMMIT", "dev")
-    build_date = os.getenv("OPENINDEX_BUILD_DATE", datetime.now().date().isoformat())
+    # Lire la version depuis le fichier VERSION
+    try:
+        from versioning import get_current_version
+        version_from_file = get_current_version()
+    except ImportError:
+        version_from_file = "0.4.19"
+    
+    # Format: "Version ${cat VERSION} (LOCAL|DEV|PREPROD|PROD) Build: ${date +"%Y%m%d_%H%M%S"} $(TZ)"
+    env_type = os.getenv("OPENINDEX_ENV_TYPE", "DEV")  # LOCAL|DEV|PREPROD|PROD
+    build_date = datetime.now().strftime("%Y%m%d_%H%M%S")
     timezone_name = os.getenv("OPENINDEX_TIMEZONE") or os.getenv("TZ") or "UTC"
+    
+    version = f"Version {version_from_file} ({env_type}) Build: {build_date} {timezone_name}"
+    
+    commit_hash = os.getenv("OPENINDEX_BUILD_COMMIT", "dev")
+    build_date_iso = os.getenv("OPENINDEX_BUILD_DATE", datetime.now().date().isoformat())
     repository_url = os.getenv("OPENINDEX_REPOSITORY_URL", "https://github.com/lamacheref/openindex")
     newer_version_available = os.getenv("OPENINDEX_NEWER_VERSION_AVAILABLE", "false").strip().lower() in {
         "1",
@@ -2820,7 +2832,7 @@ def _build_system_status_payload() -> SystemStatus:
     return SystemStatus(
         app_version=version,
         commit_hash=commit_hash,
-        build_date=build_date,
+        build_date=build_date_iso,
         timezone=timezone_name,
         license_label="Licence",
         license_owner="Copyright 2026 SMIDEN",
