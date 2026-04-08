@@ -810,19 +810,19 @@
                     <div x-show="artifactActionStatus" class="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600" x-text="artifactActionStatus"></div>
 
                     <section class="mt-6 grid grid-cols-1 gap-5 md:grid-cols-4">
-                        <button @click="artifactFilter = 'all'" class="card p-6 text-left transition" :class="artifactFilter === 'all' ? 'ring-2 ring-teal-500' : ''">
+                        <button @click="artifactFilter = 'all'; loadArtifacts()" class="card p-6 text-left transition" :class="artifactFilter === 'all' ? 'ring-2 ring-teal-500' : ''">
                             <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Total artefacts</p>
-                            <p class="mt-3 text-3xl font-semibold" x-text="artifacts.length.toLocaleString() || '0'"></p>
+                            <p class="mt-3 text-3xl font-semibold" x-text="artifactCounts.all.toLocaleString() || '0'"></p>
                         </button>
-                        <button @click="artifactFilter = 'temp'" class="card p-6 text-left transition" :class="artifactFilter === 'temp' ? 'ring-2 ring-amber-500' : ''">
+                        <button @click="artifactFilter = 'temp'; loadArtifacts()" class="card p-6 text-left transition" :class="artifactFilter === 'temp' ? 'ring-2 ring-amber-500' : ''">
                             <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Temporaires Office</p>
                             <p class="mt-3 text-3xl font-semibold text-amber-600" x-text="artifactCounts.temp.toLocaleString()"></p>
                         </button>
-                        <button @click="artifactFilter = 'duplicate'" class="card p-6 text-left transition" :class="artifactFilter === 'duplicate' ? 'ring-2 ring-sky-500' : ''">
+                        <button @click="artifactFilter = 'duplicate'; loadArtifacts()" class="card p-6 text-left transition" :class="artifactFilter === 'duplicate' ? 'ring-2 ring-sky-500' : ''">
                             <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Doublons détectés</p>
                             <p class="mt-3 text-3xl font-semibold text-sky-600" x-text="artifactCounts.duplicate.toLocaleString()"></p>
                         </button>
-                        <button @click="artifactFilter = 'system'" class="card p-6 text-left transition" :class="artifactFilter === 'system' ? 'ring-2 ring-slate-500' : ''">
+                        <button @click="artifactFilter = 'system'; loadArtifacts()" class="card p-6 text-left transition" :class="artifactFilter === 'system' ? 'ring-2 ring-slate-500' : ''">
                             <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Fichiers système</p>
                             <p class="mt-3 text-3xl font-semibold text-slate-600" x-text="artifactCounts.system.toLocaleString()"></p>
                         </button>
@@ -834,9 +834,10 @@
                                 <label class="text-sm text-slate-600">Filtre :</label>
                                 <select x-model="artifactFilter" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
                                     <option value="all">Tous</option>
-                                    <option value="temp">Temporaires Office</option>
                                     <option value="duplicate">Doublons</option>
-                                    <option value="system">Fichiers système</option>
+                                    <option value="large">Gros fichiers</option>
+                                    <option value="old">Fichiers anciens</option>
+                                    <option value="unused">Fichiers inutilisés</option>
                                 </select>
                             </div>
                             <label class="flex items-center gap-2 text-sm text-slate-600">
@@ -2417,15 +2418,14 @@
                     this.archiveBusy = true;
                     this.archiveStatus = `Préparation de l'archivage (${mode === 'move' ? 'déplacement' : 'copie'})...`;
                     try {
-                        const response = await fetch('/api/archive/file', {
+                        const response = await fetch('/api/archive/queue', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
+                                job_type: mode,
                                 source_path: this.selectedSourceFile.path,
-                                target_directory_path: this.fileExplorer.archive.currentPath,
-                                mode: mode,
-                                overwrite: this.archiveOverwrite,
-                                leave_link: mode === 'move' && this.archiveLeaveLink
+                                dest_path: this.fileExplorer.archive.currentPath + '/' + this.selectedSourceFile.name,
+                                priority: 5
                             })
                         });
                         const payload = await response.json();
@@ -2442,23 +2442,11 @@
                             throw new Error(`❌ Erreur d'archivage: ${payload.detail || 'Détails non disponibles'}`);
                         }
                         
-                        if (payload.checksum_verified && payload.checksum) {
-                            this.archiveStatus = mode === 'move'
-                                ? `✅ Fichier déplacé et vérifié: ${payload.target_path}`
-                                : `✅ Fichier copié et vérifié: ${payload.target_path}`;
-                            this.archiveStatus += `\nSHA-256: ${payload.checksum.substring(0, 16)}... (vérifié)`;
-                            
-                            if (mode === 'move' && payload.source_removed) {
-                                this.archiveStatus += `\n✅ Original supprimé (vérification post-déplacement)`;
-                            }
-                            if (mode === 'move' && payload.link_path) {
-                                this.archiveStatus += `\n🔗 Lien laissé: ${payload.link_path}`;
-                            }
-                        } else {
-                            this.archiveStatus = mode === 'move'
-                                ? `⚠️ Fichier déplacé (vérification SHA-256 non disponible)`
-                                : `⚠️ Fichier copié (vérification SHA-256 non disponible)`;
-                        }
+                        // Job créé avec succès dans la queue
+                        this.archiveStatus = `✅ Job d'archivage créé: ${payload.id?.substring(0, 8)}...\n` +
+                            `📁 ${mode === 'move' ? 'Déplacement' : 'Copie'} de:\n${payload.source_path}\n` +
+                            `📂 Vers:\n${payload.dest_path}\n` +
+                            `⏳ Statut: ${payload.status} (sera traité par le worker)`;
                         
                         this.fileExplorer.source.selectedPath = '';
                         await this.refreshOperations();
@@ -3333,24 +3321,67 @@
                     return this.artifacts.filter(a => a.category === this.artifactFilter);
                 },
 
+                getArtifactCategoryLabel(category) {
+                    const labels = {
+                        temp: 'Temporaire',
+                        duplicate: 'Doublon',
+                        system: 'Système',
+                        large: 'Gros fichier',
+                        old: 'Ancien',
+                        unused: 'Inutilisé'
+                    };
+                    return labels[category] || category;
+                },
+
+                getArtifactCategoryClass(category) {
+                    const classes = {
+                        temp: 'text-amber-600',
+                        duplicate: 'text-sky-600',
+                        system: 'text-slate-600',
+                        large: 'text-orange-600',
+                        old: 'text-yellow-600',
+                        unused: 'text-gray-600'
+                    };
+                    return classes[category] || 'text-slate-600';
+                },
+
                 async loadArtifacts() {
                     this.loadingArtifacts = true;
                     this.artifactActionStatus = '';
                     try {
-                        const params = new URLSearchParams();
-                        if (this.activeSpace) {
-                            params.append('space', this.activeSpace);
+                        // Charger les statistiques pour toutes les catégories
+                        const statsResponse = await fetch('/api/artefacts/stats');
+                        if (statsResponse.ok) {
+                            const statsData = await statsResponse.json();
+                            this.artifactCounts = {
+                                temp: 0,
+                                duplicate: statsData.find(s => s.category === 'duplicates')?.count || 0,
+                                system: 0,
+                                all: statsData.reduce((sum, stat) => sum + stat.count, 0)
+                            };
                         }
-                        const response = await fetch(`/api/artifacts?${params}`);
-                        if (!response.ok) {
+                        
+                        // Charger les doublons par défaut
+                        const duplicatesResponse = await fetch('/api/artefacts/duplicates?limit=100&offset=0');
+                        if (duplicatesResponse.ok) {
+                            const duplicatesData = await duplicatesResponse.json();
+                            this.artifacts = duplicatesData.files.map(file => ({
+                                id: file.id,
+                                path: file.path,
+                                name: file.name,
+                                size: file.size,
+                                category: 'duplicate',
+                                status: 'pending',
+                                last_modified: file.last_modified,
+                                duplicate_count: file.duplicate_count
+                            }));
+                        } else {
                             this.artifacts = [];
-                            return;
                         }
-                        const data = await response.json();
-                        this.artifacts = data.artifacts || [];
                     } catch (error) {
                         console.error('Erreur chargement artefacts:', error);
                         this.artifacts = [];
+                        this.artifactCounts = { temp: 0, duplicate: 0, system: 0, all: 0 };
                     } finally {
                         this.loadingArtifacts = false;
                     }
@@ -3410,6 +3441,9 @@
                     if (category === 'temp') return 'fa-file-word text-amber-500';
                     if (category === 'duplicate') return 'fa-files text-sky-500';
                     if (category === 'system') return 'fa-gear text-slate-500';
+                    if (category === 'large') return 'fa-file-archive text-orange-500';
+                    if (category === 'old') return 'fa-file-contract text-yellow-500';
+                    if (category === 'unused') return 'fa-file-circle-question text-gray-500';
 
                     if (['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'svg'].includes(ext)) return 'fa-file-image text-cyan-600';
                     if (['mp4', 'webm', 'ogg', 'mov', 'm4v'].includes(ext)) return 'fa-file-video text-rose-600';
@@ -3418,23 +3452,7 @@
                     return 'fa-file text-slate-500';
                 },
 
-                getArtifactCategoryLabel(category) {
-                    const labels = {
-                        temp: 'Temporaire',
-                        duplicate: 'Doublon',
-                        system: 'Système'
-                    };
-                    return labels[category] || category;
-                },
 
-                getArtifactCategoryClass(category) {
-                    const classes = {
-                        temp: 'text-amber-600',
-                        duplicate: 'text-sky-600',
-                        system: 'text-slate-600'
-                    };
-                    return classes[category] || 'text-slate-600';
-                },
 
                 getArtifactStatusLabel(status) {
                     const labels = {
