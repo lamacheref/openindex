@@ -3,7 +3,7 @@ API FastAPI pour OpenIndex
 Backend moderne avec WebSocket et monitoring temps réel
 """
 
-from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect, APIRouter
 from fastapi.responses import HTMLResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -70,6 +70,10 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+# Inclusion du router pour les artefacts (T-ART-01)
+from src.api.artefacts_router import router as artefacts_router
+app.include_router(artefacts_router)
 
 # Configuration CORS pour le frontend
 app.add_middleware(
@@ -3758,7 +3762,7 @@ class ArchiveQueueMonitoring(BaseModel):
 
 def get_scheduler():
     """Factory pour obtenir l'instance du scheduler"""
-    from archive_scheduler import ArchiveScheduler
+    from src.archive_scheduler import ArchiveScheduler
     return ArchiveScheduler()
 
 
@@ -3996,8 +4000,7 @@ async def get_archive_dashboard():
         
         # Stats par statut
         status_stats = db.execute_query(
-            "SELECT status::text, COUNT(*), SUM(bytes_transferred) FROM archive_jobs GROUP BY status",
-            fetch=True
+            "SELECT status::text, COUNT(*), SUM(bytes_transferred) FROM archive_jobs GROUP BY status"
         )
         
         # Stats des 24 dernières heures
@@ -4009,8 +4012,7 @@ async def get_archive_dashboard():
                 SUM(bytes_transferred) FILTER (WHERE status = 'completed') as bytes_24h
             FROM archive_jobs
             WHERE updated_at > CURRENT_TIMESTAMP - INTERVAL '24 hours'
-            """,
-            fetch=True
+            """
         )
         
         # Taux de succès global
@@ -4021,7 +4023,7 @@ async def get_archive_dashboard():
                 COUNT(*) as total
             FROM archive_jobs
         """
-        success_results = db.execute_query(success_rate_query, fetch=True)
+        success_results = db.execute_query(success_rate_query)
         completed_total, failed_total, total_jobs = success_results[0] if success_results else (0, 0, 0)
         
         success_rate = completed_total / (completed_total + failed_total) if (completed_total + failed_total) > 0 else 0

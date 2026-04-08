@@ -15,11 +15,12 @@
 ## 2) Gestion des Artefacts et Fichiers Problématiques
 
 ### T-ART-01 — Listings filtrés des artefacts
+- [x] **Migration DB** : Ajout du champ `last_accessed` et création des vues `large_files`, `old_files`, `unused_files`
 - [ ] **Catégories d'artefacts** : Implémenter les filtres suivants dans la page Artefacts :
-  - [ ] **Doublons** : Fichiers avec même checksum présents dans plusieurs emplacements
-  - [ ] **Gros fichiers** : Fichiers dépassant un seuil configurable (défaut: 1 Go)
-  - [ ] **Anciens** : Fichiers non modifiés depuis une date configurable (défaut: 2 ans)
-  - [ ] **Inutilisés** : Fichiers non lus depuis une date configurable (défaut: 1 an, si métrique dispo)
+  - [x] **Doublons** : Fichiers avec même checksum présents dans plusieurs emplacements (vue existante)
+  - [x] **Gros fichiers** : Fichiers dépassant un seuil configurable (défaut: 1 Go) - 47 fichiers identifiés
+  - [x] **Anciens** : Fichiers non modifiés depuis une date configurable (défaut: 2 ans) - 44144 fichiers identifiés
+  - [ ] **Inutilisés** : Fichiers non lus depuis une date configurable (défaut: 1 an, si métrique dispo) - 0 fichiers (champ `last_accessed` ajouté)
 - [ ] **KPI par catégorie** : Afficher le nombre de fichiers et la volumétrie totale pour chaque catégorie
 - [ ] **Actions de masse** : Sélection multiple + actions (supprimer, ignorer, archiver)
 - [ ] **Documentation** : Documenter les filtres et les seuils configurables
@@ -323,6 +324,39 @@ Pour chaque tâche T-XXX :
 **Conclusion :** Le run mentionné dans TODO.md a probablement été supprimé lors d'une maintenance ou nettoyé par un processus de purge. Aucun problème de blocage actuel.
 
 **Statut :** ✅ Investigation terminée - Issue commentée et à fermer
+
+---
+
+## Annexe D — Issues Mineures / Bugs à Traiter (Priorité Basse)
+
+### Issue #76 — Compatibilité Mozilla Firefox (Zen Browser)
+**Niveau:** `minor` | **Statut:** 🔍 Identifié | **Cible:** Post-T-ART
+
+**Problème:**
+La zone "Explorateur de fichiers" présente des problèmes de mise en forme (layout cassé) spécifiquement sur Mozilla Firefox (version Zen Browser testée). Le rendu CSS semble différent de Chrome/Chromium.
+
+**Hypothèses:**
+- Différence d'interprétation CSS Grid/Flexbox entre Firefox et Chrome
+- Problème potentiel avec les classes Tailwind `grid-cols-[minmax(0,1fr)_20rem_minmax(0,1fr)]`
+- Conflit possible avec les propriétés CSS spécifiques
+
+**Action:**
+- Analyser et corriger la compatibilité CSS après finalisation de T-ART-01/02/03
+- Tester sur Firefox standard et variantes (Zen, LibreWolf)
+
+### Issue #80 — Archivage 'Copier vers archives' échoue
+**Niveau:** `high` | **Statut:** 🔴 Ouvert | **Cible:** Immédiat
+
+**Problème:**
+La fonctionnalité **'Copier vers archives'** dans l'explorateur de fichiers retourne systématiquement une erreur.
+
+**URL:** https://github.com/lamacheref/openindex/issues/80
+
+**Investigations nécessaires:**
+- Logs containers api & archive-worker
+- Table `archive_jobs` 
+- Endpoint API `/api/archive/jobs`
+- Permissions SMB
 
 ---
 

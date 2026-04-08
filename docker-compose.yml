@@ -30,7 +30,7 @@ services:
       context: .
       dockerfile: Dockerfile.api
       args:
-        OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.3.2}
+        OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.6.0}
         OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-dev}
         OPENINDEX_BUILD_DATE: ${OPENINDEX_BUILD_DATE:-unknown}
     image: openindex-api:local
@@ -39,7 +39,7 @@ services:
     environment:
       TZ: ${OPENINDEX_TIMEZONE:-Europe/Paris}
       OPENINDEX_TIMEZONE: ${OPENINDEX_TIMEZONE:-Europe/Paris}
-      OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.3.2}
+      OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.6.0}
       OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-dev}
       OPENINDEX_BUILD_DATE: ${OPENINDEX_BUILD_DATE:-unknown}
       OPENINDEX_DB_BACKEND: postgresql
@@ -65,7 +65,7 @@ services:
       context: .
       dockerfile: Dockerfile.crawler
       args:
-        OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.3.2}
+        OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.6.0}
         OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-dev}
         OPENINDEX_BUILD_DATE: ${OPENINDEX_BUILD_DATE:-unknown}
     image: openindex-crawler:local
@@ -74,7 +74,7 @@ services:
     environment:
       TZ: ${OPENINDEX_TIMEZONE:-Europe/Paris}
       OPENINDEX_TIMEZONE: ${OPENINDEX_TIMEZONE:-Europe/Paris}
-      OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.3.2}
+      OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.6.0}
       OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-dev}
       OPENINDEX_BUILD_DATE: ${OPENINDEX_BUILD_DATE:-unknown}
       POSTGRES_HOST: postgres
@@ -97,7 +97,7 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
       args:
-        OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.3.2}
+        OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.6.0}
         OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-dev}
         OPENINDEX_BUILD_DATE: ${OPENINDEX_BUILD_DATE:-unknown}
     image: openindex-ui:local
@@ -106,7 +106,7 @@ services:
     environment:
       TZ: ${OPENINDEX_TIMEZONE:-Europe/Paris}
       OPENINDEX_TIMEZONE: ${OPENINDEX_TIMEZONE:-Europe/Paris}
-      OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.3.2}
+      OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.6.0}
       OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-dev}
       OPENINDEX_BUILD_DATE: ${OPENINDEX_BUILD_DATE:-unknown}
     ports:
@@ -114,6 +114,75 @@ services:
     depends_on:
       api:
         condition: service_started
+    networks:
+      - openindex-network
+
+  # T-ARCH-02: Archive Transfer Worker
+  archive-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+      args:
+        OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.6.0}
+        OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-dev}
+        OPENINDEX_BUILD_DATE: ${OPENINDEX_BUILD_DATE:-unknown}
+    image: openindex-archive-worker:local
+    container_name: openindex-archive-worker
+    restart: unless-stopped
+    environment:
+      TZ: ${OPENINDEX_TIMEZONE:-Europe/Paris}
+      OPENINDEX_TIMEZONE: ${OPENINDEX_TIMEZONE:-Europe/Paris}
+      OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.6.0}
+      OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-dev}
+      OPENINDEX_BUILD_DATE: ${OPENINDEX_BUILD_DATE:-unknown}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-openindex}
+      POSTGRES_USER: ${POSTGRES_USER:-openindex_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-openindex_secure_password}
+      ARCHIVE_WORKER_POLL_INTERVAL: ${ARCHIVE_WORKER_POLL_INTERVAL:-5}
+      ARCHIVE_WORKER_MAX_CONCURRENT: ${ARCHIVE_WORKER_MAX_CONCURRENT:-3}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_started
+    volumes:
+      - logs_data:/app/logs
+    networks:
+      - openindex-network
+
+  # T-ARCH-02: Archive Scheduler
+  archive-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.scheduler
+      args:
+        OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.6.0}
+        OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-dev}
+        OPENINDEX_BUILD_DATE: ${OPENINDEX_BUILD_DATE:-unknown}
+    image: openindex-archive-scheduler:local
+    container_name: openindex-archive-scheduler
+    restart: unless-stopped
+    environment:
+      TZ: ${OPENINDEX_TIMEZONE:-Europe/Paris}
+      OPENINDEX_TIMEZONE: ${OPENINDEX_TIMEZONE:-Europe/Paris}
+      OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.6.0}
+      OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-dev}
+      OPENINDEX_BUILD_DATE: ${OPENINDEX_BUILD_DATE:-unknown}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-openindex}
+      POSTGRES_USER: ${POSTGRES_USER:-openindex_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-openindex_secure_password}
+      ARCHIVE_SCHEDULER_POLL_INTERVAL: ${ARCHIVE_SCHEDULER_POLL_INTERVAL:-60}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_started
+    volumes:
+      - logs_data:/app/logs
     networks:
       - openindex-network
 

@@ -1,4 +1,4 @@
-# Dockerfile pour le service Crawler Python
+# Dockerfile pour le service Archive Transfer Worker
 FROM python:3.11-slim
 
 ARG OPENINDEX_APP_VERSION=0.6.0
@@ -7,11 +7,8 @@ ARG OPENINDEX_BUILD_DATE=20260408_120000
 
 # Métadonnées
 LABEL maintainer="OpenIndex Team"
-LABEL description="OpenIndex Crawler Service"
+LABEL description="OpenIndex Archive Transfer Worker Service"
 LABEL version="${OPENINDEX_APP_VERSION}"
-LABEL org.opencontainers.image.version="${OPENINDEX_APP_VERSION}"
-LABEL org.opencontainers.image.revision="${OPENINDEX_BUILD_COMMIT}"
-LABEL org.opencontainers.image.created="${OPENINDEX_BUILD_DATE}"
 
 # Configuration
 WORKDIR /app
@@ -21,20 +18,21 @@ RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     libpq-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Installation des dépendances Python
-COPY Archives/legacy/requirements/requirements.crawler.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements/dev.txt ./requirements/dev.txt
+RUN pip install --no-cache-dir -r requirements/dev.txt
 
-# Copier les sources du crawler
+# Copier les sources
 COPY VERSION ./VERSION
 COPY src/ ./src/
 COPY config/ ./config/
-COPY database/ ./database/
+COPY database/init.sql ./database/init.sql
 
 # Créer les répertoires nécessaires
-RUN mkdir -p logs archives data
+RUN mkdir -p logs data
 
 # Variables d'environnement
 ENV PYTHONPATH=/app
@@ -43,6 +41,10 @@ ENV OPENINDEX_APP_VERSION=${OPENINDEX_APP_VERSION}
 ENV OPENINDEX_BUILD_COMMIT=${OPENINDEX_BUILD_COMMIT}
 ENV OPENINDEX_BUILD_DATE=${OPENINDEX_BUILD_DATE}
 
-# Point d'entrée par défaut
-ENTRYPOINT ["python", "src/smb_crawler_postgresql.py"]
-CMD ["worker"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python -c "from src.archive_transfer_worker import ArchiveTransferWorker; w = ArchiveTransferWorker(); print('OK')" || exit 1
+
+# Point d'entrée
+ENTRYPOINT ["python", "-m", "src.archive_transfer_worker"]
+CMD ["--poll-interval", "5", "--max-concurrent", "3"]
