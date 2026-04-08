@@ -161,6 +161,9 @@ async def get_duplicate_file_details(
             occurrences=formatted_occurrences
         )
         
+    except HTTPException:
+        # Laisser passer les HTTPException (404, 400, etc.)
+        raise
     except Exception as e:
         logger.error(f"Erreur get_duplicate_file_details: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
@@ -204,6 +207,9 @@ async def keep_duplicate_occurrence(
             "checksum": checksum
         }
         
+    except HTTPException:
+        # Laisser passer les HTTPException (404, 400, etc.)
+        raise
     except Exception as e:
         logger.error(f"Erreur keep_duplicate_occurrence: {e}")
         raise HTTPException(status_code=500, detail=f"Erreur: {e}")
@@ -252,6 +258,9 @@ async def delete_duplicate_occurrences(
             "kept_occurrence_id": keep_occurrence_id
         }
         
+    except HTTPException:
+        # Laisser passer les HTTPException (404, 400, etc.)
+        raise
     except Exception as e:
         logger.error(f"Erreur delete_duplicate_occurrences: {e}")
         raise HTTPException(status_code=500, detail=f"Erreur: {e}")

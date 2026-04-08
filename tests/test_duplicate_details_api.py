@@ -15,8 +15,15 @@ client = TestClient(app)
 
 # Fixture pour mocker l'adaptateur de base de données
 @pytest.fixture
-def mock_db_adapter():
+def mock_db_adapter(monkeypatch):
     """Mock de l'adaptateur de base de données"""
+    # Définir les variables d'environnement PostgreSQL pour éviter les erreurs de connexion
+    monkeypatch.setenv('POSTGRES_HOST', 'localhost')
+    monkeypatch.setenv('POSTGRES_PORT', '5432')
+    monkeypatch.setenv('POSTGRES_DB', 'openindex')
+    monkeypatch.setenv('POSTGRES_USER', 'openindex_user')
+    monkeypatch.setenv('POSTGRES_PASSWORD', 'openindex_secure_password')
+    
     with patch('src.api.duplicate_details_router.get_db_adapter') as mock:
         yield mock
 
