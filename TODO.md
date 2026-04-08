@@ -43,12 +43,19 @@
 - [ ] **Bump Version** : Passer à la version 0.8.0
 
 ### T-ART-03 — Filtres configurables
-- [ ] **Configuration des seuils** : Interface pour modifier dynamiquement :
-  - [ ] Seuil "Gros fichiers" (Mo/Go)
-  - [ ] Seuil "Anciens" (jours/mois/années depuis dernière modif)
-  - [ ] Seuil "Inutilisés" (jours/mois/années depuis dernier accès, si disponible)
-- [ ] **Sauvegarde des préférences** : Persister les filtres utilisateur en base
-- [ ] **Préréglages** : Fournir des presets (Conservateur, Standard, Agressif)
+- [x] **Migration DB** : Création de la table `artefact_filters` pour sauvegarder les préférences
+- [x] **Endpoints API** : Implémentation des endpoints pour gérer les préférences
+  - [x] GET /api/artefact-filters/preferences : Récupérer les préférences courantes
+  - [x] PUT /api/artefact-filters/preferences : Mettre à jour les préférences
+  - [x] POST /api/artefact-filters/preferences/reset : Réinitialiser aux valeurs par défaut
+  - [x] GET /api/artefact-filters/presets : Récupérer les préréglages
+- [x] **Tests** : 5/5 tests passés pour les endpoints API
+- [x] **Intégration UI** : Modal pour configurer les seuils avec préréglages
+  - [x] Bouton "Seuils" ajouté dans la page Artefacts
+  - [x] Modal avec curseurs pour configurer chaque seuil
+  - [x] Préréglages (Conservateur, Standard, Agressif)
+  - [x] Fonctionnalités de sauvegarde et réinitialisation
+- [ ] **Utilisation des préférences** : Mettre à jour les endpoints existants pour utiliser les seuils personnalisés
 - [ ] **Documentation** : Documenter les filtres et les seuils configurables
 - [ ] **Bump Version** : Passer à la version 0.9.0
 

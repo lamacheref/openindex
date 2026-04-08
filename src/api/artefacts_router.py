@@ -50,11 +50,56 @@ def get_db_adapter():
     """Retourne l'adaptateur de base de données"""
     try:
         from src.postgres_adapter import PostgreSQLAdapter
-        from src.config import POSTGRES_CONFIG
-        return PostgreSQLAdapter(POSTGRES_CONFIG)
+        import os
+        
+        # Configuration PostgreSQL depuis les variables d'environnement
+        config = {
+            'host': os.getenv('POSTGRES_HOST', 'localhost'),
+            'port': int(os.getenv('POSTGRES_PORT', 5432)),
+            'database': os.getenv('POSTGRES_DB', 'openindex'),
+            'user': os.getenv('POSTGRES_USER', 'openindex_user'),
+            'password': os.getenv('POSTGRES_PASSWORD', 'openindex_secure_password')
+        }
+        return PostgreSQLAdapter(config)
     except Exception as e:
         logger.error(f"Erreur lors de l'initialisation de l'adaptateur DB: {e}")
         raise HTTPException(status_code=500, detail="Erreur de configuration de la base de données")
+
+
+def get_filter_preferences(db):
+    """Récupère les préférences utilisateur pour les filtres"""
+    try:
+        query = """
+            SELECT 
+                large_file_threshold_mb,
+                old_file_threshold_days,
+                unused_file_threshold_days
+            FROM current_artefact_filters
+        """
+        result = db.execute_query(query)
+        
+        if result and len(result) > 0:
+            row = result[0]
+            return {
+                'large_file_threshold_mb': row[0],
+                'old_file_threshold_days': row[1],
+                'unused_file_threshold_days': row[2]
+            }
+        else:
+            # Retourner les valeurs par défaut
+            return {
+                'large_file_threshold_mb': 1024,
+                'old_file_threshold_days': 730,
+                'unused_file_threshold_days': 365
+            }
+    except Exception as e:
+        logger.error(f"Erreur get_filter_preferences: {e}")
+        # Retourner les valeurs par défaut en cas d'erreur
+        return {
+            'large_file_threshold_mb': 1024,
+            'old_file_threshold_days': 730,
+            'unused_file_threshold_days': 365
+        }
 
 
 @router.get("/duplicates", response_model=ArtefactCategoryResponse)
@@ -123,7 +168,7 @@ async def get_duplicate_files(
 
 @router.get("/large", response_model=ArtefactCategoryResponse)
 async def get_large_files(
-    min_size_gb: float = Query(1.0, description="Taille minimale en Go"),
+    min_size_gb: Optional[float] = Query(None, description="Taille minimale en Go (facultatif)"),
     limit: int = Query(100, description="Nombre maximum de fichiers à retourner"),
     offset: int = Query(0, description="Offset pour la pagination")
 ):
@@ -131,7 +176,7 @@ async def get_large_files(
     Liste les gros fichiers
     
     Args:
-        min_size_gb: Taille minimale en Go (défaut: 1.0)
+        min_size_gb: Taille minimale en Go (facultatif, utilise les préférences utilisateur si non spécifié)
     
     Returns:
         - Liste des fichiers avec leur taille en Go
@@ -140,8 +185,15 @@ async def get_large_files(
     try:
         db = get_db_adapter()
         
+        # Utiliser les préférences utilisateur si min_size_gb n'est pas spécifié
+        if min_size_gb is None:
+            preferences = get_filter_preferences(db)
+            min_size_mb = preferences['large_file_threshold_mb']
+        else:
+            min_size_mb = min_size_gb * 1024  # Convertir Go en Mo
+        
         # Convertir la taille en octets
-        min_size_bytes = int(min_size_gb * 1073741824)
+        min_size_bytes = int(min_size_mb * 1048576)
         
         # Récupérer les gros fichiers avec pagination
         query = """

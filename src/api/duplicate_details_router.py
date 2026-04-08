@@ -44,8 +44,17 @@ def get_db_adapter():
     """Retourne l'adaptateur de base de données"""
     try:
         from src.postgres_adapter import PostgreSQLAdapter
-        from src.config import POSTGRES_CONFIG
-        return PostgreSQLAdapter(POSTGRES_CONFIG)
+        import os
+        
+        # Configuration PostgreSQL depuis les variables d'environnement
+        config = {
+            'host': os.getenv('POSTGRES_HOST', 'localhost'),
+            'port': int(os.getenv('POSTGRES_PORT', 5432)),
+            'database': os.getenv('POSTGRES_DB', 'openindex'),
+            'user': os.getenv('POSTGRES_USER', 'openindex_user'),
+            'password': os.getenv('POSTGRES_PASSWORD', 'openindex_secure_password')
+        }
+        return PostgreSQLAdapter(config)
     except Exception as e:
         logger.error(f"Erreur lors de l'initialisation de l'adaptateur DB: {e}")
         raise HTTPException(status_code=500, detail="Erreur de configuration de la base de données")

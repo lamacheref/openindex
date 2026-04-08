@@ -79,6 +79,10 @@ app.include_router(artefacts_router)
 from src.api.duplicate_details_router import router as duplicate_details_router
 app.include_router(duplicate_details_router)
 
+# Inclusion du router pour les filtres configurables (T-ART-03)
+from src.api.artefact_filters_router import router as artefact_filters_router
+app.include_router(artefact_filters_router)
+
 # Configuration CORS pour le frontend
 app.add_middleware(
     CORSMiddleware,

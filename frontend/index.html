@@ -839,6 +839,9 @@
                                     <option value="old">Fichiers anciens</option>
                                     <option value="unused">Fichiers inutilisés</option>
                                 </select>
+                                <button @click="openFilterSettings()" class="rounded-xl bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200" title="Configurer les seuils">
+                                    <i class="fas fa-sliders-h mr-1"></i>Seuils
+                                </button>
                             </div>
                             <label class="flex items-center gap-2 text-sm text-slate-600">
                                 <input type="checkbox" @change="toggleAllArtifacts($event)" :checked="selectedArtifacts.length === filteredArtifacts.length && filteredArtifacts.length > 0" class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
@@ -1408,6 +1411,20 @@
                 loadingArtifacts: false,
                 artifactActionBusy: false,
                 artifactActionStatus: '',
+                // Filter settings modal properties (T-ART-03)
+                showFilterSettingsModal: false,
+                filterPreferences: {
+                    large_file_threshold_mb: 1024,
+                    old_file_threshold_days: 730,
+                    unused_file_threshold_days: 365
+                },
+                filterPresets: {
+                    conservateur: { large_file_threshold_mb: 2048, old_file_threshold_days: 1095, unused_file_threshold_days: 730 },
+                    standard: { large_file_threshold_mb: 1024, old_file_threshold_days: 730, unused_file_threshold_days: 365 },
+                    agressif: { large_file_threshold_mb: 512, old_file_threshold_days: 365, unused_file_threshold_days: 180 }
+                },
+                selectedPreset: 'standard',
+                savingPreferences: false,
                 // Duplicate details modal properties (T-ART-02)
                 showDuplicateDetailsModal: false,
                 duplicateDetails: {
@@ -3573,6 +3590,95 @@
                     }
                 },
 
+                // Filter settings modal functions (T-ART-03)
+                openFilterSettings() {
+                    this.showFilterSettingsModal = true;
+                    this.loadFilterPreferences();
+                },
+
+                closeFilterSettings() {
+                    this.showFilterSettingsModal = false;
+                },
+
+                async loadFilterPreferences() {
+                    try {
+                        const response = await fetch('/api/artefact-filters/preferences');
+                        if (response.ok) {
+                            const data = await response.json();
+                            this.filterPreferences = data;
+                            // Mettre à jour le préréglage sélectionné
+                            this.updateSelectedPreset();
+                        }
+                    } catch (error) {
+                        console.error('Erreur chargement préférences:', error);
+                    }
+                },
+
+                updateSelectedPreset() {
+                    const current = this.filterPreferences;
+                    if (current.large_file_threshold_mb === 2048 && current.old_file_threshold_days === 1095) {
+                        this.selectedPreset = 'conservateur';
+                    } else if (current.large_file_threshold_mb === 512 && current.old_file_threshold_days === 365) {
+                        this.selectedPreset = 'agressif';
+                    } else {
+                        this.selectedPreset = 'standard';
+                    }
+                },
+
+                applyPreset(presetName) {
+                    const preset = this.filterPresets[presetName];
+                    this.filterPreferences = {
+                        large_file_threshold_mb: preset.large_file_threshold_mb,
+                        old_file_threshold_days: preset.old_file_threshold_days,
+                        unused_file_threshold_days: preset.unused_file_threshold_days
+                    };
+                    this.selectedPreset = presetName;
+                },
+
+                async saveFilterPreferences() {
+                    this.savingPreferences = true;
+                    try {
+                        const response = await fetch('/api/artefact-filters/preferences', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(this.filterPreferences)
+                        });
+                        
+                        if (response.ok) {
+                            this.addLogEntry('Préférences de filtres sauvegardées avec succès');
+                        } else {
+                            throw new Error('Erreur lors de la sauvegarde');
+                        }
+                    } catch (error) {
+                        console.error('Erreur sauvegarde préférences:', error);
+                        this.addLogEntry(`Erreur: ${error.message}`);
+                    } finally {
+                        this.savingPreferences = false;
+                    }
+                },
+
+                async resetFilterPreferences() {
+                    if (!confirm('Êtes-vous sûr de vouloir réinitialiser les préférences aux valeurs par défaut ?')) {
+                        return;
+                    }
+                    
+                    try {
+                        const response = await fetch('/api/artefact-filters/preferences/reset', {
+                            method: 'POST'
+                        });
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            this.filterPreferences = data;
+                            this.selectedPreset = 'standard';
+                            this.addLogEntry('Préférences réinitialisées aux valeurs par défaut');
+                        }
+                    } catch (error) {
+                        console.error('Erreur réinitialisation préférences:', error);
+                        this.addLogEntry(`Erreur: ${error.message}`);
+                    }
+                },
+
 
                 // Delete confirmation dialog state
                 showDeleteDialog: false,
@@ -3794,6 +3900,99 @@
                         :class="deleteDialogItemCount > 1 && deleteConfirmationText !== 'oui' ? 'bg-rose-300 cursor-not-allowed' : 'bg-rose-600 hover:bg-rose-700'">
                     Supprimer définitivement
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Settings Modal (T-ART-03) -->
+    <div x-cloak x-show="showFilterSettingsModal" class="fixed inset-0 z-[90] overflow-y-auto">
+        <div class="absolute inset-0 bg-slate-900/50" @click="closeFilterSettings()"></div>
+        <div class="relative flex min-h-full items-start justify-center p-4 pt-[12vh] sm:p-6">
+            <div class="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/20">
+                <div class="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
+                    <div>
+                        <h2 class="text-2xl font-bold tracking-tight">Préférences de filtres</h2>
+                        <p class="mt-1 text-sm text-slate-500">Configurez les seuils pour la détection des artefacts.</p>
+                    </div>
+                    <button @click="closeFilterSettings()" class="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                        Fermer
+                    </button>
+                </div>
+
+                <div class="px-6 py-6">
+                    <!-- Préréglages -->
+                    <div class="mb-6">
+                        <h3 class="text-sm font-semibold text-slate-600">Préréglages</h3>
+                        <p class="mt-1 text-sm text-slate-500">Sélectionnez un préréglage ou configurez manuellement.</p>
+                        <div class="mt-3 grid grid-cols-3 gap-3">
+                            <button @click="applyPreset('conservateur')" class="rounded-2xl border-2 border-slate-200 px-4 py-3 text-sm font-medium transition" :class="selectedPreset === 'conservateur' ? 'border-teal-500 bg-teal-50' : 'hover:bg-slate-50'">
+                                <i class="fas fa-shield-alt mb-2 block text-2xl" :class="selectedPreset === 'conservateur' ? 'text-teal-600' : 'text-slate-400'"></i>
+                                Conservateur
+                            </button>
+                            <button @click="applyPreset('standard')" class="rounded-2xl border-2 border-slate-200 px-4 py-3 text-sm font-medium transition" :class="selectedPreset === 'standard' ? 'border-teal-500 bg-teal-50' : 'hover:bg-slate-50'">
+                                <i class="fas fa-balance-scale mb-2 block text-2xl" :class="selectedPreset === 'standard' ? 'text-teal-600' : 'text-slate-400'"></i>
+                                Standard
+                            </button>
+                            <button @click="applyPreset('agressif')" class="rounded-2xl border-2 border-slate-200 px-4 py-3 text-sm font-medium transition" :class="selectedPreset === 'agressif' ? 'border-teal-500 bg-teal-50' : 'hover:bg-slate-50'">
+                                <i class="fas fa-bolt mb-2 block text-2xl" :class="selectedPreset === 'agressif' ? 'text-teal-600' : 'text-slate-400'"></i>
+                                Agressif
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Configuration manuelle -->
+                    <div class="space-y-6">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700">Gros fichiers</label>
+                            <p class="text-xs text-slate-500">Taille minimale en Mo (défaut: 1024 Mo = 1 Go)</p>
+                            <div class="mt-2 flex items-center gap-3">
+                                <input type="range" min="100" max="5000" step="100" 
+                                       x-model="filterPreferences.large_file_threshold_mb"
+                                       class="h-2 w-full cursor-pointer appearance-none rounded-lg bg-slate-200">
+                                <input type="number" x-model="filterPreferences.large_file_threshold_mb"
+te                                       class="w-20 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-center">
+                                <span class="text-sm text-slate-600">Mo</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700">Fichiers anciens</label>
+                            <p class="text-xs text-slate-500">Âge minimal en jours (défaut: 730 jours = 2 ans)</p>
+                            <div class="mt-2 flex items-center gap-3">
+                                <input type="range" min="30" max="2000" step="30" 
+                                       x-model="filterPreferences.old_file_threshold_days"
+                                       class="h-2 w-full cursor-pointer appearance-none rounded-lg bg-slate-200">
+                                <input type="number" x-model="filterPreferences.old_file_threshold_days"
+te                                       class="w-20 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-center">
+                                <span class="text-sm text-slate-600">jours</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700">Fichiers inutilisés</label>
+                            <p class="text-xs text-slate-500">Inactivité minimale en jours (défaut: 365 jours = 1 an)</p>
+                            <div class="mt-2 flex items-center gap-3">
+                                <input type="range" min="30" max="1000" step="30" 
+                                       x-model="filterPreferences.unused_file_threshold_days"
+                                       class="h-2 w-full cursor-pointer appearance-none rounded-lg bg-slate-200">
+                                <input type="number" x-model="filterPreferences.unused_file_threshold_days"
+te                                       class="w-20 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-center">
+                                <span class="text-sm text-slate-600">jours</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="mt-8 flex flex-wrap justify-end gap-3 border-t border-slate-200 pt-6">
+                        <button @click="resetFilterPreferences()" :disabled="savingPreferences" class="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 disabled:opacity-50">
+                            Réinitialiser
+                        </button>
+                        <button @click="saveFilterPreferences()" :disabled="savingPreferences" class="rounded-2xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:bg-teal-400">
+                            <span x-show="!savingPreferences">Enregistrer</span>
+                            <span x-show="savingPreferences"><i class="fas fa-spinner fa-spin mr-2"></i>Enregistrement...</span>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
