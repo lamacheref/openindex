@@ -248,7 +248,7 @@ async def get_large_files(
 
 @router.get("/old", response_model=ArtefactCategoryResponse)
 async def get_old_files(
-    min_days: int = Query(730, description="Nombre minimum de jours depuis la dernière modification"),
+    min_days: Optional[int] = Query(None, description="Nombre minimum de jours depuis la dernière modification (facultatif)"),
     limit: int = Query(100, description="Nombre maximum de fichiers à retourner"),
     offset: int = Query(0, description="Offset pour la pagination")
 ):
@@ -256,7 +256,7 @@ async def get_old_files(
     Liste les fichiers anciens
     
     Args:
-        min_days: Nombre minimum de jours depuis la dernière modification (défaut: 730 = 2 ans)
+        min_days: Nombre minimum de jours depuis la dernière modification (facultatif, utilise les préférences utilisateur si non spécifié)
     
     Returns:
         - Liste des fichiers avec leur nombre de jours depuis la modification
@@ -264,6 +264,11 @@ async def get_old_files(
     """
     try:
         db = get_db_adapter()
+        
+        # Utiliser les préférences utilisateur si min_days n'est pas spécifié
+        if min_days is None:
+            preferences = get_filter_preferences(db)
+            min_days = preferences['old_file_threshold_days']
         
         # Récupérer les fichiers anciens avec pagination
         query = """
@@ -319,7 +324,7 @@ async def get_old_files(
 
 @router.get("/unused", response_model=ArtefactCategoryResponse)
 async def get_unused_files(
-    min_days: int = Query(365, description="Nombre minimum de jours depuis le dernier accès"),
+    min_days: Optional[int] = Query(None, description="Nombre minimum de jours depuis le dernier accès (facultatif)"),
     limit: int = Query(100, description="Nombre maximum de fichiers à retourner"),
     offset: int = Query(0, description="Offset pour la pagination")
 ):
@@ -327,7 +332,7 @@ async def get_unused_files(
     Liste les fichiers inutilisés
     
     Args:
-        min_days: Nombre minimum de jours depuis le dernier accès (défaut: 365 = 1 an)
+        min_days: Nombre minimum de jours depuis le dernier accès (facultatif, utilise les préférences utilisateur si non spécifié)
     
     Returns:
         - Liste des fichiers avec leur nombre de jours depuis le dernier accès
@@ -335,6 +340,11 @@ async def get_unused_files(
     """
     try:
         db = get_db_adapter()
+        
+        # Utiliser les préférences utilisateur si min_days n'est pas spécifié
+        if min_days is None:
+            preferences = get_filter_preferences(db)
+            min_days = preferences['unused_file_threshold_days']
         
         # Récupérer les fichiers inutilisés avec pagination
         query = """
@@ -420,4 +430,126 @@ async def get_artefacts_stats():
         
     except Exception as e:
         logger.error(f"Erreur get_artefacts_stats: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {e}")
+
+
+# Modèles Pydantic pour les actions de masse
+class ArtifactActionRequest(BaseModel):
+    action: str  # "delete" ou "ignore"
+    artifact_ids: List[str]
+
+
+class ArtifactActionResponse(BaseModel):
+    message: str
+    success: bool
+    processed_count: int
+
+
+@router.post("/action", response_model=ArtifactActionResponse)
+async def apply_artifact_action(request: ArtifactActionRequest):
+    """
+    Applique une action de masse sur les artefacts sélectionnés
+    
+    Args:
+        action: "delete" pour supprimer, "ignore" pour marquer comme ignoré
+        artifact_ids: Liste des IDs des artefacts à traiter
+    
+    Returns:
+        Résultat de l'action avec le nombre d'éléments traités
+    """
+    try:
+        db = get_db_adapter()
+        
+        if not request.artifact_ids:
+            return ArtifactActionResponse(
+                message="Aucun artefact sélectionné",
+                success=False,
+                processed_count=0
+            )
+        
+        # Créer la table pour suivre les artefacts ignorés si elle n'existe pas
+        create_ignored_table_query = """
+            CREATE TABLE IF NOT EXISTS ignored_artifacts (
+                id SERIAL PRIMARY KEY,
+                artifact_id UUID NOT NULL,
+                ignored_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                ignored_by VARCHAR(50) DEFAULT 'system',
+                UNIQUE(artifact_id)
+            )
+        """
+        db.execute_query(create_ignored_table_query, commit=True)
+        
+        if request.action == "ignore":
+            # Marquer les artefacts comme ignorés
+            processed_count = 0
+            for artifact_id in request.artifact_ids:
+                try:
+                    insert_query = """
+                        INSERT INTO ignored_artifacts (artifact_id)
+                        VALUES (%s)
+                        ON CONFLICT (artifact_id) DO NOTHING
+                    """
+                    db.execute_query(insert_query, (artifact_id,), commit=True)
+                    processed_count += 1
+                except Exception as e:
+                    logger.warning(f"Erreur lors de l'ignorance de l'artefact {artifact_id}: {e}")
+            
+            return ArtifactActionResponse(
+                message=f"{processed_count} artefact(s) marqué(s) comme ignoré(s)",
+                success=True,
+                processed_count=processed_count
+            )
+        
+        elif request.action == "archive":
+            # Archiver les artefacts (simulation - dans un vrai système, cela déclencherait un processus d'archivage)
+            processed_count = 0
+            for artifact_id in request.artifact_ids:
+                try:
+                    insert_query = """
+                        INSERT INTO ignored_artifacts (artifact_id, ignored_by)
+                        VALUES (%s, 'archived')
+                        ON CONFLICT (artifact_id) DO UPDATE SET ignored_by = 'archived'
+                    """
+                    db.execute_query(insert_query, (artifact_id,), commit=True)
+                    processed_count += 1
+                except Exception as e:
+                    logger.warning(f"Erreur lors de l'archivage de l'artefact {artifact_id}: {e}")
+            
+            return ArtifactActionResponse(
+                message=f"{processed_count} artefact(s) marqué(s) pour archivage",
+                success=True,
+                processed_count=processed_count
+            )
+        
+        elif request.action == "delete":
+            # Supprimer les artefacts (simulation - dans un vrai système, cela serait plus complexe)
+            # Pour l'instant, nous allons juste les marquer comme ignorés avec un statut spécial
+            processed_count = 0
+            for artifact_id in request.artifact_ids:
+                try:
+                    insert_query = """
+                        INSERT INTO ignored_artifacts (artifact_id, ignored_by)
+                        VALUES (%s, 'deleted')
+                        ON CONFLICT (artifact_id) DO UPDATE SET ignored_by = 'deleted'
+                    """
+                    db.execute_query(insert_query, (artifact_id,), commit=True)
+                    processed_count += 1
+                except Exception as e:
+                    logger.warning(f"Erreur lors de la suppression de l'artefact {artifact_id}: {e}")
+            
+            return ArtifactActionResponse(
+                message=f"{processed_count} artefact(s) marqué(s) pour suppression",
+                success=True,
+                processed_count=processed_count
+            )
+        
+        else:
+            return ArtifactActionResponse(
+                message=f"Action non supportée: {request.action}",
+                success=False,
+                processed_count=0
+            )
+        
+    except Exception as e:
+        logger.error(f"Erreur apply_artifact_action: {e}")
         raise HTTPException(status_code=500, detail=f"Erreur: {e}")

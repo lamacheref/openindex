@@ -129,7 +129,7 @@ class TestArtefactsAPI:
         ]
         mock_db_adapter.return_value = mock_db
         
-        # Appeler l'endpoint
+        # Appeler l'endpoint avec min_size_gb spécifié
         response = client.get("/api/artefacts/large?min_size_gb=1.0&limit=10&offset=0")
         
         # Vérifications
@@ -141,6 +141,28 @@ class TestArtefactsAPI:
         assert data["stats"]["total_size"] == 3720347648
         assert data["files"][0]["size_gb"] == 2.0
 
+    def test_get_large_files_with_default_preferences(self, mock_db_adapter):
+        """Test la récupération des gros fichiers avec les préférences par défaut"""
+        # Configurer le mock pour retourner les préférences puis les fichiers
+        mock_db = MagicMock()
+        mock_db.execute_query.side_effect = [
+            [(1024,)],  # Préférences utilisateur (1024 Mo)
+            LARGE_FILES_DATA,  # Résultats des fichiers
+            [(2, 3720347648)]  # Statistiques (count, total_size)
+        ]
+        mock_db_adapter.return_value = mock_db
+        
+        # Appeler l'endpoint sans min_size_gb (doit utiliser les préférences)
+        response = client.get("/api/artefacts/large?limit=10&offset=0")
+        
+        # Vérifications
+        assert response.status_code == 200
+        data = response.json()
+        assert data["category"] == "large"
+        assert len(data["files"]) == 2
+        assert data["stats"]["count"] == 2
+        assert data["stats"]["total_size"] == 3720347648
+
     def test_get_old_files(self, mock_db_adapter):
         """Test la récupération des fichiers anciens"""
         # Configurer le mock
@@ -151,7 +173,7 @@ class TestArtefactsAPI:
         ]
         mock_db_adapter.return_value = mock_db
         
-        # Appeler l'endpoint
+        # Appeler l'endpoint avec min_days spécifié
         response = client.get("/api/artefacts/old?min_days=730&limit=10&offset=0")
         
         # Vérifications
@@ -163,6 +185,28 @@ class TestArtefactsAPI:
         assert data["stats"]["total_size"] == 3072
         assert data["files"][0]["days_since_modified"] == 1095
 
+    def test_get_old_files_with_default_preferences(self, mock_db_adapter):
+        """Test la récupération des fichiers anciens avec les préférences par défaut"""
+        # Configurer le mock pour retourner les préférences puis les fichiers
+        mock_db = MagicMock()
+        mock_db.execute_query.side_effect = [
+            [(730,)],  # Préférences utilisateur (730 jours)
+            OLD_FILES_DATA,  # Résultats des fichiers
+            [(2, 3072)]  # Statistiques (count, total_size)
+        ]
+        mock_db_adapter.return_value = mock_db
+        
+        # Appeler l'endpoint sans min_days (doit utiliser les préférences)
+        response = client.get("/api/artefacts/old?limit=10&offset=0")
+        
+        # Vérifications
+        assert response.status_code == 200
+        data = response.json()
+        assert data["category"] == "old"
+        assert len(data["files"]) == 2
+        assert data["stats"]["count"] == 2
+        assert data["stats"]["total_size"] == 3072
+
     def test_get_unused_files(self, mock_db_adapter):
         """Test la récupération des fichiers inutilisés"""
         # Configurer le mock
@@ -173,8 +217,30 @@ class TestArtefactsAPI:
         ]
         mock_db_adapter.return_value = mock_db
         
-        # Appeler l'endpoint
+        # Appeler l'endpoint avec min_days spécifié
         response = client.get("/api/artefacts/unused?min_days=365&limit=10&offset=0")
+        
+        # Vérifications
+        assert response.status_code == 200
+        data = response.json()
+        assert data["category"] == "unused"
+        assert len(data["files"]) == 0
+        assert data["stats"]["count"] == 0
+        assert data["stats"]["total_size"] == 0
+
+    def test_get_unused_files_with_default_preferences(self, mock_db_adapter):
+        """Test la récupération des fichiers inutilisés avec les préférences par défaut"""
+        # Configurer le mock pour retourner les préférences puis les fichiers
+        mock_db = MagicMock()
+        mock_db.execute_query.side_effect = [
+            [(365,)],  # Préférences utilisateur (365 jours)
+            [],  # Résultats des fichiers (vide car aucun fichier inutilisé)
+            [(0, 0)]  # Statistiques (count, total_size)
+        ]
+        mock_db_adapter.return_value = mock_db
+        
+        # Appeler l'endpoint sans min_days (doit utiliser les préférences)
+        response = client.get("/api/artefacts/unused?limit=10&offset=0")
         
         # Vérifications
         assert response.status_code == 200
@@ -253,3 +319,102 @@ class TestArtefactsEdgeCases:
         response = client.get("/api/artefacts/old?min_days=1000&limit=10&offset=0")
         assert response.status_code == 200
         assert len(response.json()["files"]) == 1
+
+
+class TestArtefactActions:
+    """Tests pour les actions de masse sur les artefacts"""
+
+    def test_apply_artifact_action_ignore(self, mock_db_adapter):
+        """Test le marquage d'artefacts comme ignorés"""
+        mock_db = MagicMock()
+        mock_db.execute_query.side_effect = [
+            None,  # Création de la table
+            None,  # Insertion du premier artefact
+            None   # Insertion du deuxième artefact
+        ]
+        mock_db_adapter.return_value = mock_db
+        
+        response = client.post("/api/artefacts/action", json={
+            "action": "ignore",
+            "artifact_ids": ["test-uuid-1", "test-uuid-2"]
+        })
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] == True
+        assert data["processed_count"] == 2
+        assert "marqué(s) comme ignoré(s)" in data["message"]
+
+    def test_apply_artifact_action_delete(self, mock_db_adapter):
+        """Test le marquage d'artefacts pour suppression"""
+        mock_db = MagicMock()
+        mock_db.execute_query.side_effect = [
+            None,  # Création de la table
+            None,  # Insertion du premier artefact
+            None   # Insertion du deuxième artefact
+        ]
+        mock_db_adapter.return_value = mock_db
+        
+        response = client.post("/api/artefacts/action", json={
+            "action": "delete",
+            "artifact_ids": ["test-uuid-1", "test-uuid-2"]
+        })
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] == True
+        assert data["processed_count"] == 2
+        assert "marqué(s) pour suppression" in data["message"]
+
+    def test_apply_artifact_action_empty_selection(self, mock_db_adapter):
+        """Test l'action avec aucun artefact sélectionné"""
+        mock_db = MagicMock()
+        mock_db_adapter.return_value = mock_db
+        
+        response = client.post("/api/artefacts/action", json={
+            "action": "ignore",
+            "artifact_ids": []
+        })
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] == False
+        assert data["processed_count"] == 0
+        assert "Aucun artefact sélectionné" in data["message"]
+
+    def test_apply_artifact_action_invalid_action(self, mock_db_adapter):
+        """Test l'action avec une action non supportée"""
+        mock_db = MagicMock()
+        mock_db_adapter.return_value = mock_db
+        
+        response = client.post("/api/artefacts/action", json={
+            "action": "invalid_action",
+            "artifact_ids": ["test-uuid-1"]
+        })
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] == False
+        assert data["processed_count"] == 0
+        assert "Action non supportée" in data["message"]
+
+    def test_apply_artifact_action_archive(self, mock_db_adapter):
+        """Test le marquage d'artefacts pour archivage"""
+        mock_db = MagicMock()
+        mock_db.execute_query.side_effect = [
+            None,  # Création de la table
+            None,  # Insertion du premier artefact
+            None   # Insertion du deuxième artefact
+        ]
+        mock_db_adapter.return_value = mock_db
+        
+        response = client.post("/api/artefacts/action", json={
+            "action": "archive",
+            "artifact_ids": ["test-uuid-1", "test-uuid-2"]
+        })
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] == True
+        assert data["processed_count"] == 2
+        assert "marqué(s) pour archivage" in data["message"]

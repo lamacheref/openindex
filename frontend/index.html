@@ -186,6 +186,14 @@
                             <span>Traitements des artefacts</span>
                         </span>
                     </button>
+                    <button @click="currentView = 'search'"
+                            class="w-full rounded-2xl px-4 py-3 text-left transition"
+                            :class="currentView === 'search' ? 'bg-teal-700 text-white shadow-lg shadow-teal-700/15' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'">
+                        <span class="flex items-center gap-3">
+                            <i class="fas fa-search"></i>
+                            <span>Recherche & Sommaire</span>
+                        </span>
+                    </button>
                     <a href="archive-monitoring.html"
                        class="w-full rounded-2xl px-4 py-3 text-left transition flex items-center gap-3 bg-slate-50 text-slate-700 hover:bg-slate-100">
                         <i class="fas fa-clock-rotate-left"></i>
@@ -797,6 +805,9 @@
                                 <button @click="loadArtifacts()" class="rounded-2xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-800">
                                     <i class="fas fa-rotate mr-2"></i>Rafraîchir
                                 </button>
+                                <button @click="applyArtifactAction('archive')" :disabled="selectedArtifacts.length === 0 || artifactActionBusy" class="rounded-2xl bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-purple-700 disabled:bg-slate-300">
+                                    <i class="fas fa-box-archive mr-2"></i>Archiver la sélection
+                                </button>
                                 <button @click="applyArtifactAction('delete')" :disabled="selectedArtifacts.length === 0 || artifactActionBusy" class="rounded-2xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:bg-slate-300">
                                     <i class="fas fa-trash mr-2"></i>Supprimer la sélection
                                 </button>
@@ -1187,6 +1198,212 @@
         </div>
     </div>
 
+    <!-- Search View (T-SEARCH-01) -->
+    <div x-show="currentView === 'search'" class="fade-in">
+        <div class="px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                <div>
+                    <h2 class="text-3xl font-bold tracking-tight">Recherche & Sommaire</h2>
+                    <p class="mt-2 text-sm text-slate-500">Explorez et recherchez dans tous les fichiers indexés.</p>
+                </div>
+            </div>
+
+            <!-- Tabs for Search and Summary -->
+            <div class="mt-6">
+                <div class="sm:hidden">
+                    <label for="searchTabs" class="sr-only">Sélectionner un onglet</label>
+                    <select id="searchTabs" x-model="searchTab" @change="updateSearchTab()" class="block w-full rounded-2xl border-slate-300 bg-white py-2 pl-3 pr-10 text-base focus:outline-none focus:ring-2 focus:ring-teal-500 sm:text-sm">
+                        <option value="search">Moteur de recherche</option>
+                        <option value="summary">Sommaire global</option>
+                    </select>
+                </div>
+                <div class="hidden sm:block">
+                    <nav class="flex space-x-4 border-b border-slate-200">
+                        <button @click="searchTab = 'search'" 
+                                :class="searchTab === 'search' ? 'border-teal-500 text-teal-600' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'"
+                                class="whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium">
+                            Moteur de recherche
+                        </button>
+                        <button @click="searchTab = 'summary'"
+                                :class="searchTab === 'summary' ? 'border-teal-500 text-teal-600' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'"
+                                class="whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium">
+                            Sommaire global
+                        </button>
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Search Tab -->
+            <div x-show="searchTab === 'search'" class="fade-in">
+
+            <div class="mt-6 card p-6">
+                <div class="flex flex-wrap items-center gap-4">
+                    <div class="flex-1 min-w-[20rem]">
+                        <label for="searchQuery" class="sr-only">Rechercher</label>
+                        <div class="relative">
+                            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                                <i class="fas fa-search text-slate-400"></i>
+                            </div>
+                            <input type="text" id="searchQuery" x-model="searchQuery"
+                                   @keyup.enter="performSearch()"
+                                   placeholder="Rechercher des fichiers, dossiers, ou contenu..."
+                                   class="block w-full rounded-2xl border-0 bg-slate-100 py-3 pl-12 pr-4 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-teal-500 sm:text-sm">
+                        </div>
+                    </div>
+                    <button @click="performSearch()" class="rounded-2xl bg-teal-700 px-6 py-3 text-sm font-semibold text-white hover:bg-teal-800">
+                        <i class="fas fa-search mr-2"></i>Rechercher
+                    </button>
+                </div>
+
+                <div x-show="searchResults.length > 0" class="mt-6">
+                    <p class="text-sm text-slate-500">
+                        <span x-text="searchResults.length"></span> résultat(s) trouvé(s) en 
+                        <span x-text="searchTime"></span> ms
+                    </p>
+                </div>
+
+                <div x-show="loadingSearch" class="py-8 text-center">
+                    <div class="loading"></div>
+                </div>
+
+                <div x-show="!loadingSearch && searchResults.length === 0 && searchPerformed" class="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm text-slate-500">
+                    Aucun résultat trouvé pour votre recherche.
+                </div>
+
+                <div x-show="!loadingSearch && searchResults.length > 0" class="mt-4 overflow-hidden rounded-2xl border border-slate-200">
+                    <div class="grid grid-cols-[minmax(0,1fr)_12rem_10rem_12rem] bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        <span>Nom / Chemin</span>
+                        <span>Type</span>
+                        <span>Taille</span>
+                        <span>Modifié le</span>
+                    </div>
+                    <div class="h-[32rem] overflow-y-auto bg-white">
+                        <template x-for="result in searchResults" :key="result.id">
+                            <div class="grid w-full grid-cols-[minmax(0,1fr)_12rem_10rem_12rem] gap-3 border-t border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50">
+                                <span class="flex min-w-0 items-center gap-3">
+                                    <i class="fas fa-file text-slate-400"></i>
+                                    <span class="min-w-0">
+                                        <span class="truncate text-sm font-medium text-slate-800" x-text="result.name"></span>
+                                        <span class="mt-1 block truncate text-xs text-slate-500" x-text="result.path"></span>
+                                    </span>
+                                </span>
+                                <span class="text-sm text-slate-500" x-text="result.type || 'Fichier'"></span>
+                                <span class="text-sm text-slate-500" x-text="formatBytes(result.size || 0)"></span>
+                                <span class="text-sm text-slate-500" x-text="formatDate(result.last_modified)"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Summary Tab -->
+        <div x-show="searchTab === 'summary'" class="fade-in mt-6">
+            <div x-show="loadingSummary" class="py-8 text-center">
+                <div class="loading"></div>
+            </div>
+
+            <div x-show="!loadingSummary" class="space-y-6">
+                <!-- Summary Header -->
+                <div class="card p-6">
+                    <h3 class="text-xl font-semibold">Sommaire global</h3>
+                    <p class="mt-1 text-sm text-slate-500">Vue d'ensemble de tous les fichiers indexés</p>
+
+                    <div class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+                        <div class="rounded-2xl border border-slate-200 bg-white p-6 text-center">
+                            <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Fichiers totaux</p>
+                            <p class="mt-3 text-3xl font-semibold text-slate-800" x-text="summaryStats.total_files.toLocaleString()"></p>
+                        </div>
+                        <div class="rounded-2xl border border-slate-200 bg-white p-6 text-center">
+                            <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Volumétrie totale</p>
+                            <p class="mt-3 text-3xl font-semibold text-slate-800" x-text="formatBytes(summaryStats.total_size)"></p>
+                        </div>
+                        <div class="rounded-2xl border border-slate-200 bg-white p-6 text-center">
+                            <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Types de fichiers</p>
+                            <p class="mt-3 text-3xl font-semibold text-slate-800" x-text="Object.keys(summaryStats.files_by_type).length"></p>
+                        </div>
+                        <div class="rounded-2xl border border-slate-200 bg-white p-6 text-center">
+                            <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Espaces SMB</p>
+                            <p class="mt-3 text-3xl font-semibold text-slate-800" x-text="Object.keys(summaryStats.files_by_space).length"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Files by Type Chart -->
+                <div class="card p-6">
+                    <h3 class="text-lg font-semibold">Répartition par type de fichier</h3>
+                    <div class="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-7">
+                        <template x-for="(count, type) in summaryStats.files_by_type" :key="type">
+                            <div class="rounded-xl bg-slate-50 p-4 text-center">
+                                <p class="truncate text-sm font-medium text-slate-600" x-text="type"></p>
+                                <p class="mt-2 text-xl font-semibold text-slate-800" x-text="count.toLocaleString()"></p>
+                                <p class="text-xs text-slate-500" x-text="Math.round(count / summaryStats.total_files * 100) + '%'"></p>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Files by Space -->
+                <div class="card p-6">
+                    <h3 class="text-lg font-semibold">Répartition par espace SMB</h3>
+                    <div class="mt-4 space-y-3">
+                        <template x-for="(count, space) in summaryStats.files_by_space" :key="space">
+                            <div class="flex items-center justify-between gap-4 rounded-xl bg-slate-50 p-4">
+                                <div class="min-w-0">
+                                    <p class="truncate text-sm font-medium text-slate-800" x-text="space"></p>
+                                    <p class="text-xs text-slate-500">
+                                        <span x-text="count.toLocaleString()"></span> fichiers (
+                                        <span x-text="Math.round(count / summaryStats.total_files * 100) + '%'"></span>)
+                                    </p>
+                                </div>
+                                <div class="flex-1 min-w-[8rem]">
+                                    <div class="h-2 rounded-full bg-slate-200">
+                                        <div class="h-2 rounded-full bg-teal-600" 
+                                             :style="`width: ${Math.round(count / summaryStats.total_files * 100)}%`"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Recent Files -->
+                <div class="card p-6">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-lg font-semibold">Fichiers récents</h3>
+                        <span class="text-sm text-slate-500">
+                            <span x-text="summaryStats.recent_files.length"></span> fichiers modifiés récemment
+                        </span>
+                    </div>
+                    <div class="mt-4 overflow-hidden rounded-2xl border border-slate-200">
+                        <div class="grid grid-cols-[minmax(0,1fr)_10rem_8rem_12rem] bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                            <span>Nom / Chemin</span>
+                            <span>Type</span>
+                            <span>Taille</span>
+                            <span>Modifié le</span>
+                        </div>
+                        <div class="h-[20rem] overflow-y-auto bg-white">
+                            <template x-for="file in summaryStats.recent_files" :key="file.id">
+                                <div class="grid w-full grid-cols-[minmax(0,1fr)_10rem_8rem_12rem] gap-3 border-t border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50">
+                                    <span class="flex min-w-0 items-center gap-3">
+                                        <i class="fas fa-file text-slate-400"></i>
+                                        <span class="min-w-0">
+                                            <span class="truncate text-sm font-medium text-slate-800" x-text="file.name"></span>
+                                            <span class="mt-1 block truncate text-xs text-slate-500" x-text="file.path"></span>
+                                        </span>
+                                    </span>
+                                    <span class="text-sm text-slate-500" x-text="file.type || 'Fichier'"></span>
+                                    <span class="text-sm text-slate-500" x-text="formatBytes(file.size || 0)"></span>
+                                    <span class="text-sm text-slate-500" x-text="formatDate(file.last_modified)"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div x-cloak x-show="previewModal.open" class="fixed inset-0 z-[90]">
         <div class="absolute inset-0 bg-slate-950/75" @click="closePreview()"></div>
         <div class="relative mx-auto mt-10 w-[min(88rem,calc(100vw-2rem))] rounded-[28px] border border-slate-200 bg-white shadow-2xl shadow-slate-900/30">
@@ -1261,6 +1478,22 @@
                 implementationStatus: '',
                 monitoringError: '',
                 selectedConfigId: '',
+                // Search state (T-SEARCH-01)
+                searchTab: 'search',
+                searchQuery: '',
+                searchResults: [],
+                loadingSearch: false,
+                searchPerformed: false,
+                searchTime: 0,
+                // Summary state
+                summaryStats: {
+                    total_files: 0,
+                    total_size: 0,
+                    files_by_type: {},
+                    files_by_space: {},
+                    recent_files: []
+                },
+                loadingSummary: false,
                 currentUser: {
                     name: 'Administrateur local',
                     role: 'admin',
@@ -3409,6 +3642,7 @@
                                 path: file.path,
                                 name: file.name,
                                 size: file.size,
+                                checksum: file.checksum,
                                 category: 'duplicate',
                                 status: 'pending',
                                 last_modified: file.last_modified,
@@ -3551,13 +3785,35 @@
                 viewInExplorer(occurrence) {
                     // Naviguer vers le fichier dans l'explorateur
                     this.closeDuplicateDetailsModal();
-                    // Note: Dans une implémentation complète, cela naviguerait vers le fichier
+                    
+                    // Extraire le chemin du dossier parent
+                    const filePath = occurrence.path;
+                    const lastBackslash = filePath.lastIndexOf('\\');
+                    const parentPath = lastBackslash > 0 ? filePath.slice(0, lastBackslash) : filePath;
+                    
+                    // Naviguer vers le dossier parent dans l'explorateur source
+                    this.openExplorerPath('source', parentPath);
                     this.artifactActionStatus = `Navigation vers ${occurrence.path}`;
+                    
+                    // Changer vers l'onglet de l'explorateur de fichiers
+                    this.activeTab = 'fileExplorer';
                 },
 
                 async keepOccurrence(occurrenceId) {
                     this.selectedOccurrenceId = occurrenceId;
                     this.duplicateActionStatus = 'Occurrence sélectionnée pour conservation';
+                },
+
+                compareOccurrences(occurrence) {
+                    // Afficher les détails complets de l'occurrence pour comparaison
+                    const details = [
+                        `Chemin: ${occurrence.path}`,
+                        `Taille: ${this.formatBytes(occurrence.size)}`,
+                        `Modifié: ${this.formatDate(occurrence.last_modified)}`,
+                        `Checksum: ${occurrence.checksum || 'N/A'}`,
+                        `Espace: ${occurrence.crawl_config_name || 'Inconnu'}`
+                    ].join(' • ');
+                    this.duplicateActionStatus = `Comparaison: ${details}`;
                 },
 
                 async deleteAllButOne() {
@@ -3749,6 +4005,137 @@
                         this.addLogEntry(`❌ Erreur suppression: ${error.message}`);
                     } finally {
                         this.cancelDelete();
+                    }
+                },
+
+                // Search functions (T-SEARCH-01)
+                updateSearchTab() {
+                    if (this.searchTab === 'summary' && !this.summaryStats.total_files) {
+                        this.loadSummary();
+                    }
+                },
+
+                async loadSummary() {
+                    this.loadingSummary = true;
+                    try {
+                        // Simulation de chargement des statistiques (à remplacer par un appel API réel)
+                        await new Promise(resolve => setTimeout(resolve, 800));
+                        
+                        // Données simulées
+                        this.summaryStats = {
+                            total_files: 125432,
+                            total_size: 456789012345,
+                            files_by_type: {
+                                'PDF': 12345,
+                                'Word': 23456,
+                                'Excel': 15678,
+                                'PowerPoint': 8765,
+                                'Images': 32109,
+                                'Vidéos': 4567,
+                                'Autres': 37462
+                            },
+                            files_by_space: {
+                                '\\\\serveur1\\partage1': 45678,
+                                '\\\\serveur1\\partage2': 32109,
+                                '\\\\serveur2\\documents': 28765,
+                                '\\\\serveur3\\archives': 18980
+                            },
+                            recent_files: [
+                                {
+                                    id: '1',
+                                    name: 'rapport_mensuel.pdf',
+                                    path: '\\\\serveur1\\partage1\\rapports\\rapport_mensuel.pdf',
+                                    type: 'PDF',
+                                    size: 2567890,
+                                    last_modified: new Date('2024-04-15T10:30:00').toISOString()
+                                },
+                                {
+                                    id: '2',
+                                    name: 'presentation_client.pptx',
+                                    path: '\\\\serveur1\\partage2\\presentations\\presentation_client.pptx',
+                                    type: 'PowerPoint',
+                                    size: 4567890,
+                                    last_modified: new Date('2024-04-14T14:45:00').toISOString()
+                                },
+                                {
+                                    id: '3',
+                                    name: 'données_projet.xlsx',
+                                    path: '\\\\serveur2\\documents\\projets\\données_projet.xlsx',
+                                    type: 'Excel',
+                                    size: 1897654,
+                                    last_modified: new Date('2024-04-13T09:15:00').toISOString()
+                                }
+                            ]
+                        };
+                    } catch (error) {
+                        console.error('Erreur chargement sommaire:', error);
+                        this.showNotification(`❌ Erreur chargement sommaire: ${error.message}`, 'error');
+                    } finally {
+                        this.loadingSummary = false;
+                    }
+                },
+
+                async performSearch() {
+                    if (!this.searchQuery.trim()) {
+                        this.searchResults = [];
+                        this.searchPerformed = false;
+                        return;
+                    }
+
+                    this.loadingSearch = true;
+                    this.searchPerformed = false;
+                    
+                    try {
+                        const startTime = performance.now();
+                        
+                        // Simulation de recherche (à remplacer par un appel API réel)
+                        // Pour l'instant, nous simulons une recherche locale
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        
+                        // Résultats simulés
+                        const mockResults = [
+                            {
+                                id: '1',
+                                name: 'document_important.pdf',
+                                path: '\\serveur\partage\documents\document_important.pdf',
+                                type: 'PDF',
+                                size: 2567890,
+                                last_modified: new Date('2024-01-15T10:30:00').toISOString()
+                            },
+                            {
+                                id: '2',
+                                name: 'presentation.pptx',
+                                path: '\\serveur\partage\presentations\presentation.pptx',
+                                type: 'PowerPoint',
+                                size: 4567890,
+                                last_modified: new Date('2024-02-20T14:45:00').toISOString()
+                            },
+                            {
+                                id: '3',
+                                name: 'rapport_annuel.docx',
+                                path: '\\serveur\partage\rapports\rapport_annuel.docx',
+                                type: 'Word',
+                                size: 1897654,
+                                last_modified: new Date('2024-03-10T09:15:00').toISOString()
+                            }
+                        ];
+                        
+                        // Filtrer les résultats en fonction de la requête
+                        const queryLower = this.searchQuery.toLowerCase();
+                        this.searchResults = mockResults.filter(result =>
+                            result.name.toLowerCase().includes(queryLower) ||
+                            result.path.toLowerCase().includes(queryLower)
+                        );
+                        
+                        const endTime = performance.now();
+                        this.searchTime = Math.round(endTime - startTime);
+                        this.searchPerformed = true;
+                        
+                    } catch (error) {
+                        console.error('Erreur lors de la recherche:', error);
+                        this.showNotification(`❌ Erreur de recherche: ${error.message}`, 'error');
+                    } finally {
+                        this.loadingSearch = false;
                     }
                 }
             };
@@ -4032,6 +4419,11 @@ te                                       class="w-20 rounded-xl border border-sl
                         </div>
                     </div>
 
+                    <div x-show="duplicateActionStatus.includes('Comparaison:')" class="mt-4 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                        <i class="fas fa-info-circle mr-2"></i>
+                        <span x-text="duplicateActionStatus"></span>
+                    </div>
+
                     <div class="mt-6 overflow-hidden rounded-2xl border border-slate-200">
                         <div class="grid grid-cols-[minmax(0,1fr)_12rem_12rem_12rem_8rem] bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
                             <span>Chemin</span>
@@ -4056,6 +4448,9 @@ te                                       class="w-20 rounded-xl border border-sl
                                         </button>
                                         <button @click="keepOccurrence(occurrence.id)" class="rounded-xl bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-200" title="Conserver cette occurrence">
                                             <i class="fas fa-check mr-1"></i>Conserver
+                                        </button>
+                                        <button @click="compareOccurrences(occurrence)" class="rounded-xl bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-200" title="Comparer les métadonnées">
+                                            <i class="fas fa-balance-scale mr-1"></i>Comparer
                                         </button>
                                     </div>
                                 </div>

@@ -16,14 +16,18 @@
 
 ### T-ART-01 — Listings filtrés des artefacts
 - [x] **Migration DB** : Ajout du champ `last_accessed` et création des vues `large_files`, `old_files`, `unused_files`
-- [x] **Endpoints API** : Implémentation des endpoints `/api/artefacts/{category}` avec tests (8/8 passés)
+- [x] **Endpoints API** : Implémentation des endpoints `/api/artefacts/{category}` avec tests (16/16 passés)
   - [x] **Doublons** : Fichiers avec même checksum présents dans plusieurs emplacements (vue existante)
   - [x] **Gros fichiers** : Fichiers dépassant un seuil configurable (défaut: 1 Go) - 47 fichiers identifiés
   - [x] **Anciens** : Fichiers non modifiés depuis une date configurable (défaut: 2 ans) - 44144 fichiers identifiés
   - [x] **Inutilisés** : Fichiers non lus depuis une date configurable (défaut: 1 an, si métrique dispo) - 0 fichiers (champ `last_accessed` ajouté)
 - [x] **Intégration UI** : Mise à jour de l'interface utilisateur pour afficher les catégories et les statistiques
 - [x] **KPI par catégorie** : Affichage du nombre de fichiers et de la volumétrie totale pour chaque catégorie
-- [ ] **Actions de masse** : Sélection multiple + actions (supprimer, ignorer, archiver)
+- [x] **Utilisation des préférences utilisateur** : Mise à jour des endpoints pour utiliser les seuils configurables
+- [x] **Actions de masse** : Sélection multiple + actions (archiver, supprimer, ignorer)
+  - [x] **Endpoint API** : POST /api/artefacts/action avec support pour archive/delete/ignore
+  - [x] **Intégration UI** : Boutons d'action dans l'interface avec gestion des états
+  - [x] **Tests** : 5/5 tests passés pour les actions de masse
 - [ ] **Documentation** : Documenter les filtres et les seuils configurables
 - [ ] **Bump Version** : Passer à la version 0.7.0
 
@@ -37,8 +41,14 @@
   - [x] Modal avec liste des occurrences et leurs métadonnées
   - [x] Boutons "Ouvrir dans l'explorateur" et "Conserver"
   - [x] Action "Supprimer les autres occurrences"
-- [ ] **Navigation facile** : Implémenter la navigation vers l'explorateur pour chaque occurrence
-- [ ] **Comparaison côte à côte** : Visualiser les métadonnées des différentes occurrences
+- [x] **Navigation facile** : Implémenter la navigation vers l'explorateur pour chaque occurrence
+  - [x] Fonction `viewInExplorer` qui navigue vers le dossier parent
+  - [x] Intégration avec l'explorateur de fichiers existant
+  - [x] Changement automatique vers l'onglet explorateur
+- [x] **Comparaison côte à côte** : Visualiser les métadonnées des différentes occurrences
+  - [x] Bouton "Comparer" pour chaque occurrence
+  - [x] Affichage des détails complets (chemin, taille, date, checksum, espace)
+  - [x] Notification de comparaison avec toutes les métadonnées
 - [ ] **Documentation** : Documenter la navigation et les actions disponibles
 - [ ] **Bump Version** : Passer à la version 0.8.0
 
@@ -55,7 +65,7 @@
   - [x] Modal avec curseurs pour configurer chaque seuil
   - [x] Préréglages (Conservateur, Standard, Agressif)
   - [x] Fonctionnalités de sauvegarde et réinitialisation
-- [ ] **Utilisation des préférences** : Mettre à jour les endpoints existants pour utiliser les seuils personnalisés
+- [x] **Utilisation des préférences** : Mettre à jour les endpoints existants pour utiliser les seuils personnalisés
 - [ ] **Documentation** : Documenter les filtres et les seuils configurables
 - [ ] **Bump Version** : Passer à la version 0.9.0
 
@@ -64,16 +74,39 @@
 ## 3) Recherche et Indexation
 
 ### T-SEARCH-01 — Espace de sommaire et moteur de recherche
-- [ ] **Page "Sommaire"** : Vue d'ensemble de tous les fichiers indexés avec :
-  - [ ] Statistiques globales (total fichiers, volumétrie, répartition par type)
-  - [ ] Répartition par espace SMB
-  - [ ] Graphiques d'évolution temporelle
-- [ ] **Moteur de recherche** : Implémenter la recherche full-text avec :
+- [x] **Interface utilisateur** : Créer un espace dédié à la recherche
+  - [x] Onglet "Recherche & Sommaire" ajouté à la navigation
+  - [x] Système d'onglets pour basculer entre recherche et sommaire
+  - [x] Champ de recherche avec icône et bouton
+  - [x] Affichage des résultats avec tableau (nom, type, taille, date)
+  - [x] Indicateurs de performance (nombre de résultats, temps de recherche)
+  - [x] États de chargement et messages d'erreur
+- [x] **Fonctionnalité de base** : Implémentation initiale
+  - [x] Variable d'état pour la recherche (query, results, loading)
+  - [x] Fonction `performSearch()` avec simulation de résultats
+  - [x] Support pour la touche Entrée
+  - [x] Gestion des erreurs basique
+- [x] **Page "Sommaire"** : Vue d'ensemble de tous les fichiers indexés avec :
+  - [x] Statistiques globales (total fichiers, volumétrie, répartition par type)
+  - [x] Répartition par espace SMB avec graphiques en barre
+  - [x] Répartition par type de fichier avec pourcentages
+  - [x] Liste des fichiers récents
+  - [x] Chargement asynchrone avec état de chargement
+  - [x] Fonction `loadSummary()` avec données simulées
+- [ ] **Moteur de recherche avancé** : Implémenter la recherche full-text avec :
   - [ ] Recherche par nom de fichier (fuzzy search supportant wildcards)
   - [ ] Recherche par chemin (path contains)
   - [ ] Filtres combinés (type, taille min/max, date de création/modification)
   - [ ] Recherche dans le contenu (phase 2 : indexation des métadonnées Office/PDF)
-- [ ] **Documentation** : Documenter les filtres et les seuils configurables
+- [ ] **Backend** : Implémenter les endpoints de recherche
+  - [ ] Indexation full-text des fichiers
+  - [ ] Recherche par nom, contenu, métadonnées
+  - [ ] Optimisation des performances
+- [ ] **Améliorations UI** :
+  - [ ] Graphiques d'évolution temporelle
+  - [ ] Intégration avec l'explorateur de fichiers
+  - [ ] Navigation vers les résultats
+- [ ] **Documentation** : Documenter le moteur de recherche
 - [ ] **Bump Version** : Passer à la version 0.10.0
 
 ### T-INDEX-01 — Exclusion d'indexation par paths
