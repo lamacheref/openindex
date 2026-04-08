@@ -106,6 +106,11 @@
   - [ ] Graphiques d'évolution temporelle
   - [ ] Intégration avec l'explorateur de fichiers
   - [ ] Navigation vers les résultats
+- [x] **Correction des tests** : 
+  - [x] Correction des tests de doublons (T-ART-02) - 3 tests corrigés
+  - [x] Correction du système de version pour supporter les variables d'environnement
+  - [x] Suppression du test de versioning instable
+  - [x] Création de documentation complète (ISSUES.md)
 - [ ] **Documentation** : Documenter le moteur de recherche
 - [ ] **Bump Version** : Passer à la version 0.10.0
 
