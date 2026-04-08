@@ -16,22 +16,28 @@
 
 ### T-ART-01 — Listings filtrés des artefacts
 - [x] **Migration DB** : Ajout du champ `last_accessed` et création des vues `large_files`, `old_files`, `unused_files`
-- [ ] **Catégories d'artefacts** : Implémenter les filtres suivants dans la page Artefacts :
+- [x] **Endpoints API** : Implémentation des endpoints `/api/artefacts/{category}` avec tests (8/8 passés)
   - [x] **Doublons** : Fichiers avec même checksum présents dans plusieurs emplacements (vue existante)
   - [x] **Gros fichiers** : Fichiers dépassant un seuil configurable (défaut: 1 Go) - 47 fichiers identifiés
   - [x] **Anciens** : Fichiers non modifiés depuis une date configurable (défaut: 2 ans) - 44144 fichiers identifiés
-  - [ ] **Inutilisés** : Fichiers non lus depuis une date configurable (défaut: 1 an, si métrique dispo) - 0 fichiers (champ `last_accessed` ajouté)
-- [ ] **KPI par catégorie** : Afficher le nombre de fichiers et la volumétrie totale pour chaque catégorie
+  - [x] **Inutilisés** : Fichiers non lus depuis une date configurable (défaut: 1 an, si métrique dispo) - 0 fichiers (champ `last_accessed` ajouté)
+- [x] **Intégration UI** : Mise à jour de l'interface utilisateur pour afficher les catégories et les statistiques
+- [x] **KPI par catégorie** : Affichage du nombre de fichiers et de la volumétrie totale pour chaque catégorie
 - [ ] **Actions de masse** : Sélection multiple + actions (supprimer, ignorer, archiver)
 - [ ] **Documentation** : Documenter les filtres et les seuils configurables
 - [ ] **Bump Version** : Passer à la version 0.7.0
 
 ### T-ART-02 — Détail des doublons avec navigation
-- [ ] **Liste des doublons enrichie** : Pour chaque fichier en doublon, afficher :
-  - [ ] Tous les chemins où le fichier est présent (avec liens cliquables)
-  - [ ] Taille, date de dernière modification, checksum
-  - [ ] Espace/SMB de chaque occurrence
-- [ ] **Navigation facile** : Bouton "Voir dans l'explorateur" pour chaque occurrence
+- [x] **Endpoints API** : Implémentation des endpoints pour gérer les doublons
+  - [x] GET /api/duplicates/{checksum}/details : Détails des occurrences
+  - [x] POST /api/duplicates/{checksum}/keep : Marquer une occurrence à conserver
+  - [x] DELETE /api/duplicates/{checksum}/occurrences : Supprimer les autres occurrences
+- [x] **Intégration UI** : Modal pour afficher les détails des doublons
+  - [x] Bouton "Voir les détails" dans la liste des artefacts
+  - [x] Modal avec liste des occurrences et leurs métadonnées
+  - [x] Boutons "Ouvrir dans l'explorateur" et "Conserver"
+  - [x] Action "Supprimer les autres occurrences"
+- [ ] **Navigation facile** : Implémenter la navigation vers l'explorateur pour chaque occurrence
 - [ ] **Comparaison côte à côte** : Visualiser les métadonnées des différentes occurrences
 - [ ] **Documentation** : Documenter la navigation et les actions disponibles
 - [ ] **Bump Version** : Passer à la version 0.8.0

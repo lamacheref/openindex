@@ -881,6 +881,16 @@
                                         <span class="text-sm" :class="getArtifactCategoryClass(artifact.category)" x-text="getArtifactCategoryLabel(artifact.category)"></span>
                                         <span class="text-sm" :class="getArtifactStatusClass(artifact.status)" x-text="getArtifactStatusLabel(artifact.status)"></span>
                                         <span class="text-sm text-slate-500" x-text="formatDate(artifact.last_modified)"></span>
+                                        <div class="flex items-center gap-2">
+                                            <button 
+                                                x-show="artifact.category === 'duplicate' && artifact.duplicate_count > 1"
+                                                @click="openDuplicateDetailsModal(artifact)"
+                                                class="rounded-xl border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                                title="Voir les détails des doublons">
+                                                <i class="fas fa-list mr-1"></i>
+                                                <span x-text="artifact.duplicate_count"></span> doublons
+                                            </button>
+                                        </div>
                                     </div>
                                 </template>
                             </div>
@@ -1398,6 +1408,18 @@
                 loadingArtifacts: false,
                 artifactActionBusy: false,
                 artifactActionStatus: '',
+                // Duplicate details modal properties (T-ART-02)
+                showDuplicateDetailsModal: false,
+                duplicateDetails: {
+                    checksum: '',
+                    name: '',
+                    size: 0,
+                    total_occurrences: 0,
+                    occurrences: []
+                },
+                selectedOccurrenceId: null,
+                duplicateActionBusy: false,
+                duplicateActionStatus: '',
                 // Polling state
                 _lastRuntimeSnapshot: null,
                 _lastOverviewSnapshot: null,
@@ -3476,6 +3498,82 @@
                     return classes[status] || 'text-slate-600';
                 },
 
+                // Duplicate details modal functions (T-ART-02)
+                openDuplicateDetailsModal(artifact) {
+                    this.showDuplicateDetailsModal = true;
+                    this.duplicateActionStatus = '';
+                    this.loadDuplicateDetails(artifact.checksum);
+                },
+
+                closeDuplicateDetailsModal() {
+                    this.showDuplicateDetailsModal = false;
+                    this.duplicateDetails = {
+                        checksum: '',
+                        name: '',
+                        size: 0,
+                        total_occurrences: 0,
+                        occurrences: []
+                    };
+                    this.selectedOccurrenceId = null;
+                },
+
+                async loadDuplicateDetails(checksum) {
+                    try {
+                        const response = await fetch(`/api/duplicates/${checksum}/details?limit=50&offset=0`);
+                        if (!response.ok) {
+                            throw new Error(`Erreur HTTP ${response.status}`);
+                        }
+                        const data = await response.json();
+                        this.duplicateDetails = data;
+                    } catch (error) {
+                        console.error('Erreur chargement détails doublons:', error);
+                        this.duplicateActionStatus = `❌ Erreur: ${error.message}`;
+                    }
+                },
+
+                viewInExplorer(occurrence) {
+                    // Naviguer vers le fichier dans l'explorateur
+                    this.closeDuplicateDetailsModal();
+                    // Note: Dans une implémentation complète, cela naviguerait vers le fichier
+                    this.artifactActionStatus = `Navigation vers ${occurrence.path}`;
+                },
+
+                async keepOccurrence(occurrenceId) {
+                    this.selectedOccurrenceId = occurrenceId;
+                    this.duplicateActionStatus = 'Occurrence sélectionnée pour conservation';
+                },
+
+                async deleteAllButOne() {
+                    if (!this.selectedOccurrenceId) {
+                        this.duplicateActionStatus = '❌ Aucune occurrence sélectionnée';
+                        return;
+                    }
+
+                    this.duplicateActionBusy = true;
+                    this.duplicateActionStatus = 'Suppression en cours...';
+
+                    try {
+                        const response = await fetch(`/api/duplicates/${this.duplicateDetails.checksum}/occurrences?keep_occurrence_id=${this.selectedOccurrenceId}`, {
+                            method: 'DELETE'
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`Erreur HTTP ${response.status}`);
+                        }
+
+                        const result = await response.json();
+                        this.duplicateActionStatus = `✅ ${result.deleted_count} occurrence(s) supprimée(s)`;
+                        await this.loadDuplicateDetails(this.duplicateDetails.checksum);
+                        await this.loadArtifacts();
+                    } catch (error) {
+                        console.error('Erreur suppression doublons:', error);
+                        this.duplicateActionStatus = `❌ Erreur: ${error.message}`;
+                    } finally {
+                        this.duplicateActionBusy = false;
+                    }
+                },
+
+
                 // Delete confirmation dialog state
                 showDeleteDialog: false,
                 deleteDialogPanel: null,
@@ -3696,6 +3794,90 @@
                         :class="deleteDialogItemCount > 1 && deleteConfirmationText !== 'oui' ? 'bg-rose-300 cursor-not-allowed' : 'bg-rose-600 hover:bg-rose-700'">
                     Supprimer définitivement
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Duplicate Details Modal (T-ART-02) -->
+    <div x-cloak x-show="showDuplicateDetailsModal" class="fixed inset-0 z-[95] overflow-y-auto">
+        <div class="absolute inset-0 bg-slate-900/50" @click="closeDuplicateDetailsModal()"></div>
+        <div class="relative flex min-h-full items-start justify-center p-4 pt-[12vh] sm:p-6">
+            <div class="w-full max-w-4xl rounded-3xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/20">
+                <div class="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
+                    <div>
+                        <h2 class="text-2xl font-bold tracking-tight">Détails des doublons</h2>
+                        <p class="mt-1 text-sm text-slate-500">
+                            <span x-text="duplicateDetails.name"></span> 
+                            (<span x-text="duplicateDetails.total_occurrences"></span> occurrence(s))
+                        </p>
+                    </div>
+                    <button @click="closeDuplicateDetailsModal()" class="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                        Fermer
+                    </button>
+                </div>
+
+                <div class="px-6 py-6">
+                    <div class="mb-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <div class="flex flex-wrap items-center justify-between gap-4">
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-files text-2xl text-sky-600"></i>
+                                <div>
+                                    <p class="font-semibold text-slate-800" x-text="duplicateDetails.name"></p>
+                                    <p class="text-sm text-slate-500">Checksum: <span class="font-mono text-xs" x-text="duplicateDetails.checksum"></span></p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-sm text-slate-500">Taille totale</p>
+                                <p class="text-xl font-semibold text-slate-800" x-text="formatBytes(duplicateDetails.size * duplicateDetails.total_occurrences)"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 overflow-hidden rounded-2xl border border-slate-200">
+                        <div class="grid grid-cols-[minmax(0,1fr)_12rem_12rem_12rem_8rem] bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                            <span>Chemin</span>
+                            <span>Espace SMB</span>
+                            <span>Modifié le</span>
+                            <span>Taille</span>
+                            <span>Actions</span>
+                        </div>
+                        <div class="h-[32rem] overflow-y-auto bg-white">
+                            <template x-for="occurrence in duplicateDetails.occurrences" :key="occurrence.id">
+                                <div class="grid w-full grid-cols-[minmax(0,1fr)_12rem_12rem_8rem_auto] gap-3 border-t border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50">
+                                    <span class="flex min-w-0 items-center gap-2">
+                                        <i class="fas fa-file text-slate-400"></i>
+                                        <span class="min-w-0 truncate text-sm" x-text="occurrence.path"></span>
+                                    </span>
+                                    <span class="truncate text-sm text-slate-600" x-text="occurrence.crawl_config_name || 'Inconnu'"></span>
+                                    <span class="text-sm text-slate-500" x-text="formatDate(occurrence.last_modified)"></span>
+                                    <span class="text-sm text-slate-500" x-text="formatBytes(occurrence.size)"></span>
+                                    <div class="flex items-center gap-2">
+                                        <button @click="viewInExplorer(occurrence)" class="rounded-xl bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200" title="Voir dans l'explorateur">
+                                            <i class="fas fa-folder-open mr-1"></i>Ouvrir
+                                        </button>
+                                        <button @click="keepOccurrence(occurrence.id)" class="rounded-xl bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-200" title="Conserver cette occurrence">
+                                            <i class="fas fa-check mr-1"></i>Conserver
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <div class="flex items-center gap-4">
+                            <button @click="deleteAllButOne()" class="rounded-2xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700" :disabled="duplicateActionBusy">
+                                <i class="fas fa-trash mr-2"></i>
+                                Supprimer les autres occurrences
+                            </button>
+                            <span x-show="duplicateActionStatus" class="text-sm text-slate-600" x-text="duplicateActionStatus"></span>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-xs text-slate-500">Occurrences sélectionnées</p>
+                            <p class="text-lg font-semibold text-slate-800">1 / <span x-text="duplicateDetails.total_occurrences"></span></p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

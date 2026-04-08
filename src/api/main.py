@@ -75,6 +75,10 @@ app = FastAPI(
 from src.api.artefacts_router import router as artefacts_router
 app.include_router(artefacts_router)
 
+# Inclusion du router pour les détails des doublons (T-ART-02)
+from src.api.duplicate_details_router import router as duplicate_details_router
+app.include_router(duplicate_details_router)
+
 # Configuration CORS pour le frontend
 app.add_middleware(
     CORSMiddleware,
