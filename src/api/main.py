@@ -3502,12 +3502,54 @@ async def list_archive_jobs(
         raise HTTPException(status_code=500, detail=f"Erreur lors de la récupération des jobs: {e}")
 
 
+@app.get("/api/archive/queue/stats", response_model=ArchiveJobStats)
+async def get_archive_job_stats():
+    """Récupère les statistiques de la queue d'archivage"""
+    try:
+        db = get_db_adapter()
+
+        query = """
+            SELECT
+                COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) as pending,
+                COALESCE(SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END), 0) as running,
+                COALESCE(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END), 0) as completed,
+                COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) as failed,
+                COALESCE(SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END), 0) as cancelled,
+                COALESCE(SUM(CASE WHEN status = 'pending' THEN COALESCE(source_size, 0) ELSE 0 END), 0) as total_size_pending,
+                COALESCE(SUM(bytes_transferred), 0) as total_size_transferred
+            FROM archive_jobs
+        """
+
+        results = db.execute_query(query)
+
+        if not results:
+            return ArchiveJobStats(
+                pending=0, running=0, completed=0, failed=0, cancelled=0,
+                total_size_pending=0, total_size_transferred=0
+            )
+
+        row = results[0]
+        return ArchiveJobStats(
+            pending=row[0],
+            running=row[1],
+            completed=row[2],
+            failed=row[3],
+            cancelled=row[4],
+            total_size_pending=row[5],
+            total_size_transferred=row[6]
+        )
+
+    except Exception as e:
+        logger.error(f"Erreur get_archive_job_stats: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la récupération des statistiques: {e}")
+
+
 @app.get("/api/archive/queue/{job_id}", response_model=ArchiveJobResponse)
 async def get_archive_job(job_id: str):
     """Récupère les détails d'un job d'archivage spécifique"""
     try:
         db = get_db_adapter()
-        
+
         query = """
             SELECT id, job_type::text, source_path, dest_path, status::text, priority,
                    retry_count, max_retries, error_message, started_at, completed_at,
@@ -3515,14 +3557,14 @@ async def get_archive_job(job_id: str):
             FROM archive_jobs
             WHERE id = %s
         """
-        
+
         results = db.execute_query(query, [job_id])
-        
+
         if not results:
             raise HTTPException(status_code=404, detail=f"Job {job_id} introuvable")
-        
+
         return _row_to_archive_job_response(results[0])
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -3579,49 +3621,6 @@ async def cancel_archive_job(job_id: str):
         raise HTTPException(status_code=500, detail=f"Erreur lors de l'annulation du job: {e}")
 
 
-@app.get("/api/archive/queue/stats", response_model=ArchiveJobStats)
-async def get_archive_job_stats():
-    """Récupère les statistiques de la queue d'archivage"""
-    try:
-        db = get_db_adapter()
-        
-        # Utiliser la vue archive_jobs_stats si disponible
-        query = """
-            SELECT 
-                COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) as pending,
-                COALESCE(SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END), 0) as running,
-                COALESCE(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END), 0) as completed,
-                COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) as failed,
-                COALESCE(SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END), 0) as cancelled,
-                COALESCE(SUM(CASE WHEN status = 'pending' THEN COALESCE(source_size, 0) ELSE 0 END), 0) as total_size_pending,
-                COALESCE(SUM(bytes_transferred), 0) as total_size_transferred
-            FROM archive_jobs
-        """
-        
-        results = db.execute_query(query)
-        
-        if not results:
-            return ArchiveJobStats(
-                pending=0, running=0, completed=0, failed=0, cancelled=0,
-                total_size_pending=0, total_size_transferred=0
-            )
-        
-        row = results[0]
-        return ArchiveJobStats(
-            pending=row[0],
-            running=row[1],
-            completed=row[2],
-            failed=row[3],
-            cancelled=row[4],
-            total_size_pending=row[5],
-            total_size_transferred=row[6]
-        )
-        
-    except Exception as e:
-        logger.error(f"Erreur get_archive_job_stats: {e}")
-        raise HTTPException(status_code=500, detail=f"Erreur lors de la récupération des statistiques: {e}")
-
-
 @app.post("/api/archive/queue/{job_id}/retry", response_model=ArchiveJobActionResult)
 async def retry_archive_job(job_id: str):
     """Réinitialise un job échoué pour qu'il soit réessayé"""
@@ -3672,6 +3671,430 @@ async def retry_archive_job(job_id: str):
     except Exception as e:
         logger.error(f"Erreur retry_archive_job: {e}")
         raise HTTPException(status_code=500, detail=f"Erreur lors du retry du job: {e}")
+
+
+# ============================================================
+# T-ARCH-02: Archive Scheduling API Endpoints
+# ============================================================
+
+class ArchiveScheduleCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    cron_expression: str = Field(..., description="Expression cron (ex: '0 2 * * *')")
+    timezone: str = Field(default="Europe/Paris")
+    job_type: ArchiveJobType
+    source_pattern: str = Field(..., description="Pattern de fichiers (ex: '\\\\server\\share\\*.txt')")
+    dest_path: Optional[str] = None
+    priority: int = Field(default=5, ge=1, le=10)
+    max_age_days: Optional[int] = None
+    min_size_bytes: Optional[int] = None
+    max_size_bytes: Optional[int] = None
+    file_extensions: Optional[List[str]] = None
+
+
+class ArchiveScheduleResponse(BaseModel):
+    id: str
+    name: str
+    description: Optional[str]
+    cron_expression: str
+    timezone: str
+    is_active: bool
+    job_type: str
+    source_pattern: str
+    dest_path: Optional[str]
+    priority: int
+    max_age_days: Optional[int]
+    min_size_bytes: Optional[int]
+    max_size_bytes: Optional[int]
+    file_extensions: Optional[List[str]]
+    created_at: str
+    last_run_at: Optional[str]
+    next_run_at: Optional[str]
+    run_count: int
+
+
+class ArchiveScheduleRun(BaseModel):
+    id: str
+    schedule_id: Optional[str]
+    schedule_name: Optional[str]
+    started_at: str
+    completed_at: Optional[str]
+    status: str
+    jobs_created: int
+    jobs_completed: int
+    jobs_failed: int
+    total_bytes_processed: int
+    error_message: Optional[str]
+
+
+class ArchiveSettings(BaseModel):
+    default_priority: int = 5
+    max_retries: int = 3
+    worker_poll_interval: int = 5
+    worker_max_concurrent: int = 3
+    retention_days: int = 30
+    cleanup_interval_hours: int = 24
+
+
+class ArchiveQueueMonitoring(BaseModel):
+    id: str
+    job_type: str
+    source_path: str
+    dest_path: Optional[str]
+    status: str
+    status_label: str
+    priority: int
+    retry_count: int
+    max_retries: int
+    error_message: Optional[str]
+    created_at: str
+    started_at: Optional[str]
+    completed_at: Optional[str]
+    source_size: Optional[int]
+    bytes_transferred: int
+    duration_seconds: Optional[float]
+    progress_percent: float
+
+
+def get_scheduler():
+    """Factory pour obtenir l'instance du scheduler"""
+    from archive_scheduler import ArchiveScheduler
+    return ArchiveScheduler()
+
+
+@app.post("/api/archive/schedules", response_model=ArchiveScheduleResponse)
+async def create_archive_schedule(payload: ArchiveScheduleCreate):
+    """Crée une nouvelle tâche planifiée d'archivage"""
+    try:
+        scheduler = get_scheduler()
+        
+        config = {
+            'name': payload.name,
+            'description': payload.description,
+            'cron_expression': payload.cron_expression,
+            'timezone': payload.timezone,
+            'is_active': True,
+            'job_type': payload.job_type.value,
+            'source_pattern': payload.source_pattern,
+            'dest_path': payload.dest_path,
+            'priority': payload.priority,
+            'max_age_days': payload.max_age_days,
+            'min_size_bytes': payload.min_size_bytes,
+            'max_size_bytes': payload.max_size_bytes,
+            'file_extensions': payload.file_extensions or [],
+            'created_by': 'api'
+        }
+        
+        schedule_id = scheduler.create_schedule(config)
+        
+        # Récupérer le schedule créé
+        schedules = scheduler.get_schedules()
+        for schedule in schedules:
+            if schedule['id'] == schedule_id:
+                return ArchiveScheduleResponse(**schedule)
+        
+        raise HTTPException(status_code=500, detail="Erreur lors de la récupération du schedule créé")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur create_archive_schedule: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la création du schedule: {e}")
+
+
+@app.get("/api/archive/schedules", response_model=List[ArchiveScheduleResponse])
+async def list_archive_schedules(active_only: bool = False):
+    """Liste les tâches planifiées d'archivage"""
+    try:
+        scheduler = get_scheduler()
+        schedules = scheduler.get_schedules(active_only=active_only)
+        return [ArchiveScheduleResponse(**s) for s in schedules]
+        
+    except Exception as e:
+        logger.error(f"Erreur list_archive_schedules: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la récupération des schedules: {e}")
+
+
+@app.get("/api/archive/schedules/{schedule_id}", response_model=ArchiveScheduleResponse)
+async def get_archive_schedule(schedule_id: str):
+    """Récupère les détails d'une tâche planifiée"""
+    try:
+        scheduler = get_scheduler()
+        schedules = scheduler.get_schedules()
+        
+        for schedule in schedules:
+            if schedule['id'] == schedule_id:
+                return ArchiveScheduleResponse(**schedule)
+        
+        raise HTTPException(status_code=404, detail="Schedule introuvable")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur get_archive_schedule: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la récupération du schedule: {e}")
+
+
+@app.put("/api/archive/schedules/{schedule_id}")
+async def update_archive_schedule(schedule_id: str, payload: ArchiveScheduleCreate):
+    """Met à jour une tâche planifiée"""
+    try:
+        scheduler = get_scheduler()
+        
+        updates = {
+            'name': payload.name,
+            'description': payload.description,
+            'cron_expression': payload.cron_expression,
+            'timezone': payload.timezone,
+            'job_type': payload.job_type.value,
+            'source_pattern': payload.source_pattern,
+            'dest_path': payload.dest_path,
+            'priority': payload.priority,
+            'max_age_days': payload.max_age_days,
+            'min_size_bytes': payload.min_size_bytes,
+            'max_size_bytes': payload.max_size_bytes,
+            'file_extensions': payload.file_extensions or []
+        }
+        
+        success = scheduler.update_schedule(schedule_id, updates)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Schedule introuvable")
+        
+        return {"success": True, "message": "Schedule mis à jour"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur update_archive_schedule: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la mise à jour du schedule: {e}")
+
+
+@app.delete("/api/archive/schedules/{schedule_id}")
+async def delete_archive_schedule(schedule_id: str):
+    """Supprime une tâche planifiée"""
+    try:
+        scheduler = get_scheduler()
+        success = scheduler.delete_schedule(schedule_id)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Schedule introuvable")
+        
+        return {"success": True, "message": "Schedule supprimé"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur delete_archive_schedule: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la suppression du schedule: {e}")
+
+
+@app.post("/api/archive/schedules/{schedule_id}/toggle")
+async def toggle_archive_schedule(schedule_id: str):
+    """Active/désactive une tâche planifiée"""
+    try:
+        scheduler = get_scheduler()
+        
+        # Récupérer le statut actuel
+        schedules = scheduler.get_schedules()
+        current = None
+        for s in schedules:
+            if s['id'] == schedule_id:
+                current = s
+                break
+        
+        if not current:
+            raise HTTPException(status_code=404, detail="Schedule introuvable")
+        
+        new_status = not current['is_active']
+        success = scheduler.update_schedule(schedule_id, {'is_active': new_status})
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Erreur lors de la mise à jour")
+        
+        status_text = "activé" if new_status else "désactivé"
+        return {"success": True, "message": f"Schedule {status_text}", "is_active": new_status}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur toggle_archive_schedule: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {e}")
+
+
+@app.get("/api/archive/schedules/{schedule_id}/runs", response_model=List[ArchiveScheduleRun])
+async def get_archive_schedule_runs(schedule_id: str, limit: int = 10):
+    """Récupère l'historique des exécutions d'un schedule"""
+    try:
+        scheduler = get_scheduler()
+        runs = scheduler.get_schedule_runs(schedule_id=schedule_id, limit=limit)
+        return [ArchiveScheduleRun(**r) for r in runs]
+        
+    except Exception as e:
+        logger.error(f"Erreur get_archive_schedule_runs: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {e}")
+
+
+@app.get("/api/archive/monitoring/queue", response_model=List[ArchiveQueueMonitoring])
+async def get_archive_queue_monitoring(
+    status: Optional[str] = Query(default=None, description="Filtrer par statut"),
+    limit: int = Query(default=100, ge=1, le=1000)
+):
+    """Récupère la vue de monitoring temps réel de la queue"""
+    try:
+        db = get_db_adapter()
+        
+        where_clause = "WHERE status_label = %s" if status else ""
+        params = (status,) if status else ()
+        params += (limit,)
+        
+        query = f"""
+            SELECT id, job_type, source_path, dest_path, status, status_label, priority,
+                   retry_count, max_retries, error_message, created_at, started_at, completed_at,
+                   source_size, bytes_transferred, duration_seconds, progress_percent
+            FROM archive_queue_monitoring
+            {where_clause}
+            LIMIT %s
+        """
+        
+        results = db.execute_query(query, params)
+        
+        monitoring = []
+        for row in results:
+            monitoring.append(ArchiveQueueMonitoring(
+                id=str(row[0]),
+                job_type=row[1],
+                source_path=row[2],
+                dest_path=row[3],
+                status=row[4],
+                status_label=row[5],
+                priority=row[6],
+                retry_count=row[7],
+                max_retries=row[8],
+                error_message=row[9],
+                created_at=row[10].isoformat() if row[10] else None,
+                started_at=row[11].isoformat() if row[11] else None,
+                completed_at=row[12].isoformat() if row[12] else None,
+                source_size=row[13],
+                bytes_transferred=row[14] or 0,
+                duration_seconds=row[15],
+                progress_percent=row[16] or 0
+            ))
+        
+        return monitoring
+        
+    except Exception as e:
+        logger.error(f"Erreur get_archive_queue_monitoring: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {e}")
+
+
+@app.get("/api/archive/monitoring/dashboard")
+async def get_archive_dashboard():
+    """Récupère les données agrégées pour le dashboard de monitoring"""
+    try:
+        db = get_db_adapter()
+        
+        # Stats par statut
+        status_stats = db.execute_query(
+            "SELECT status::text, COUNT(*), SUM(bytes_transferred) FROM archive_jobs GROUP BY status",
+            fetch=True
+        )
+        
+        # Stats des 24 dernières heures
+        recent_stats = db.execute_query(
+            """
+            SELECT 
+                COUNT(*) FILTER (WHERE status = 'completed') as completed_24h,
+                COUNT(*) FILTER (WHERE status = 'failed') as failed_24h,
+                SUM(bytes_transferred) FILTER (WHERE status = 'completed') as bytes_24h
+            FROM archive_jobs
+            WHERE updated_at > CURRENT_TIMESTAMP - INTERVAL '24 hours'
+            """,
+            fetch=True
+        )
+        
+        # Taux de succès global
+        success_rate_query = """
+            SELECT 
+                COUNT(*) FILTER (WHERE status = 'completed') as completed_total,
+                COUNT(*) FILTER (WHERE status = 'failed') as failed_total,
+                COUNT(*) as total
+            FROM archive_jobs
+        """
+        success_results = db.execute_query(success_rate_query, fetch=True)
+        completed_total, failed_total, total_jobs = success_results[0] if success_results else (0, 0, 0)
+        
+        success_rate = completed_total / (completed_total + failed_total) if (completed_total + failed_total) > 0 else 0
+        
+        # Schedules actifs
+        scheduler = get_scheduler()
+        active_schedules = len(scheduler.get_schedules(active_only=True))
+        
+        return {
+            "queue_status": {
+                stat[0]: {"count": stat[1], "bytes_transferred": stat[2] or 0}
+                for stat in status_stats
+            },
+            "recent_activity": {
+                "completed_24h": recent_stats[0][0] if recent_stats else 0,
+                "failed_24h": recent_stats[0][1] if recent_stats else 0,
+                "bytes_transferred_24h": recent_stats[0][2] or 0 if recent_stats else 0
+            },
+            "overall_success_rate": round(success_rate, 4),
+            "total_jobs": total_jobs,
+            "active_schedules": active_schedules,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Erreur get_archive_dashboard: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {e}")
+
+
+@app.get("/api/archive/settings", response_model=ArchiveSettings)
+async def get_archive_settings():
+    """Récupère les paramètres d'archivage"""
+    try:
+        scheduler = get_scheduler()
+        settings = scheduler.get_settings()
+        
+        return ArchiveSettings(
+            default_priority=int(settings.get('archive.default_priority', 5)),
+            max_retries=int(settings.get('archive.max_retries', 3)),
+            worker_poll_interval=int(settings.get('archive.worker.poll_interval', 5)),
+            worker_max_concurrent=int(settings.get('archive.worker.max_concurrent', 3)),
+            retention_days=int(settings.get('archive.retention_days', 30)),
+            cleanup_interval_hours=int(settings.get('archive.cleanup_interval_hours', 24))
+        )
+        
+    except Exception as e:
+        logger.error(f"Erreur get_archive_settings: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {e}")
+
+
+@app.put("/api/archive/settings")
+async def update_archive_settings(payload: ArchiveSettings):
+    """Met à jour les paramètres d'archivage"""
+    try:
+        scheduler = get_scheduler()
+        
+        settings_map = {
+            'archive.default_priority': str(payload.default_priority),
+            'archive.max_retries': str(payload.max_retries),
+            'archive.worker.poll_interval': str(payload.worker_poll_interval),
+            'archive.worker.max_concurrent': str(payload.worker_max_concurrent),
+            'archive.retention_days': str(payload.retention_days),
+            'archive.cleanup_interval_hours': str(payload.cleanup_interval_hours)
+        }
+        
+        for key, value in settings_map.items():
+            scheduler.update_setting(key, value, updated_by='api')
+        
+        return {"success": True, "message": "Paramètres mis à jour"}
+        
+    except Exception as e:
+        logger.error(f"Erreur update_archive_settings: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {e}")
 
 
 # ============================================================

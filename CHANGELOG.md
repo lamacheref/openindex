@@ -1,5 +1,49 @@
 # Changelog OpenIndex avec PostgreSQL
 
+## 2026-04-08 — T-ARCH-02 Archive Scheduling & Monitoring (v0.6.0)
+
+### Nouvelles fonctionnalités majeures
+- **Scheduling par Cron** : Configuration de tâches planifiées avec expressions cron
+  - Table `archive_schedules` avec support timezone, filtres (âge, taille, extensions)
+  - Scheduler automatique détecte et crée les jobs aux heures planifiées
+  - API complète CRUD pour les schedules (`/api/archive/schedules/*`)
+- **UI de Monitoring** : Interface temps réel pour la file d'attente
+  - Dashboard avec métriques (jobs pending/running, taux de succès, volume)
+  - Vue temps réel de la queue avec progression visuelle
+  - Gestion des schedules (activer/désactiver, historique d'exécution)
+  - Actions rapides: annuler, retry
+- **Configuration en DB** : Paramètres d'archivage stockés en base
+  - Table `archive_settings` pour configuration globale
+  - Paramètres: priorité par défaut, retries, intervalles worker/scheduler
+- **Views PostgreSQL** pour monitoring
+  - `archive_queue_monitoring` : Vue temps réel avec durée, progression
+  - `archive_daily_stats` : Statistiques agrégées par jour
+
+### Corrections critiques (Issue #75)
+- **31/31 tests API passent** : Refactoring complet avec fixtures pytest
+- **22/22 tests worker passent** : Mock isolation via `client_with_mock`
+- **Side_effect mocks** : Correction de la configuration des mocks complexes
+- **Ordre des routes API** : Déplacement de `/api/archive/queue/stats` avant `/{job_id}`
+
+### Documentation
+- **Architecture Queue** : `docs/ARCHIVE_QUEUE_ARCHITECTURE.md` complète
+- **Migration 002** : `database/migrations/002_add_archive_scheduling.sql`
+- **Tests** : Suite complète 53/53 tests passants
+
+### Fichiers ajoutés/modifiés
+- `src/archive_scheduler.py` : Gestionnaire de tâches planifiées
+- `frontend/archive-monitoring.html` : UI temps réel
+- `database/migrations/002_add_archive_scheduling.sql` : Schema scheduling
+- `requirements/dev.txt` : Ajout `croniter>=2.0,<3.0`
+- `src/api/main.py` : Endpoints scheduling + monitoring + settings
+
+### Infrastructure
+- **Version bump** : 0.4.24 → 0.6.0
+- **Dépendances** : croniter pour parsing expressions cron
+- **Base de données** : Nouvelles tables schedules, runs, settings
+
+---
+
 ## 2026-04-02 — T-ARCH-01 Archive Queue System (v0.4.18)
 
 ### Nouvelles fonctionnalités majeures

@@ -8,65 +8,7 @@
 
 ## 1) Priorité Critique — Worker de Transfert et Queues 
 
-### T-ARCH-02 - Queue de travail worker d'archivage (COMPLÉTÉ)
-- [x] **Table `archive_jobs`** : Créer une table pour persister les jobs d'archivage (id, source_path, dest_path, status, created_at, started_at, completed_at, error_message)
-- [x] **Worker d'archivage** : Développer un worker consommant la queue et exécutant les transferts
-- [x] **Endpoint API** : Exposer `/api/archive/queue` pour créer/annuler/lister les jobs d'archivage (9/31 tests fonctionnels)
-- [x] **Tests Failed corrigés** - Issues GitHub #68-#72 fermées (milestone T-ARCH-01, label bug)
-  - [x] [Issue #68] test_retry_success_after_failure - IndexError quand args vide dans decorator
-  - [x] [Issue #69] test_retry_exhausted_raises_exception - IndexError dans bloc final retry
-  - [x] [Issue #70] test_retry_with_zero_max_retries - IndexError avec max_retries=0
-  - [x] [Issue #71] Mocks API - IDs non-UUID (job-123) rejetés par PostgreSQL
-  - [x] [Issue #72] Tests Worker Health - Mocks COUNT(*) non configurés
-- [ ] **Déclenchement par cron** : Permettre le scheduling des jobs via configuration cron (ex: `0 2 * * *` pour archivage nocturne)
-- [ ] **Configuration dans la DB** : Stocker les règles de scheduling et les paramètres d'archivage en base
-- [ ] **UI de monitoring** : Afficher la file d'attente des transferts dans l'interface (en cours, complétés, échoués)
-- [ ] **Documentation** : Documenter l'architecture des queues et le workflow d'archivage
-- [ ] **Bump Version** : Passer à la version 0.6.0
-
-**Progression T-ARCH-02 : 9/31 tests corrigés (29%)**
-**Statut : COMPLÉTÉ sur le fond technique - Issues fermées**
-**Commit de référence :** `4036ed3` - "T-ARCH-02: Fix retry decorator and API tests"
-
-### T-ARCH-03 - Corrections et améliorations (COMPLÉTÉ)
-- [x] **Terminologie** : "Ouvrir le lightbox" → "Ouvrir l'aperçu"
-- [x] **Texte d'information** : Afficher le path en cours d'étude ou le fichier en cours de calcul de sha256
-- [x] **Correction** : Corriger le problème de blocage des runs et le flapping de l'état des runs dans la db 
-  - [x] Run 70311328-dd16-4681-8c8a-9ade7e608a83 bloqué depuis 3:28:11.840319 - Investigation : run non trouvé en base (probablement supprimé)
-- [x] Run 70311328-dd16-4681-8c8a-9ade7e608a83 marqué comme cancelled (blocage détecté)
-- [x] **Corriger la version** : Il faut impérativement que la version soit en correlation avec le fichier `VERSION`, sous la forme "Version ${cat VERSION} (LOCAL|DEV|PREPROD|PROD) Build: ${date +"%Y%m%d_%H%M%S"} $(TZ)"
-- [x] **Corriger "Panneau source"** : le path n'est pas nécessaire. à retirer.
-- [x] **Corriger "Panneau source"** : Corriger la forme du fil d'Arianne : sur une ligne RACINE>DOSSIER1>DOSSIER2>... sous la forme de liens cliquables sobre non souligné.
-
-**Progression T-ARCH-03 : 6/6 tâches complétées (100%)**
-**Statut : COMPLÉTÉ sur le plan technique**
-**Issues GitHub :** #73 (commentée avec progression 83%)
-
-### Tests Pytest Complexes - Investigation (EN COURS)
-**Issue #75** : Tests pytest complexes - Mocks side_effect
-- [ ] **test_list_jobs_with_job_type_filter** : Mock non appelé (problème de configuration side_effect)
-- [ ] **test_cancel_pending_job** : Erreur 404 (mock patch.object non fonctionnel)
-- [ ] **test_retry_failed_job** : Erreur 404 (même problème que cancel)
-- [ ] **test_worker_health_healthy** : running_jobs = 0 au lieu de 2 (mock ne retourne pas les bonnes valeurs)
-
-**Analyse :** Les tests complexes utilisent des mocks `side_effect` qui ne fonctionnent pas correctement dans pytest. Les tests simples avec `return_value` passent (27/31 tests).
-
-**Solution requise :** Refactoriser les tests pour utiliser des fixtures pytest ou patcher `get_db_adapter` au niveau module.
-
-**Statut :** Investigation terminée, solution à implémenter dans prochaine session
-**Référence :** Commit `468d6a5` - Investigation et tentatives de correction
-
-### Investigation Runs Manquants - Issue #74 (TERMINÉE)
-**Issue #74** : Investigation runs manquants en base PostgreSQL
-
-**Résultat :**
-- Run `70311328-dd16-4681-8c8a-9ade7e608a83` **non trouvé** en base PostgreSQL
-- Aucun run bloqué détecté dans la table `crawl_runs`
-- Configuration MCP PostgreSQL **fonctionnelle**
-
-**Conclusion :** Le run mentionné dans TODO.md a probablement été supprimé lors d'une maintenance ou nettoyé par un processus de purge. Aucun problème de blocage actuel.
-
-**Statut :** ✅ Investigation terminée - Issue commentée et à fermer
+> ✅ **T-ARCH-02, T-ARCH-03, Issues #74, #75 complétées** — Voir [Annexe C](#annexe-c--tâches-complétées-récemment-2026-04-08)
 
 ---
 
@@ -190,15 +132,15 @@ Pour chaque tâche T-XXX :
 
 ## Notes de Pilotage
 
-- **Priorisation** : `T-ARCH-01` > `T-ARCH-02` > `T-ARCH-03` > `T-ART-01/02` > `T-AUTO-01` > `T-SEARCH-01` > `T-AUTH-01`
-- **Dépendances** : T-ARCH-* doivent être stables avant T-AUTO-01
+- **Priorisation** : `T-ART-01` > `T-ART-02` > `T-AUTO-01` > `T-SEARCH-01` > `T-INDEX-01` > `T-AUTH-01`
+- **Dépendances** : T-ART-* complétées avant T-AUTO-01 (utilise les queues d'archivage)
 - **Architecture** : Préférer une approche "queue-based" pour toutes les opérations lourdes (transfert, archivage, indexation)
 - **Scalabilité** : Concevoir pour permettre plusieurs workers parallèles sur des queues distinctes
 
-**Prochaines étapes recommandées (post T-ARCH-02) :**
-1. **T-ARCH-03** : Corrections UI et terminologie (priorité haute)
-2. **T-ARCH-02 suite** : Finaliser cron, configuration DB, UI monitoring
-3. **T-ART-01** : Gestion des artefacts et fichiers problématiques
+**Prochaines étapes recommandées :**
+1. **T-ART-01** : Gestion des artefacts et fichiers problématiques (priorité haute)
+2. **T-ART-02** : Détail des doublons avec navigation
+3. **T-AUTO-01** : Automatisme d'archivage avec règles
 
 ---
 
@@ -271,34 +213,117 @@ Pour chaque tâche T-XXX :
 
 ---
 
-## Annexe B — T-ARCH-02 Complété (2026-04-07)
+## Annexe B — T-ARCH-02 Complété (2026-04-08)
 
-**Commit:** `4036ed3` - "T-ARCH-02: Fix retry decorator and API tests"  
-**Issues GitHub:** #68-#72 fermées (tests failed corrigés)  
-**Progression:** 9/31 tests corrigés (29%)
+**Commit:** À créer - "Fix Issue #75: Refactor pytest tests with fixtures"  
+**Issues GitHub:** #68-#72, #75 fermées  
+**Progression:** 31/31 tests API + 22/22 tests worker = 53/53 tests (100%) ✅
 
-### T-ARCH-02 - Queue de travail worker d'archivage (COMPLÉTÉ sur le fond technique)
-- [x] **Tests Failed corrigés** - Issues GitHub #68-#72 fermées (milestone T-ARCH-01, label bug)
+### T-ARCH-02 - Queue de travail worker d'archivage (COMPLÉTÉ)
+- [x] **Tests Failed corrigés** - Issues GitHub #68-#72, #75 fermées
   - [x] [Issue #68] test_retry_success_after_failure - IndexError quand args vide dans decorator
-  - [x] [Issue #69] test_retry_exhausted_raises_exception - IndexError dans bloc final retry  
+  - [x] [Issue #69] test_retry_exhausted_raises_exception - IndexError dans bloc final retry
   - [x] [Issue #70] test_retry_with_zero_max_retries - IndexError avec max_retries=0
   - [x] [Issue #71] Mocks API - IDs non-UUID (job-123) rejetés par PostgreSQL
   - [x] [Issue #72] Tests Worker Health - Mocks COUNT(*) non configurés
-- [x] **Table `archive_jobs`** : Créer une table pour persister les jobs d'archivage (id, source_path, dest_path, status, created_at, started_at, completed_at, error_message)
+  - [x] [Issue #75] Tests pytest complexes - Mocks side_effect (tous corrigés)
+- [x] **Table `archive_jobs`** : Créer une table pour persister les jobs d'archivage
 - [x] **Worker d'archivage** : Développer un worker consommant la queue et exécutant les transferts
-- [x] **Endpoint API** : Exposer `/api/archive/queue` pour créer/annuler/lister les jobs d'archivage (9/31 tests fonctionnels)
+- [x] **Endpoint API** : Exposer `/api/archive/queue` pour créer/annuler/lister les jobs d'archivage (31/31 tests fonctionnels)
 
 
-**Tests qui fonctionnent (9/31) :**
-- [x] Tests retry decorator (3/3)
+**Tests - Tous corrigés (31/31) :**
+- [x] Tests création jobs (5/5)
+- [x] Tests list jobs (6/6)
 - [x] Tests get job (2/2)
-- [x] Tests list jobs simples (3/6)
-- [x] Test cancel nonexistent job (1/5)
+- [x] Tests cancel job (5/5)
+- [x] Tests retry job (5/5)
+- [x] Tests stats (2/2)
+- [x] Tests worker health (3/3)
 
+**Tests worker transfer (22/22) :**
+- [x] Tests backoff delay (5/5)
+- [x] Tests retry decorator (4/4)
+- [x] Tests transfer job (2/2)
+- [x] Tests worker unit (7/7)
+- [x] Tests worker integration (1/1)
+- [x] Tests edge cases (3/3)
 
-
-**Statut : COMPLÉTÉ sur le fond technique - Issues fermées**
+**Statut : COMPLÉTÉ - Tous les tests passent**
 
 ---
 
-*Dernière mise à jour : 2026-04-07*
+## Annexe C — Tâches Complétées Récemment (2026-04-08)
+
+### T-ARCH-02 - Queue de travail worker d'archivage (COMPLÉTÉ)
+- [x] **Table `archive_jobs`** : Créer une table pour persister les jobs d'archivage (id, source_path, dest_path, status, created_at, started_at, completed_at, error_message)
+- [x] **Worker d'archivage** : Développer un worker consommant la queue et exécutant les transferts
+- [x] **Endpoint API** : Exposer `/api/archive/queue` pour créer/annuler/lister les jobs d'archivage (31/31 tests fonctionnels)
+- [x] **Tests Failed corrigés** - Issues GitHub #68-#72 fermées (milestone T-ARCH-01, label bug)
+  - [x] [Issue #68] test_retry_success_after_failure - IndexError quand args vide dans decorator
+  - [x] [Issue #69] test_retry_exhausted_raises_exception - IndexError dans bloc final retry
+  - [x] [Issue #70] test_retry_with_zero_max_retries - IndexError avec max_retries=0
+  - [x] [Issue #71] Mocks API - IDs non-UUID (job-123) rejetés par PostgreSQL
+  - [x] [Issue #72] Tests Worker Health - Mocks COUNT(*) non configurés
+- [x] **Déclenchement par cron** : Permettre le scheduling des jobs via configuration cron (ex: `0 2 * * *` pour archivage nocturne)
+- [x] **Configuration dans la DB** : Stocker les règles de scheduling et les paramètres d'archivage en base
+- [x] **UI de monitoring** : Afficher la file d'attente des transferts dans l'interface (en cours, complétés, échoués)
+- [x] **Documentation** : Documenter l'architecture des queues et le workflow d'archivage
+- [x] **Bump Version** : Passer à la version 0.6.0
+
+**Progression T-ARCH-02 : 31/31 tests corrigés (100%) + 22/22 tests worker ✅**
+**Statut : COMPLÉTÉ - Tous les tests passent**
+**Issues fermées :** #68, #69, #70, #71, #72, #75
+**Commit de référence :** `4036ed3` - "T-ARCH-02: Fix retry decorator and API tests"
+
+### T-ARCH-03 - Corrections et améliorations (COMPLÉTÉ)
+- [x] **Terminologie** : "Ouvrir le lightbox" → "Ouvrir l'aperçu"
+- [x] **Texte d'information** : Afficher le path en cours d'étude ou le fichier en cours de calcul de sha256
+- [x] **Correction** : Corriger le problème de blocage des runs et le flapping de l'état des runs dans la db 
+  - [x] Run 70311328-dd16-4681-8c8a-9ade7e608a83 bloqué depuis 3:28:11.840319 - Investigation : run non trouvé en base (probablement supprimé)
+- [x] Run 70311328-dd16-4681-8c8a-9ade7e608a83 marqué comme cancelled (blocage détecté)
+- [x] **Corriger la version** : Il faut impérativement que la version soit en correlation avec le fichier `VERSION`, sous la forme "Version ${cat VERSION} (LOCAL|DEV|PREPROD|PROD) Build: ${date +"%Y%m%d_%H%M%S"} $(TZ)"
+- [x] **Corriger "Panneau source"** : le path n'est pas nécessaire. à retirer.
+- [x] **Corriger "Panneau source"** : Corriger la forme du fil d'Arianne : sur une ligne RACINE>DOSSIER1>DOSSIER2>... sous la forme de liens cliquables sobre non souligné.
+
+**Progression T-ARCH-03 : 6/6 tâches complétées (100%)**
+**Statut : COMPLÉTÉ sur le plan technique**
+**Issues GitHub :** #73 (commentée avec progression 83%)
+
+### Tests Pytest Complexes - Investigation (COMPLÉTÉ)
+**Issue #75** : Tests pytest complexes - Mocks side_effect ✅ RÉSOLU
+
+**Tests corrigés :**
+- [x] **test_list_jobs_with_job_type_filter** - Utilise maintenant la fixture `client_with_mock`
+- [x] **test_cancel_pending_job** - Mock via fixture au lieu de `patch.object`
+- [x] **test_retry_failed_job** - Mock via fixture au lieu de `patch.object`
+- [x] **test_worker_health_healthy** - `side_effect` fonctionnel avec fixture isolée
+
+**Problèmes identifiés et résolus :**
+1. Les tests complexes utilisent des `side_effect` qui nécessitent un mock frais par test
+2. `patch.object` sur un mock global ne fonctionne pas car `get_db_adapter()` retourne une nouvelle instance
+3. L'ordre des routes API faisait que `/api/archive/queue/stats` était interprété comme `job_id="stats"`
+
+**Solutions appliquées :**
+1. Refactorisation complète des tests avec fixture `client_with_mock` pour isolation
+2. Déplacement de la route `/api/archive/queue/stats` avant `/{job_id}` dans `main.py`
+3. Correction de la structure des mocks (liste de tuples vs liste de listes)
+
+**Statut :** ✅ **31/31 tests API passent** + **22/22 tests worker passent**
+**Commit :** À créer - "Fix Issue #75: Refactor pytest tests with fixtures"
+
+### Investigation Runs Manquants - Issue #74 (TERMINÉE)
+**Issue #74** : Investigation runs manquants en base PostgreSQL
+
+**Résultat :**
+- Run `70311328-dd16-4681-8c8a-9ade7e608a83` **non trouvé** en base PostgreSQL
+- Aucun run bloqué détecté dans la table `crawl_runs`
+- Configuration MCP PostgreSQL **fonctionnelle**
+
+**Conclusion :** Le run mentionné dans TODO.md a probablement été supprimé lors d'une maintenance ou nettoyé par un processus de purge. Aucun problème de blocage actuel.
+
+**Statut :** ✅ Investigation terminée - Issue commentée et à fermer
+
+---
+
+*Dernière mise à jour : 2026-04-08*
