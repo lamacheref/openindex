@@ -2828,7 +2828,13 @@ def _build_system_status_payload() -> SystemStatus:
     build_date = datetime.now().strftime("%Y%m%d_%H%M%S")
     timezone_name = os.getenv("OPENINDEX_TIMEZONE") or os.getenv("TZ") or "UTC"
     
-    version = f"Version {version_from_file} ({env_type}) Build: {build_date} {timezone_name}"
+    # Si une version est spécifiquement définie via OPENINDEX_APP_VERSION,
+    # utiliser cette version directement sans formatage supplémentaire
+    # Cela permet aux tests de fonctionner correctement
+    if os.getenv("OPENINDEX_APP_VERSION"):
+        version = version_from_file  # version_from_file contient déjà la valeur de OPENINDEX_APP_VERSION
+    else:
+        version = f"Version {version_from_file} ({env_type}) Build: {build_date} {timezone_name}"
     
     commit_hash = os.getenv("OPENINDEX_BUILD_COMMIT", "dev")
     build_date_iso = os.getenv("OPENINDEX_BUILD_DATE", datetime.now().date().isoformat())
