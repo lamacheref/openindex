@@ -2061,6 +2061,17 @@ async def archive_file(payload: ArchiveFileRequest):
         raise
     except Exception as e:
         logger.error(f"Erreur archive_file: {e}")
+        error_detail = str(e)
+        lowered_detail = error_detail.lower()
+
+        if (
+            "status_logon_failure" in lowered_detail
+            or "logon is invalid" in lowered_detail
+            or "authentication" in lowered_detail
+            or "nt_status" in lowered_detail
+        ):
+            raise HTTPException(status_code=502, detail=error_detail)
+
         raise HTTPException(status_code=500, detail="Erreur lors de l'archivage du fichier")
 
 

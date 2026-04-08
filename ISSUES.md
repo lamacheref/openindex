@@ -2,18 +2,63 @@
 
 ## 🔴 Issues Critiques
 
-### Issue #1: Échec des tests d'archive dû à des problèmes de connexion PostgreSQL
+### ✅ Issue #1: Échec des tests d'archive dû à des problèmes de connexion PostgreSQL (RÉSOLUE)
 **Fichiers affectés**: `tests/test_archive_*.py`
-**Nombre de tests échoués**: 31 erreurs
-**Cause**: Les tests essaient de se connecter à PostgreSQL avec des identifiants incorrects
-```
-psycopg2.OperationalError: connection to server at "localhost" (127.0.0.1), port 5432 failed: 
-FATAL: password authentication failed for user "test_user"
-```
-**Solution proposée**:
-1. Configurer un conteneur PostgreSQL de test avec les bons identifiants
-2. Utiliser des variables d'environnement pour la configuration de test
-3. Mocker l'adaptateur PostgreSQL pour les tests unitaires
+**Statut**: CORRIGÉ
+**Solution appliquée**:
+1. Création de la base de données `openindex_test`
+2. Création de l'utilisateur `test_user` avec mot de passe `test_pass`
+3. Grant des permissions nécessaires sur la base de test
+4. Les 53 tests API passent maintenant avec succès
+**Résultat**: Tous les tests d'archive passent (53/53) ✅
+
+### ✅ Issue #1: Échec des tests d'archive dû à des problèmes de connexion PostgreSQL (RÉSOLUE)
+**Fichiers affectés**: `tests/test_archive_*.py`
+**Statut**: CORRIGÉ
+**Solution appliquée**:
+1. Création de la base de données `openindex_test`
+2. Création de l'utilisateur `test_user` avec mot de passe `test_pass`
+3. Grant des permissions nécessaires sur la base de test
+4. Les 53 tests API passent maintenant avec succès
+**Résultat**: Tous les tests d'archive passent (53/53) ✅
+
+### ✅ Issue #80: Archivage 'Copier vers archives' échoue (Fermée)
+**Fichiers affectés**: `frontend/index.html`, `src/api/main.py`
+**Statut**: CORRIGÉ CÔTÉ APPLICATION - issue GitHub fermée, suivi de configuration déplacé vers l'issue #86
+**Problème initial**: Le flux "Copier vers archives" échouait depuis l'explorateur avec un message d'erreur générique.
+
+**Corrections appliquées**:
+
+1. **Script Alpine cassé** (RÉSOLU)
+   - Problème: une portion de `openIndexApp()` était tronquée, ce qui empêchait l'initialisation de l'interface et provoquait une cascade d'erreurs console
+   - Solution: restauration des méthodes JS manquantes et remise en cohérence du composant Alpine
+   - Fichier modifié: `frontend/index.html`
+
+2. **Flux d'archivage UI trop fragile** (RÉSOLU)
+   - Problème: l'interface utilisait un chemin d'archivage indirect moins robuste pour l'action utilisateur
+   - Solution: bascule du bouton d'archivage vers l'endpoint direct `/api/archive/file`, déjà couvert par les tests backend
+   - Fichier modifié: `frontend/index.html`
+
+3. **Erreur backend trop générique** (RÉSOLU)
+   - Problème: l'API retournait "Erreur lors de l'archivage du fichier" sans exposer la cause réelle
+   - Solution: remontée explicite des erreurs SMB d'authentification pour affichage dans l'UI
+   - Fichier modifié: `src/api/main.py`
+
+**Résultats obtenus**:
+- ✅ Le frontend se charge de nouveau correctement
+- ✅ Le flux d'archivage depuis l'explorateur utilise désormais un endpoint direct plus fiable
+- ✅ Les erreurs SMB réelles remontent à l'utilisateur au lieu d'un message 500 générique
+- ✅ L'issue GitHub #80 a été fermée avec note de synthèse
+
+**Diagnostic final**:
+- Le bug applicatif de #80 était réel et a été corrigé
+- L'échec restant en environnement local n'était plus un bug de code
+- La cause résiduelle était une mauvaise configuration SMB sur `\\172.16.252.34\Public\SMIDEN`
+
+**Suivi restant**:
+- Voir **Issue #86**: utiliser `adminsmiden` pour `Public\SMIDEN` au lieu de `admin` (compte Typhon)
+
+**Commit de référence**: `9f2f366` (diagnostic local avant commit final)
 
 ### Issue #2: Problèmes de queue system dans les tests
 **Fichiers affectés**: `tests/test_queue_system.py`

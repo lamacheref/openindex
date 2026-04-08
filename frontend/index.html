@@ -646,7 +646,19 @@
                                         <p class="mt-3 text-sm text-slate-500">Sélectionnez un fichier côté source pour le classer ou l’ouvrir.</p>
                                     </template>
                                 </div>
-                                <div x-show="archiveStatus" class="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600" x-text="archiveStatus"></div>
+                                <div x-show="archiveStatus" class="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+                                    <p class="text-sm font-semibold text-slate-700">Journal des opérations</p>
+                                    <div class="mt-3 h-48 overflow-y-auto rounded-xl border border-slate-100 bg-slate-50 p-3">
+                                        <div class="space-y-2 text-sm">
+                                            <template x-for="log in archiveStatus.split('\n').filter(line => line.trim())" :key="log">
+                                                <div class="flex items-start gap-2">
+                                                    <span class="text-slate-400">•</span>
+                                                    <span x-text="log" class="text-slate-600"></span>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </div>
                                 <p class="mt-4 text-xs text-slate-500">
                                     <strong>Copier</strong> : conserve l’original dans le partage source.<br>
                                     <strong>Déplacer</strong> : supprime l’original après vérification SHA-256 (optionnel : laisse un lien .url).<br>
@@ -1539,14 +1551,15 @@
                     newer_version_available: false,
                     newest_version_url: null
                 },
+                notifications: [],
                 displayTimezone: 'Europe/Paris',
                 timezoneOptions: ['Europe/Paris', 'UTC'],
                 preferredArchiveRoot: '',
+                archiveExplorerSpaces: [],
                 crawlerRuntime: {
                     active: false,
                     idle: false,
                     latest_status: 'Aucun run',
-                    latest_config_name: '-',
                     status_label: 'Explorateur inactif',
                     progress_percent: null,
                     processed_bytes: 0,
@@ -1568,6 +1581,19 @@
                     log_lines: [],
                     log_source: 'logs/smb_crawler_postgresql.log'
                 },
+                engineStatusCardClass: 'bg-slate-50 border-slate-200',
+                engineStatusCardLabelClass: 'text-slate-500',
+                engineStatusBadgeClass: 'bg-slate-200 text-slate-600',
+                engineStatusDotClass: 'bg-slate-300',
+                engineStatusLabel: 'Explorateur inactif',
+                latestRunDisplayLabel: 'Aucun run récent',
+                latestRunDateLabel: '-',
+                volumeProgressLabel: '0% exploré',
+                databaseActivityLabel: 'Base inactive',
+                runtimeActivityMessage: 'Aucune activité',
+                progressIndicators: [],
+                queueIndicators: [],
+                operationalLogText: '',
                 animatedProcessedBytes: 0,
                 animatedDiscoveredBytes: 0,
                 clockNow: Date.now(),
@@ -1607,6 +1633,8 @@
                         smbErrors: []
                     }
                 },
+                explorerLegend: 'Explorateur de fichiers',
+                activeSourceSpaceVolumeLabel: 'Espace source',
                 contextMenu: {
                     open: false,
                     x: 0,
@@ -1622,6 +1650,8 @@
                     previewError: '',
                     textContent: ''
                 },
+                previewTextContent: '',
+                previewOfficeUrl: '',
                 propertiesModal: {
                     open: false,
                     item: null
@@ -1644,6 +1674,12 @@
                 loadingArtifacts: false,
                 artifactActionBusy: false,
                 artifactActionStatus: '',
+                artifactCounts: {
+                    all: 0,
+                    temp: 0,
+                    duplicate: 0,
+                    system: 0
+                },
                 // Filter settings modal properties (T-ART-03)
                 showFilterSettingsModal: false,
                 filterPreferences: {
@@ -2676,56 +2712,77 @@
 
                 async archiveSelectedFile(mode) {
                     if (!this.canArchiveSelectedFile) return;
-                    
-                    // Vérifier que l'espace d'archivage est bien configuré
+
                     if (!this.selectedArchiveSpace) {
                         this.archiveStatus = '❌ Aucun espace d’archivage valide sélectionné. Veuillez en choisir un dans la liste.';
                         return;
                     }
-                    
-                    // Conserver l'espace d'archivage sélectionné même en cas d'erreur
+
                     const currentArchiveRoot = this.fileExplorer.archive.root;
                     const currentArchivePath = this.fileExplorer.archive.currentPath;
-                    
+                    const sourcePath = this.selectedSourceFile.path;
+                    const sourceFileName = this.getFileNameFromPath(sourcePath);
+
                     this.archiveBusy = true;
                     this.archiveStatus = `Préparation de l'archivage (${mode === 'move' ? 'déplacement' : 'copie'})...`;
+
                     try {
-                        const response = await fetch('/api/archive/queue', {
+                        const response = await fetch('/api/archive/file', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
-                                job_type: mode,
-                                source_path: this.selectedSourceFile.path,
-                                dest_path: this.fileExplorer.archive.currentPath + '/' + this.selectedSourceFile.name,
-                                priority: 5
+                                source_path: sourcePath,
+                                target_directory_path: currentArchivePath,
+                                mode,
+                                overwrite: !!this.archiveOverwrite,
+                                leave_link: mode === 'move' ? !!this.archiveLeaveLink : false
                             })
                         });
+
                         const payload = await response.json();
+
                         if (!response.ok) {
-                            if (payload.detail && payload.detail.includes('Aucune configuration SMB')) {
-                                throw new Error(`❌ Configuration SMB introuvable\n\nVérifiez que:\n1. L'espace "${this.selectedArchiveSpaceName}" est bien configuré\n2. Le chemin "${currentArchivePath}" est couvert par la configuration\n3. Les identifiants SMB sont valides et le serveur est accessible`);
+                            const detail = payload?.detail || 'Erreur lors de l’archivage.';
+
+                            if (detail.includes('Aucune configuration SMB')) {
+                                throw new Error(`❌ Chemin non couvert par une configuration SMB\n\nVérifiez que la source et l’espace d’archivage sélectionné correspondent chacun à un espace configuré.`);
                             }
-                            if (payload.detail && (payload.detail.includes('login') || payload.detail.includes('authentication') || payload.detail.includes('NT_STATUS'))) {
+
+                            if (
+                                detail.includes('login')
+                                || detail.includes('authentication')
+                                || detail.includes('NT_STATUS')
+                            ) {
                                 throw new Error(`❌ Échec d'authentification SMB\n\nDétails:\n- Espace: ${this.selectedArchiveSpaceName}\n- Chemin: ${currentArchivePath}\n\nVérifiez:\n1. Le nom d'utilisateur et mot de passe SMB\n2. Le domaine (si applicable)\n3. Que le serveur SMB est accessible depuis ce réseau`);
                             }
-                            if (payload.detail && payload.detail.includes('cancelled')) {
-                                throw new Error(`❌ Opération annulée\n\nLe statut du run est incohérent. Veuillez:\n1. Rafraîchir la page\n2. Vérifier l'état du crawler\n3. Recommencer l'opération`);
+
+                            if (detail.includes('Checksum source introuvable')) {
+                                throw new Error(`❌ Archivage refusé\n\nLe fichier doit d’abord être indexé avec son checksum avant de pouvoir être archivé.`);
                             }
-                            throw new Error(`❌ Erreur d'archivage: ${payload.detail || 'Détails non disponibles'}`);
+
+                            if (detail.includes('existe déjà')) {
+                                throw new Error(`❌ Le fichier cible existe déjà\n\nActive l’option “Écraser le fichier cible” pour autoriser le remplacement.`);
+                            }
+
+                            if (detail.includes('Verification SHA-256')) {
+                                throw new Error(`❌ Vérification d’intégrité échouée\n\nLa copie cible a été rejetée et la source a été conservée.`);
+                            }
+
+                            throw new Error(`❌ Archivage impossible\n\n${detail}`);
                         }
-                        
-                        // Job créé avec succès dans la queue
-                        this.archiveStatus = `✅ Job d'archivage créé: ${payload.id?.substring(0, 8)}...\n` +
-                            `📁 ${mode === 'move' ? 'Déplacement' : 'Copie'} de:\n${payload.source_path}\n` +
-                            `📂 Vers:\n${payload.dest_path}\n` +
-                            `⏳ Statut: ${payload.status} (sera traité par le worker)`;
-                        
+
+                        const targetFileName = this.getFileNameFromPath(payload.target_path);
+                        this.archiveStatus = `✅ ${mode === 'move' ? 'Déplacement' : 'Copie'} terminé(e)\n`
+                            + `📁 Source: ${sourceFileName}\n`
+                            + `📂 Destination: ${targetFileName}\n`
+                            + `🔐 Checksum vérifié: ${payload.checksum_verified ? 'oui' : 'non'}`
+                            + (payload.link_path ? `\n🔗 Lien créé: ${this.getFileNameFromPath(payload.link_path)}` : '');
+
                         this.fileExplorer.source.selectedPath = '';
                         await this.refreshOperations();
                         await this.refreshExplorerPanels();
                     } catch (error) {
-                        this.archiveStatus = error.message;
-                        // Restaurer l'espace d'archivage en cas d'erreur
+                        this.archiveStatus = error?.message || '❌ Erreur lors de l’archivage.';
                         this.fileExplorer.archive.root = currentArchiveRoot;
                         this.fileExplorer.archive.currentPath = currentArchivePath;
                     } finally {
@@ -3107,6 +3164,13 @@
                         unitIndex += 1;
                     }
                     return `${new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(value)} ${units[unitIndex]}`;
+                },
+
+                getFileNameFromPath(path) {
+                    if (!path) return 'inconnu';
+                    const parts = path.split('\\');
+                    if (parts.length > 1) return parts.pop();
+                    return path.split('/').pop() || path;
                 },
 
                 formatDate(dateString) {
