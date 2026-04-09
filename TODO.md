@@ -396,19 +396,62 @@ La zone "Explorateur de fichiers" présente des problèmes de mise en forme (lay
 - Tester sur Firefox standard et variantes (Zen, LibreWolf)
 
 ### Issue #80 — Archivage 'Copier vers archives' échoue
-**Niveau:** `high` | **Statut:** 🔴 Ouvert | **Cible:** Immédiat
+**Niveau:** `high` | **Statut:** ✅ **RÉSOLU par T-ARCH-04** | **Cible:** 2026-04-09
 
 **Problème:**
 La fonctionnalité **'Copier vers archives'** dans l'explorateur de fichiers retourne systématiquement une erreur.
 
 **URL:** https://github.com/lamacheref/openindex/issues/80
 
-**Investigations nécessaires:**
-- Logs containers api & archive-worker
-- Table `archive_jobs` 
-- Endpoint API `/api/archive/jobs`
-- Permissions SMB
+**Cause racine identifiée (Issue #85):**
+- Configuration SMB de SMIDEN utilisait `admin` au lieu de `adminsmiden`
+- Les sessions SMB globales s'écrasaient mutuellement (source vs cible)
+
+**Solution:**
+Voir **T-ARCH-04** ci-dessous.
 
 ---
 
-*Dernière mise à jour : 2026-04-08*
+### T-ARCH-04 — Correction SMB SMIDEN (Issue #85) ✅ COMPLÉTÉ
+**Niveau:** `critical` | **Statut:** ✅ **COMPLÉTÉ** | **Date:** 2026-04-09
+
+**URL:** https://github.com/lamacheref/openindex/issues/85
+
+**Problème:**
+- L'archivage depuis SMIDEN vers Typhon échouait avec erreur d'authentification SMB
+- Les credentials de la cible (admin) écrasaient ceux de la source (adminsmiden)
+
+**Solution Implémentée:**
+- [x] **Nouveau module** : `src/smb_mount_manager.py` - Gestionnaire de montages SMB
+- [x] **Mode hybride** : Priorité au montage SMB (`mount.cifs`) avec fallback programmatique
+- [x] **Auto-remontage** : `ensure_mounted()` vérifie et remonte si démonté après 30min
+- [x] **Timeout intelligent** : Démontage automatique après 30min d'inactivité
+- [x] **API endpoints** : 
+  - `GET /api/smb-mounts` - Liste les montages actifs
+  - `POST /api/smb-mounts/{config_id}/unmount` - Démonte manuellement
+
+**Architecture:**
+```
+Priorité 1: Montage SMB (mount.cifs) → Fichiers locaux → Rapide et isolé
+Priorité 2: Fallback smbclient → Sessions programmatiques → Compatibilité
+Cleanup: Thread démonte après 30min → Prochaine utilisation remonte auto
+```
+
+**Fichiers modifiés:**
+- `src/smb_mount_manager.py` (nouveau)
+- `src/api/main.py` - `archive_file()` avec mode hybride
+
+**Commit:** `484b5b3` - "Fix #85: Configuration SMB incorrecte - Montage dynamique avec fallback"
+
+**Tests à réaliser:**
+- [ ] **Test 1** : Archivage SMIDEN → Typhon (fichier < 10MB)
+- [ ] **Test 2** : Archivage après 31min d'inactivité (vérifie auto-remontage)
+- [ ] **Test 3** : Vérification endpoint `/api/smb-mounts` après montage
+- [ ] **Test 4** : Test démontage manuel via `/api/smb-mounts/{id}/unmount`
+- [ ] **Test 5** : Archivage gros fichier (> 100MB) - vérifie performance
+- [ ] **Test 6** : Test fallback - désactiver mount.cifs temporairement
+- [ ] **Test 7** : Archivage avec mode "move" + leave_link
+
+---
+
+*Dernière mise à jour : 2026-04-09*
