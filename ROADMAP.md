@@ -58,10 +58,25 @@ Industrialiser OpenIndex pour un usage régulier en environnement SMB volumineux
   - Suite de tests complète (22+31+4 tests)
   - Documentation technique complète
 
-- **T-ARCH-02** (en cours) : Scheduling et configuration
-  - Déclenchement par cron des jobs d'archivage
-  - Configuration des règles en base de données
-  - UI de monitoring des files d'attente
+- **T-ARCH-02** (✅ complété 2026-04-08) : Scheduling et configuration
+  - ✅ Déclenchement par cron des jobs d'archivage
+  - ✅ Configuration des règles en base de données
+  - ✅ UI de monitoring des files d'attente
+  - ✅ 53/53 tests passés (31 API + 22 worker)
+  - ✅ Issues #68-#72, #75 fermées
+
+- **T-ARCH-03** (✅ complété 2026-04-08) : Corrections UI et stabilisation
+  - ✅ Terminologie et textes d'information corrigés
+  - ✅ Correction blocage runs et flapping état
+  - ✅ Version alignée avec fichier VERSION
+  - ✅ Corrections panneau source (breadcrumb cliquable)
+
+- **T-ARCH-04** (✅ complété 2026-04-09) : Correction SMB SMIDEN (Issue #85)
+  - ✅ Architecture hybride : montage SMB + fallback programmatique
+  - ✅ Module `smb_mount_manager.py` avec gestion dynamique des montages
+  - ✅ Auto-remontage après timeout 30min d'inactivité
+  - ✅ API endpoints `/api/smb-mounts` pour monitoring et contrôle
+  - ✅ Résout Issues #80 et #85 (credentials SMB incorrects)
 
 ### Prochaines livraisons prévues
 - **T-ART-01/02/03** : Gestion des artefacts et doublons
