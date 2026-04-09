@@ -36,6 +36,17 @@ except ModuleNotFoundError:  # pragma: no cover
     smbclient = None
 
 try:
+    from src.smb_mount_manager import smb_to_local_path, ensure_mounted, get_mount_manager, SMBMountManager
+except ModuleNotFoundError:  # pragma: no cover
+    try:
+        from smb_mount_manager import smb_to_local_path, ensure_mounted, get_mount_manager, SMBMountManager
+    except ModuleNotFoundError:
+        smb_to_local_path = None
+        ensure_mounted = None
+        get_mount_manager = None
+        SMBMountManager = None
+
+try:
     import openpyxl
 except ModuleNotFoundError:  # pragma: no cover
     openpyxl = None
@@ -1612,13 +1623,47 @@ def _generate_office_preview_html(path: str, raw_bytes: bytes) -> str:
     raise ValueError("Format bureautique non pris en charge")
 
 
-def _configure_smb_session(config: Dict[str, Any]) -> None:
+# Cache des sessions SMB par serveur
+_SMB_SESSIONS: Dict[str, Any] = {}
+
+
+def _get_smb_session(config: Dict[str, Any]) -> Any:
+    """
+    Récupère ou crée une session SMB pour la configuration donnée.
+    Chaque session est isolée et identifiée par le serveur.
+    """
     _require_smbclient()
-    smbclient.ClientConfig(
-        username=config.get("connection_username"),
-        password=config.get("connection_password"),
-        domain=config.get("connection_domain") or "",
-    )
+    server = config.get("connection_server", "")
+    username = config.get("connection_username")
+    password = config.get("connection_password")
+    domain = config.get("connection_domain") or ""
+    
+    # Clé unique pour cette session
+    session_key = f"{server}_{username}"
+    
+    if session_key not in _SMB_SESSIONS:
+        # Créer une nouvelle connexion et session
+        from smbprotocol.connection import Connection
+        from smbprotocol.session import Session
+        
+        connection = Connection(server, server)
+        connection.connect()
+        session = Session(connection, username, password, domain=domain)
+        session.connect()
+        
+        _SMB_SESSIONS[session_key] = (connection, session)
+    
+    return _SMB_SESSIONS[session_key]
+
+
+def _configure_smb_session(config: Dict[str, Any]) -> str:
+    """
+    Configure une session SMB et retourne le serveur pour identifier la session.
+    Cette fonction est gardée pour compatibilité avec le code existant.
+    """
+    server = config.get("connection_server", "")
+    _get_smb_session(config)
+    return server
 
 
 def _is_smb_sharing_violation(exc: Exception) -> bool:
@@ -1626,9 +1671,30 @@ def _is_smb_sharing_violation(exc: Exception) -> bool:
     return "0xc0000043" in message or "being used by another process" in message
 
 
-def _read_smb_file_bytes(file_path: str, retries: int = 2, retry_delay: float = 0.15) -> bytes:
+def _read_smb_file_bytes(
+    file_path: str, 
+    retries: int = 2, 
+    retry_delay: float = 0.15, 
+    server: Optional[str] = None,
+    config: Optional[Dict[str, Any]] = None
+) -> bytes:
+    """
+    Lit un fichier SMB avec gestion des sessions explicites.
+    
+    Args:
+        file_path: Chemin du fichier
+        retries: Nombre de tentatives
+        retry_delay: Délai entre tentatives
+        server: Serveur SMB (optionnel, pour compatibilité)
+        config: Configuration SMB avec credentials (optionnel)
+    """
     normalized_path = _normalize_smb_path(file_path)
     last_error: Optional[Exception] = None
+    
+    # Si config fournie, configurer une session temporaire
+    if config:
+        _configure_smb_session(config)
+    
     for attempt in range(retries + 1):
         try:
             with smbclient.open_file(normalized_path, mode="rb") as handle:
@@ -1723,11 +1789,47 @@ def _sync_archived_file_in_db(
         db.delete_file_record(source_path)
 
 
-def _compute_smb_sha256(file_path: str) -> str:
+def _compute_smb_sha256(file_path: str, config: Optional[Dict[str, Any]] = None) -> str:
+    """
+    Calcule le SHA256 d'un fichier SMB (fallback pour compatibilité).
+    Privilégier smb_to_local_path + _compute_local_sha256.
+    """
+    # Essayer d'abord avec le montage local si disponible
+    if smb_to_local_path and config:
+        local_path = smb_to_local_path(file_path, config)
+        if local_path:
+            return _compute_local_sha256(local_path)
+    
+    # Fallback vers smbclient direct
     digest = hashlib.sha256()
-    with smbclient.open_file(_normalize_smb_path(file_path), mode="rb") as handle:
+    normalized_path = _normalize_smb_path(file_path)
+    
+    if config:
+        _configure_smb_session(config)
+    
+    with smbclient.open_file(normalized_path, mode="rb") as handle:
         while True:
             chunk = handle.read(1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _compute_local_sha256(file_path: str) -> str:
+    """
+    Calcule le SHA256 d'un fichier local.
+    
+    Args:
+        file_path: Chemin du fichier local
+    
+    Returns:
+        Hash SHA256 hexadécimal
+    """
+    digest = hashlib.sha256()
+    with open(file_path, "rb") as handle:
+        while True:
+            chunk = handle.read(1024 * 1024)  # 1MB chunks
             if not chunk:
                 break
             digest.update(chunk)
@@ -1983,6 +2085,12 @@ async def get_file_preview(path: str):
 
 @app.post("/api/archive/file", response_model=ArchiveFileResult)
 async def archive_file(payload: ArchiveFileRequest):
+    """
+    Archive un fichier avec montage SMB prioritaire et fallback programmatique.
+    Les partages sont vérifiés/remontés automatiquement si nécessaire.
+    """
+    use_mount = ensure_mounted is not None
+    
     try:
         db = get_db_adapter()
         ensure_crawl_storage_ready(db)
@@ -1996,57 +2104,141 @@ async def archive_file(payload: ArchiveFileRequest):
                 status_code=409,
                 detail="Checksum source introuvable en base. Le fichier doit d'abord etre indexe et checksumme avant archivage.",
             )
-        _configure_smb_session(source_config)
-        _configure_smb_session(target_config)
-
-        target_path = _join_smb_path(normalized_target_directory, _smb_name(normalized_source_path))
-        if not payload.overwrite:
-            try:
-                smbclient.stat(target_path)
+        
+        # Essayer d'abord avec les montages SMB
+        local_source = None
+        local_target_dir = None
+        
+        if use_mount:
+            logger.info("Tentative avec montage SMB...")
+            local_source = ensure_mounted(source_config)
+            local_target_dir = ensure_mounted(target_config)
+        
+        # Fallback vers mode programmatique si montage échoue ou non disponible
+        if not local_source or not local_target_dir:
+            if not use_mount:
+                logger.info("Mode programmatique (montage non disponible)")
+            else:
+                logger.warning("Fallback vers mode programmatique SMB")
+            use_mount = False
+        
+        if use_mount:
+            # === MODE MONTAGE (prioritaire) ===
+            local_target_path = os.path.join(
+                local_target_dir, 
+                _smb_name(normalized_source_path)
+            )
+            
+            # Vérifier que la cible n'existe pas déjà
+            if not payload.overwrite and os.path.exists(local_target_path):
                 raise HTTPException(status_code=409, detail="Le fichier cible existe déjà")
-            except OSError:
-                pass
-
-        _ensure_parent_directories(normalized_target_directory)
-        copied_size = 0
-        with smbclient.open_file(normalized_source_path, mode="rb") as source_handle:
+            
+            # Créer les répertoires parents si nécessaire
+            os.makedirs(os.path.dirname(local_target_path), exist_ok=True)
+            
+            # Copier le fichier
+            copied_size = 0
+            with open(local_source, "rb") as source_handle:
+                with open(local_target_path, "wb") as target_handle:
+                    while True:
+                        chunk = source_handle.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        copied_size += len(chunk)
+                        target_handle.write(chunk)
+            
+            # Vérifier le checksum
+            archived_checksum = _compute_local_sha256(local_target_path)
+            
+        else:
+            # === MODE PROGRAMMATIQUE (fallback) ===
+            # Configurer session source et lire
+            _configure_smb_session(source_config)
+            file_content = _read_smb_file_bytes(normalized_source_path, config=source_config)
+            copied_size = len(file_content)
+            
+            # Configurer session cible et écrire
+            _configure_smb_session(target_config)
+            
+            target_path = _join_smb_path(normalized_target_directory, _smb_name(normalized_source_path))
+            if not payload.overwrite:
+                try:
+                    smbclient.stat(target_path)
+                    raise HTTPException(status_code=409, detail="Le fichier cible existe déjà")
+                except OSError:
+                    pass
+            
+            _ensure_parent_directories(normalized_target_directory)
+            
             with smbclient.open_file(target_path, mode="wb") as target_handle:
-                while True:
-                    chunk = source_handle.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    copied_size += len(chunk)
-                    target_handle.write(chunk)
-
-        archived_checksum = _compute_smb_sha256(target_path)
+                target_handle.write(file_content)
+            
+            archived_checksum = _compute_smb_sha256(target_path, config=target_config)
+            local_target_path = None  # Pas de chemin local en mode programmatique
+        
+        # Vérification checksum commune
         if archived_checksum.lower() != source_checksum.lower():
             try:
-                smbclient.remove(target_path)
+                if use_mount and local_target_path:
+                    os.remove(local_target_path)
+                elif not use_mount:
+                    smbclient.remove(target_path)
             except OSError:
-                logger.warning("Impossible de supprimer la copie archivee apres echec de verification: %s", target_path)
+                pass
             raise HTTPException(
                 status_code=409,
                 detail="Verification SHA-256 echouee apres copie. La source est conservee et l'archive est rejetee.",
             )
-
+        
+        # Suppression source si mode=move
         source_deleted = False
         link_path = None
         if payload.mode == "move":
-            smbclient.remove(normalized_source_path)
-            source_deleted = True
-            if payload.leave_link:
-                link_path = f"{normalized_source_path}.url"
-                with smbclient.open_file(link_path, mode="w") as link_handle:
-                    link_handle.write(
-                        "[InternetShortcut]\n"
-                        f"URL={_unc_to_file_url(target_path)}\n"
-                        "IconIndex=0\n"
+            try:
+                if use_mount:
+                    os.remove(local_source)
+                else:
+                    _configure_smb_session(source_config)
+                    smbclient.remove(normalized_source_path)
+                
+                source_deleted = True
+                
+                if payload.leave_link:
+                    target_smb_path = _join_smb_path(
+                        normalized_target_directory, 
+                        _smb_name(normalized_source_path)
                     )
+                    if use_mount:
+                        link_local_path = f"{local_source}.url"
+                        with open(link_local_path, "w") as link_handle:
+                            link_handle.write(
+                                "[InternetShortcut]\n"
+                                f"URL={_unc_to_file_url(target_smb_path)}\n"
+                                "IconIndex=0\n"
+                            )
+                    else:
+                        link_smb_path = f"{normalized_source_path}.url"
+                        with smbclient.open_file(link_smb_path, mode="w") as link_handle:
+                            link_handle.write(
+                                "[InternetShortcut]\n"
+                                f"URL={_unc_to_file_url(target_smb_path)}\n"
+                                "IconIndex=0\n"
+                            )
+                    link_path = f"{normalized_source_path}.url"
+            except OSError as e:
+                logger.error(f"Erreur lors de la suppression de la source: {e}")
+                source_deleted = False
 
+        # Construire le chemin SMB cible final
+        final_target_path = _join_smb_path(
+            normalized_target_directory, 
+            _smb_name(normalized_source_path)
+        )
+        
         _sync_archived_file_in_db(
             db,
             source_path=normalized_source_path,
-            target_path=target_path,
+            target_path=final_target_path,
             checksum=archived_checksum,
             file_size=copied_size,
             source_config_id=source_config.get("id"),
@@ -2059,7 +2251,7 @@ async def archive_file(payload: ArchiveFileRequest):
 
         return ArchiveFileResult(
             source_path=normalized_source_path,
-            target_path=target_path,
+            target_path=final_target_path,
             mode=payload.mode,
             source_deleted=source_deleted,
             link_path=link_path,
@@ -2082,6 +2274,44 @@ async def archive_file(payload: ArchiveFileRequest):
             raise HTTPException(status_code=502, detail=error_detail)
 
         raise HTTPException(status_code=500, detail="Erreur lors de l'archivage du fichier")
+
+
+@app.get("/api/smb-mounts")
+async def get_smb_mounts():
+    """Liste les montages SMB actifs avec leur temps d'inactivité."""
+    if get_mount_manager is None:
+        raise HTTPException(status_code=503, detail="Gestionnaire de montages non disponible")
+    
+    try:
+        mounts = get_mount_manager().list_active_mounts()
+        idle_timeout = 30
+        if SMBMountManager and hasattr(SMBMountManager, 'IDLE_TIMEOUT_MINUTES'):
+            idle_timeout = SMBMountManager.IDLE_TIMEOUT_MINUTES
+        return {
+            "mounts": mounts,
+            "total": len(mounts),
+            "timeout_minutes": idle_timeout
+        }
+    except Exception as e:
+        logger.error(f"Erreur lors de la récupération des montages: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/smb-mounts/{config_id}/unmount")
+async def unmount_smb(config_id: str):
+    """Démonte manuellement un partage SMB."""
+    if get_mount_manager is None:
+        raise HTTPException(status_code=503, detail="Gestionnaire de montages non disponible")
+    
+    try:
+        success = get_mount_manager()._unmount(config_id)
+        if success:
+            return {"message": f"Partage {config_id} démonté avec succès"}
+        else:
+            raise HTTPException(status_code=500, detail=f"Échec du démontage de {config_id}")
+    except Exception as e:
+        logger.error(f"Erreur lors du démontage: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/files", response_model=List[FileInfo])
