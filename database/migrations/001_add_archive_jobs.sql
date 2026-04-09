@@ -80,24 +80,24 @@ RETURNS TABLE (
 ) AS $$
 BEGIN
     RETURN QUERY
-    UPDATE archive_jobs
+    UPDATE archive_jobs AS aj
     SET status = 'running', started_at = CURRENT_TIMESTAMP
-    WHERE id = (
-        SELECT id 
-        FROM archive_jobs 
-        WHERE status = 'pending' 
-           OR (status = 'failed' AND retry_count < max_retries)
-        ORDER BY priority ASC, created_at ASC
+    WHERE aj.id = (
+        SELECT candidate.id
+        FROM archive_jobs AS candidate
+        WHERE candidate.status = 'pending'
+           OR (candidate.status = 'failed' AND candidate.retry_count < candidate.max_retries)
+        ORDER BY candidate.priority ASC, candidate.created_at ASC
         LIMIT 1
         FOR UPDATE SKIP LOCKED
     )
     RETURNING 
-        archive_jobs.id,
-        archive_jobs.job_type,
-        archive_jobs.source_path,
-        archive_jobs.dest_path,
-        archive_jobs.priority,
-        archive_jobs.retry_count;
+        aj.id,
+        aj.job_type,
+        aj.source_path,
+        aj.dest_path,
+        aj.priority,
+        aj.retry_count;
 END;
 $$ LANGUAGE plpgsql;
 

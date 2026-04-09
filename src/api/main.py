@@ -488,7 +488,13 @@ class PostgreSQLAdapter:
         finally:
             self._get_pool().putconn(conn)
 
-    def execute_query(self, query: str, params: Optional[List[Any]] = None) -> List[tuple]:
+    def execute_query(
+        self,
+        query: str,
+        params: Optional[List[Any]] = None,
+        fetch: bool = True,
+        commit: bool = False,
+    ) -> List[tuple]:
         params = params or []
         pg_query = query.replace("?", "%s")
         if pg_query.startswith("EXPLAIN QUERY PLAN"):
@@ -497,9 +503,12 @@ class PostgreSQLAdapter:
         with self.get_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(pg_query, params)
-                if cursor.description is None:
-                    return []
-                return cursor.fetchall()
+                rows: List[tuple] = []
+                if fetch and cursor.description is not None:
+                    rows = cursor.fetchall()
+                if commit or not fetch or cursor.description is None:
+                    conn.commit()
+                return rows
 
     def resolve_space_config_id(self, space: Optional[str]) -> Optional[str]:
         if not space:

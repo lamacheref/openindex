@@ -9,7 +9,7 @@ services:
       TZ: ${OPENINDEX_TIMEZONE:-Europe/Paris}
       POSTGRES_DB: ${POSTGRES_DB:-openindex}
       POSTGRES_USER: ${POSTGRES_USER:-openindex_user}
-      POSTGRES_PASSWORD: openindex_secure_password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-openindex_secure_password}
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     volumes:
       - postgres_data:/var/lib/postgresql/data

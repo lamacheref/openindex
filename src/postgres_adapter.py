@@ -204,12 +204,26 @@ class PostgreSQLAdapter:
         except ValueError:
             return None
 
-    def execute_query(self, query: str, params: Optional[List[Any]] = None) -> List[Any]:
-        """Exécute une requête SQL simple et retourne toutes les lignes."""
+    def execute_query(
+        self,
+        query: str,
+        params: Optional[List[Any]] = None,
+        fetch: bool = True,
+    ) -> List[Any]:
+        """Exécute une requête SQL simple.
+
+        Args:
+            query: Requête SQL à exécuter.
+            params: Paramètres positionnels.
+            fetch: Retourne les lignes du curseur quand vrai. À désactiver
+                pour les requêtes d'écriture qui ne produisent pas de résultat.
+        """
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(query, params or [])
-            rows = cursor.fetchall()
+            rows: List[Any] = []
+            if fetch and cursor.description is not None:
+                rows = cursor.fetchall()
             conn.commit()
             return rows
     
