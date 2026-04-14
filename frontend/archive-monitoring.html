@@ -451,16 +451,39 @@ function archiveMonitoring() {
         },
         
         initUser() {
+            const isTruthyAdminValue = (value) => {
+                if (typeof value === 'string') {
+                    const normalizedValue = value.trim().toLowerCase();
+                    return normalizedValue === 'true' || normalizedValue === '1' || normalizedValue === 'yes';
+                }
+
+                return value === true || value === 1;
+            };
+
+            const resolveUserAdminStatus = (user) => {
+                if (typeof resolveAdminStatus === 'function') {
+                    return resolveAdminStatus(user);
+                }
+
+                return Boolean(
+                    isTruthyAdminValue(user?.isAdmin) ||
+                    isTruthyAdminValue(user?.is_admin) ||
+                    isTruthyAdminValue(user?.admin) ||
+                    user?.role === 'admin'
+                );
+            };
+
             // Vérifier l'authentification et rediriger si nécessaire
             if (typeof onPbReady !== 'undefined') {
                 onPbReady((pbInstance) => {
                     if (pbInstance && pbInstance.authStore.isValid) {
                         const user = pbInstance.authStore.model;
+                        const isAdmin = resolveUserAdminStatus(user);
                         this.currentUser = {
                             name: user.name || user.email || 'Utilisateur',
-                            role: user.isAdmin ? 'admin' : 'user',
-                            role_label: user.isAdmin ? 'Administrateur' : 'Utilisateur',
-                            is_admin: user.isAdmin || false
+                            role: isAdmin ? 'admin' : 'user',
+                            role_label: isAdmin ? 'Administrateur' : 'Utilisateur',
+                            is_admin: isAdmin
                         };
                         
                         // Rediriger les non-admins vers l'explorateur de fichiers
@@ -475,11 +498,12 @@ function archiveMonitoring() {
             } else if (typeof pb !== 'undefined' && pb.authStore.isValid) {
                 // Fallback direct
                 const user = pb.authStore.model;
+                const isAdmin = resolveUserAdminStatus(user);
                 this.currentUser = {
                     name: user.name || user.email || 'Utilisateur',
-                    role: user.isAdmin ? 'admin' : 'user',
-                    role_label: user.isAdmin ? 'Administrateur' : 'Utilisateur',
-                    is_admin: user.isAdmin || false
+                    role: isAdmin ? 'admin' : 'user',
+                    role_label: isAdmin ? 'Administrateur' : 'Utilisateur',
+                    is_admin: isAdmin
                 };
                 
                 // Rediriger les non-admins vers l'explorateur de fichiers

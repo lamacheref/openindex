@@ -108,7 +108,7 @@
                         </div>
                     </div>
 
-                    <button x-show="currentUser.is_admin" @click="openConfiguration('crawler')"
+                    <button x-show="isAdminUser" @click="openConfiguration('crawler')"
                             class="h-10 w-10 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
                             aria-label="Configuration"
                             title="Configuration">
@@ -148,7 +148,7 @@
                     </div>
                 </section>
 
-                <section x-show="currentUser.is_admin" class="card p-5">
+                <section x-show="isAdminUser" class="card p-5">
                     <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">Dernier lancement</p>
                     <p class="mt-3 text-sm font-semibold" x-text="latestRunDisplayLabel"></p>
                     <p class="mt-1 text-xs text-slate-500" x-text="latestRunDateLabel"></p>
@@ -166,7 +166,7 @@
                 </section>
 
                 <nav class="space-y-2">
-                    <button x-show="currentUser.is_admin" @click="currentView = 'dashboard'"
+                    <button x-show="isAdminUser" @click="currentView = 'dashboard'"
                             class="w-full rounded-2xl px-4 py-3 text-left transition"
                             :class="currentView === 'dashboard' ? 'bg-teal-700 text-white shadow-lg shadow-teal-700/15' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'">
                         <span class="flex items-center justify-between">
@@ -472,7 +472,7 @@
                                 <p class="mt-2 text-sm text-slate-500">Classement manuel entre l’espace SMB actif et un espace d’archivage déjà configuré.</p>
                             </div>
                             <div class="flex flex-wrap gap-3">
-                                <button x-show="currentUser.is_admin" @click="openConfiguration('fileExplorer')"
+                                <button x-show="isAdminUser" @click="openConfiguration('fileExplorer')"
                                         class="rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
                                     <i class="fas fa-sliders mr-2"></i>Configurer
                                 </button>
@@ -949,21 +949,21 @@
 
             <div class="px-6 py-6">
                 <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
-                    <button x-show="currentUser.is_admin" @click="configSection = 'crawler'; loadCrawlConfigs()" class="rounded-2xl px-4 py-3 text-sm font-medium"
+                    <button x-show="isAdminUser" @click="configSection = 'crawler'; loadCrawlConfigs()" class="rounded-2xl px-4 py-3 text-sm font-medium"
                             :class="configSection === 'crawler' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">Espaces explorés</button>
-                    <button x-show="currentUser.is_admin" @click="configSection = 'fileExplorer'" class="rounded-2xl px-4 py-3 text-sm font-medium"
+                    <button x-show="isAdminUser" @click="configSection = 'fileExplorer'" class="rounded-2xl px-4 py-3 text-sm font-medium"
                             :class="configSection === 'fileExplorer' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">Explorateur</button>
-                    <button x-show="currentUser.is_admin" @click="configSection = 'dbAnalysis'; loadDbExplain()" class="rounded-2xl px-4 py-3 text-sm font-medium"
+                    <button x-show="isAdminUser" @click="configSection = 'dbAnalysis'; loadDbExplain()" class="rounded-2xl px-4 py-3 text-sm font-medium"
                             :class="configSection === 'dbAnalysis' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">Base de données</button>
-                    <button x-show="currentUser.is_admin" @click="configSection = 'users'" class="rounded-2xl px-4 py-3 text-sm font-medium"
+                    <button x-show="isAdminUser" @click="configSection = 'users'" class="rounded-2xl px-4 py-3 text-sm font-medium"
                             :class="configSection === 'users' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">Utilisateurs</button>
                     <button @click="configSection = 'profile'" class="rounded-2xl px-4 py-3 text-sm font-medium"
                             :class="configSection === 'profile' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">Profil</button>
-                    <button x-show="currentUser.is_admin" @click="configSection = 'monitoring'; loadMonitoringSummary()" class="rounded-2xl px-4 py-3 text-sm font-medium"
+                    <button x-show="isAdminUser" @click="configSection = 'monitoring'; loadMonitoringSummary()" class="rounded-2xl px-4 py-3 text-sm font-medium"
                             :class="configSection === 'monitoring' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">Monitoring</button>
                 </div>
 
-                <div x-show="configSection === 'monitoring' && currentUser.is_admin" class="fade-in mt-6 card p-6">
+                <div x-show="configSection === 'monitoring' && isAdminUser" class="fade-in mt-6 card p-6">
                     <div class="flex items-center justify-between">
                         <div>
                             <h3 class="text-xl font-semibold">Monitoring</h3>
@@ -982,7 +982,7 @@
                     </div>
                 </div>
 
-                <div x-show="configSection === 'fileExplorer' && currentUser.is_admin" class="fade-in mt-6 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+                <div x-show="configSection === 'fileExplorer' && isAdminUser" class="fade-in mt-6 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
                     <div class="card p-6">
                         <div class="flex items-start justify-between gap-3">
                             <div>
@@ -1027,7 +1027,7 @@
                     </div>
                 </div>
 
-                <div x-show="configSection === 'crawler' && currentUser.is_admin" class="fade-in mt-6 grid grid-cols-1 gap-5 xl:grid-cols-2">
+                <div x-show="configSection === 'crawler' && isAdminUser" class="fade-in mt-6 grid grid-cols-1 gap-5 xl:grid-cols-2">
                     <div class="card p-6">
                         <div class="flex items-start justify-between gap-3">
                             <div>
@@ -1095,7 +1095,7 @@
                     </div>
                 </div>
 
-                <div x-show="configSection === 'users' && currentUser.is_admin" class="fade-in mt-6 card p-6">
+                <div x-show="configSection === 'users' && isAdminUser" class="fade-in mt-6 card p-6">
                     <h3 class="text-xl font-semibold">Inscription des utilisateurs</h3>
                     <div class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -1139,7 +1139,7 @@
                     </div>
                 </div>
 
-                <div x-show="configSection === 'dbAnalysis' && currentUser.is_admin" class="fade-in mt-6 card p-6">
+                <div x-show="configSection === 'dbAnalysis' && isAdminUser" class="fade-in mt-6 card p-6">
                     <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                         <div>
                             <h3 class="text-xl font-semibold">Explain / Analyze DB</h3>
@@ -1518,6 +1518,7 @@
                     recent_files: []
                 },
                 loadingSummary: false,
+                isAdminUser: false,
                 currentUser: {
                     name: 'Chargement...',
                     role: 'guest',
@@ -1746,7 +1747,7 @@
                     this.showConfigOverlay = true;
                     // Définir la section par défaut en fonction du rôle
                     if (!section) {
-                        this.configSection = this.currentUser.is_admin ? 'crawler' : 'profile';
+                        this.configSection = this.isAdminUser ? 'crawler' : 'profile';
                     } else {
                         this.configSection = section;
                     }
@@ -2839,42 +2840,61 @@
                 },
 
                 initUser() {
+                    const isTruthyAdminValue = (value) => {
+                        if (typeof value === 'string') {
+                            const normalizedValue = value.trim().toLowerCase();
+                            return normalizedValue === 'true' || normalizedValue === '1' || normalizedValue === 'yes';
+                        }
+
+                        return value === true || value === 1;
+                    };
+
+                    const resolveUserAdminStatus = (user) => {
+                        if (typeof resolveAdminStatus === 'function') {
+                            return resolveAdminStatus(user);
+                        }
+
+                        return Boolean(
+                            isTruthyAdminValue(user?.isAdmin) ||
+                            isTruthyAdminValue(user?.is_admin) ||
+                            isTruthyAdminValue(user?.admin) ||
+                            user?.role === 'admin'
+                        );
+                    };
+
                     // Utiliser onPbReady pour initialiser l'utilisateur
                     if (typeof onPbReady !== 'undefined') {
                         onPbReady((pbInstance) => {
                             if (pbInstance && pbInstance.authStore.isValid) {
                                 const user = pbInstance.authStore.model;
+                                console.log('Utilisateur PocketBase:', user); // Debug: voir toutes les propriétés
+                                
+                                const isAdmin = resolveUserAdminStatus(user);
+                                
                                 this.currentUser = {
                                     name: user.name || user.email || 'Utilisateur',
-                                    role: user.isAdmin ? 'admin' : 'user',
-                                    role_label: user.isAdmin ? 'Administrateur' : 'Utilisateur',
-                                    is_admin: user.isAdmin || false
+                                    role: isAdmin ? 'admin' : 'user',
+                                    role_label: isAdmin ? 'Administrateur' : 'Utilisateur',
+                                    is_admin: isAdmin
                                 };
+                                this.isAdminUser = isAdmin;
+                                console.log('isAdminUser défini à:', this.isAdminUser);
                                 console.log('Utilisateur authentifié:', this.currentUser);
                                 
                                 // Définir la vue initiale en fonction du rôle
-                                if (!this.currentUser.is_admin) {
+                                if (!this.isAdminUser) {
                                     this.currentView = 'fileExplorer';
                                 }
+                                
+                                // Forcer la mise à jour du DOM avec $nextTick
+                                this.$nextTick(() => {
+                                    console.log('DOM mis à jour, isAdminUser:', this.isAdminUser);
+                                    this.$dispatch('user-updated', this.currentUser);
+                                });
                             }
                         });
                     }
                     
-                    // Fallback si onPbReady n'est pas disponible
-                    if (typeof pb !== 'undefined' && pb.authStore.isValid) {
-                        const user = pb.authStore.model;
-                        this.currentUser = {
-                            name: user.name || user.email || 'Utilisateur',
-                            role: user.isAdmin ? 'admin' : 'user',
-                            role_label: user.isAdmin ? 'Administrateur' : 'Utilisateur',
-                            is_admin: user.isAdmin || false
-                        };
-                        console.log('Utilisateur authentifié (fallback direct):', this.currentUser);
-                        
-                        if (!this.currentUser.is_admin) {
-                            this.currentView = 'fileExplorer';
-                        }
-                    }
                 },
 
                 logout() {

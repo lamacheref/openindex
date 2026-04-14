@@ -60,9 +60,30 @@ function checkAuth() {
   return pbInitialized && pb.authStore.isValid;
 }
 
+// Normaliser la détection du rôle admin entre PocketBase et le fallback local
+function isTruthyAdminValue(value) {
+  if (typeof value === 'string') {
+    const normalizedValue = value.trim().toLowerCase();
+    return normalizedValue === 'true' || normalizedValue === '1' || normalizedValue === 'yes';
+  }
+
+  return value === true || value === 1;
+}
+
+function resolveAdminStatus(user) {
+  if (!user) return false;
+
+  return Boolean(
+    isTruthyAdminValue(user.isAdmin) ||
+    isTruthyAdminValue(user.is_admin) ||
+    isTruthyAdminValue(user.admin) ||
+    user.role === 'admin'
+  );
+}
+
 // Vérifier si l'utilisateur est admin
 function isAdmin() {
-  return pbInitialized && pb.authStore.model?.isAdmin || false;
+  return pbInitialized ? resolveAdminStatus(pb.authStore.model) : false;
 }
 
 // Protection stricte - bloque complètement le chargement pour les non-authentifiés
@@ -181,7 +202,7 @@ function redirectIfNotAuthenticated() {
 // Rediriger si non admin
 function redirectIfNotAdmin() {
   onPbReady((pbInstance) => {
-    if (!pbInstance || !pbInstance.authStore.isValid || !pbInstance.authStore.model?.isAdmin) {
+    if (!pbInstance || !pbInstance.authStore.isValid || !resolveAdminStatus(pbInstance.authStore.model)) {
       window.location.href = '/access-denied.html';
     }
   });
@@ -239,5 +260,5 @@ document.addEventListener('DOMContentLoaded', initAuth);
 
 // Exporter pour les modules
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { checkAuth, isAdmin, login, logout, redirectIfNotAuthenticated, redirectIfNotAdmin, onPbReady, onAuthChange };
+  module.exports = { checkAuth, isAdmin, login, logout, redirectIfNotAuthenticated, redirectIfNotAdmin, onPbReady, onAuthChange, resolveAdminStatus, isTruthyAdminValue };
 }
