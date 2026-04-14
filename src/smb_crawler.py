@@ -16,7 +16,7 @@ from pathlib import Path
 from queue import Queue, Empty
 from concurrent.futures import ThreadPoolExecutor
 import smbclient
-from logging_config import get_logger_manager
+from src.logging_config import get_logger_manager
 
 
 class SMBCrawler:

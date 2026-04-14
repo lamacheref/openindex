@@ -10,6 +10,11 @@ ALTER TABLE files ADD COLUMN last_accessed TIMESTAMP WITH TIME ZONE;
 -- Index pour optimiser les requêtes sur last_accessed
 CREATE INDEX IF NOT EXISTS idx_files_last_accessed ON files(last_accessed);
 
+-- Supprimer les vues existantes si elles existent avec un ordre de colonnes différent
+DROP VIEW IF EXISTS unused_files;
+DROP VIEW IF EXISTS large_files;
+DROP VIEW IF EXISTS old_files;
+
 -- Vue pour les fichiers inutilisés (accès ancien)
 CREATE OR REPLACE VIEW unused_files AS
 SELECT 

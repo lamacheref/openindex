@@ -79,7 +79,7 @@ Cleanup: Thread démonte après 30min → Prochaine utilisation remonte auto
   - [x] DELETE /api/duplicates/{checksum}/occurrences : Supprimer les autres occurrences
 - [x] **Intégration UI** : Modal pour afficher les détails des doublons
   - [x] Bouton "Voir les détails" dans la liste des artefacts
-  - [x] Modal avec liste des occurrences et leurs métadonnées
+  - [x] Modal avec liste des occurrences et leurs métadonnéeschrome://vivaldi-webui/startpage?section=Speed-dials&background-color=#f7f7f7
   - [x] Boutons "Ouvrir dans l'explorateur" et "Conserver"
   - [x] Action "Supprimer les autres occurrences"
 - [x] **Navigation facile** : Implémenter la navigation vers l'explorateur pour chaque occurrence
@@ -453,7 +453,11 @@ Voir **T-ARCH-04** ci-dessous.
 
 ---
 
+<<<<<<< HEAD
 
 ---
 
-*Dernière mise à jour : 2026-04-09*
+*Dernière mise à jour : 2026-04-08*
+=======
+*Dernière mise à jour : 2026-04-08*
+>>>>>>> e5d80f2 (Mise à jour des fichiers et ajout de nouveaux scripts et tests)

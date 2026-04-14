@@ -81,8 +81,7 @@ class ArchiveScheduler:
         try:
             # Vérifier si la table archive_schedules existe
             result = self.adapter.execute_query(
-                "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'archive_schedules')",
-                fetch=True
+                "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'archive_schedules')"
             )
             if result and not result[0][0]:
                 self.logger.warning("⚠️  Table archive_schedules non trouvée. Exécutez la migration 002.")
@@ -132,8 +131,7 @@ class ArchiveScheduler:
                 WHERE is_active = true
                   AND (next_run_at IS NULL OR next_run_at <= CURRENT_TIMESTAMP)
                 ORDER BY priority ASC
-                """,
-                fetch=True
+                """
             )
             
             if not schedules:
@@ -172,8 +170,7 @@ class ArchiveScheduler:
                         run_count = run_count + 1
                     WHERE id = %s
                     """,
-                    (next_run, config.id),
-                    fetch=False
+                    (next_run, config.id)
                 )
                 
         except Exception as e:
@@ -191,8 +188,7 @@ class ArchiveScheduler:
                 VALUES (%s, 'running')
                 RETURNING id
                 """,
-                (config.id,),
-                fetch=True
+                (config.id,)
             )
             run_id = run_result[0][0] if run_result else None
             
@@ -222,8 +218,7 @@ class ArchiveScheduler:
                             dest,
                             config.priority,
                             file_info.get('size', 0)
-                        ),
-                        fetch=False
+                        )
                     )
                     jobs_created += 1
                     
@@ -240,8 +235,7 @@ class ArchiveScheduler:
                         jobs_created = %s
                     WHERE id = %s
                     """,
-                    (jobs_created, run_id),
-                    fetch=False
+                    (jobs_created, run_id)
                 )
             
             self.logger.info(f"✅ Schedule {config.name}: {jobs_created} job(s) créé(s)")
@@ -258,8 +252,7 @@ class ArchiveScheduler:
                         error_message = %s
                     WHERE id = %s
                     """,
-                    (str(e)[:1000], run_id),
-                    fetch=False
+                    (str(e)[:1000], run_id)
                 )
     
     def _find_matching_files(self, config: ScheduleConfig) -> List[Dict[str, Any]]:
@@ -308,7 +301,7 @@ class ArchiveScheduler:
                 LIMIT 1000
             """
             
-            results = self.adapter.execute_query(query, params, fetch=True)
+            results = self.adapter.execute_query(query, params)
             
             # Filtrer avec le pattern complet (regex/glob)
             pattern = config.source_pattern.replace('*', '.*').replace('?', '.')
@@ -386,8 +379,7 @@ class ArchiveScheduler:
                     config.get('max_size_bytes'),
                     config.get('file_extensions', []),
                     config.get('created_by', 'system')
-                ),
-                fetch=True
+                )
             )
             
             schedule_id = str(result[0][0])
@@ -396,8 +388,7 @@ class ArchiveScheduler:
             next_run = self._calculate_next_run(config['cron_expression'], config.get('timezone', 'Europe/Paris'))
             self.adapter.execute_query(
                 "UPDATE archive_schedules SET next_run_at = %s WHERE id = %s",
-                (next_run, schedule_id),
-                fetch=False
+                (next_run, schedule_id)
             )
             
             self.logger.info(f"✅ Schedule créé: {config['name']} ({schedule_id})")
@@ -437,7 +428,7 @@ class ArchiveScheduler:
                 RETURNING id
             """
             
-            result = self.adapter.execute_query(query, params, fetch=True)
+            result = self.adapter.execute_query(query, params)
             
             if result:
                 self.logger.info(f"✅ Schedule mis à jour: {schedule_id}")
@@ -453,8 +444,7 @@ class ArchiveScheduler:
         try:
             result = self.adapter.execute_query(
                 "DELETE FROM archive_schedules WHERE id = %s RETURNING id",
-                (schedule_id,),
-                fetch=True
+                (schedule_id,)
             )
             
             if result:
@@ -480,8 +470,7 @@ class ArchiveScheduler:
                 FROM archive_schedules
                 {where_clause}
                 ORDER BY is_active DESC, priority ASC, name ASC
-                """,
-                fetch=True
+                """
             )
             
             schedules = []
@@ -530,8 +519,7 @@ class ArchiveScheduler:
                 ORDER BY r.started_at DESC
                 LIMIT %s
                 """,
-                params + (limit,),
-                fetch=True
+                params + (limit,)
             )
             
             runs = []
@@ -560,8 +548,7 @@ class ArchiveScheduler:
         """Récupère les paramètres d'archivage"""
         try:
             results = self.adapter.execute_query(
-                "SELECT key, value FROM archive_settings ORDER BY key",
-                fetch=True
+                "SELECT key, value FROM archive_settings ORDER BY key"
             )
             return {row[0]: row[1] for row in results}
         except Exception as e:
@@ -580,8 +567,7 @@ class ArchiveScheduler:
                     updated_by = EXCLUDED.updated_by,
                     updated_at = CURRENT_TIMESTAMP
                 """,
-                (key, value, updated_by),
-                fetch=False
+                (key, value, updated_by)
             )
             return True
         except Exception as e:

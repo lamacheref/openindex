@@ -264,8 +264,7 @@ class ArchiveTransferWorker:
         try:
             # Utiliser la fonction PostgreSQL pour récupérer et verrouiller le job
             result = self.adapter.execute_query(
-                "SELECT * FROM get_next_archive_job()",
-                fetch=True
+                "SELECT * FROM get_next_archive_job()"
             )
 
             if result and len(result) > 0:
@@ -276,7 +275,7 @@ class ArchiveTransferWorker:
                     source_path=row[2],
                     dest_path=row[3],
                     priority=row[4],
-                    retry_count=row[5],
+                    retry_count=row[5],  # current_retry_count from function
                     max_retries=3
                 )
                 self.logger.info(f"📦 Job récupéré: {job.id} ({job.job_type}) - {job.source_path}")
@@ -421,15 +420,14 @@ class ArchiveTransferWorker:
                 self.adapter.execute_query(
                     """
                     UPDATE archive_jobs 
-                    SET status = 'completed', 
+                    SET status = 'completed'::archive_job_status, 
                         completed_at = CURRENT_TIMESTAMP,
                         bytes_transferred = %s,
                         error_message = NULL,
                         retry_count = 0
                     WHERE id = %s
                     """,
-                    (bytes_transferred, job_id),
-                    fetch=False
+                    (bytes_transferred, job_id)
                 )
                 self.logger.info(f"✅ Job {job_id} marqué comme completed")
             else:
@@ -439,16 +437,15 @@ class ArchiveTransferWorker:
                     UPDATE archive_jobs 
                     SET retry_count = retry_count + 1,
                         status = CASE 
-                            WHEN retry_count + 1 >= max_retries THEN 'failed'
-                            ELSE 'failed'
+                            WHEN retry_count + 1 >= max_retries THEN 'failed'::archive_job_status
+                            ELSE 'failed'::archive_job_status
                         END,
                         error_message = %s,
                         bytes_transferred = %s
                     WHERE id = %s
                     RETURNING retry_count, max_retries
                     """,
-                    (error_msg, bytes_transferred, job_id),
-                    fetch=True
+                    (error_msg, bytes_transferred, job_id)
                 )
 
                 if new_retry_count:
@@ -465,8 +462,7 @@ class ArchiveTransferWorker:
         """Retourne les statistiques du worker."""
         try:
             result = self.adapter.execute_query(
-                "SELECT * FROM archive_jobs_stats",
-                fetch=True
+                "SELECT * FROM archive_jobs_stats"
             )
 
             stats = {"active_transfers": len(self.active_transfers)}

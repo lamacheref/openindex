@@ -143,6 +143,9 @@ CREATE TRIGGER update_files_updated_at
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column();
 
+-- Supprimer la vue si elle existe avec un schéma différent (avec CASCADE pour forcer)
+DROP VIEW IF EXISTS duplicate_files CASCADE;
+
 -- Vue pour les doublons
 CREATE OR REPLACE VIEW duplicate_files AS
 SELECT 
@@ -152,12 +155,18 @@ SELECT
     f1.size,
     f1.checksum,
     f1.last_modified,
+    f1.last_accessed,
     f1.created_at,
+    f1.updated_at,
+    f1.crawl_config_id,
     COUNT(*) OVER (PARTITION BY f1.checksum) as duplicate_count
 FROM files f1
 WHERE f1.checksum IS NOT NULL 
   AND f1.is_duplicate = TRUE
 ORDER BY f1.checksum, f1.path;
+
+-- Supprimer la vue si elle existe avec un schéma différent (avec CASCADE pour forcer)
+DROP VIEW IF EXISTS file_size_distribution CASCADE;
 
 -- Vue pour les statistiques par taille
 CREATE OR REPLACE VIEW file_size_distribution AS
@@ -284,6 +293,9 @@ CREATE INDEX IF NOT EXISTS idx_archive_jobs_created_at ON archive_jobs(created_a
 CREATE INDEX IF NOT EXISTS idx_archive_jobs_source_config ON archive_jobs(source_config_id);
 CREATE INDEX IF NOT EXISTS idx_archive_jobs_dest_config ON archive_jobs(dest_config_id);
 
+-- Supprimer la vue si elle existe avec un schéma différent (avec CASCADE pour forcer)
+DROP VIEW IF EXISTS archive_jobs_pending CASCADE;
+
 -- Vue pour les jobs prêts à être traités (pending, ordonnés par priorité)
 CREATE OR REPLACE VIEW archive_jobs_pending AS
 SELECT *
@@ -291,6 +303,9 @@ FROM archive_jobs
 WHERE status = 'pending'
    OR (status = 'failed' AND retry_count < max_retries)
 ORDER BY priority ASC, created_at ASC;
+
+-- Supprimer la vue si elle existe avec un schéma différent (avec CASCADE pour forcer)
+DROP VIEW IF EXISTS archive_jobs_stats CASCADE;
 
 -- Vue pour les statistiques de la queue
 CREATE OR REPLACE VIEW archive_jobs_stats AS
@@ -301,6 +316,9 @@ SELECT
 FROM archive_jobs
 GROUP BY status;
 
+-- Supprimer et recréer la fonction pour éviter les conflits
+DROP FUNCTION IF EXISTS get_next_archive_job() CASCADE;
+
 -- Fonction pour récupérer le prochain job à traiter
 CREATE OR REPLACE FUNCTION get_next_archive_job()
 RETURNS TABLE (
@@ -309,28 +327,46 @@ RETURNS TABLE (
     source_path TEXT,
     dest_path TEXT,
     priority INTEGER,
-    retry_count INTEGER
+    current_retry_count INTEGER
 ) AS $$
 BEGIN
     RETURN QUERY
     UPDATE archive_jobs AS aj
     SET status = 'running', started_at = CURRENT_TIMESTAMP
-    WHERE aj.id = (
-        SELECT candidate.id
-        FROM archive_jobs AS candidate
-        WHERE candidate.status = 'pending'
-           OR (candidate.status = 'failed' AND candidate.retry_count < candidate.max_retries)
-        ORDER BY candidate.priority ASC, candidate.created_at ASC
+<<<<<<< HEAD
+    WHERE id = (
+        SELECT id 
+        FROM archive_jobs 
+        WHERE status = 'pending' 
+           OR (status = 'failed' AND archive_jobs.retry_count < archive_jobs.max_retries)
+        ORDER BY archive_jobs.priority ASC, archive_jobs.created_at ASC
+=======
+    WHERE id = (
+        SELECT id 
+        FROM archive_jobs 
+        WHERE status = 'pending' 
+           OR (status = 'failed' AND archive_jobs.retry_count < archive_jobs.max_retries)
+        ORDER BY archive_jobs.priority ASC, archive_jobs.created_at ASC
+>>>>>>> e5d80f2 (Mise à jour des fichiers et ajout de nouveaux scripts et tests)
         LIMIT 1
         FOR UPDATE SKIP LOCKED
     )
     RETURNING 
-        aj.id,
-        aj.job_type,
-        aj.source_path,
-        aj.dest_path,
-        aj.priority,
-        aj.retry_count;
+<<<<<<< HEAD
+        archive_jobs.id,
+        archive_jobs.job_type,
+        archive_jobs.source_path,
+        archive_jobs.dest_path,
+        archive_jobs.priority,
+        archive_jobs.retry_count AS current_retry_count;
+=======
+        archive_jobs.id,
+        archive_jobs.job_type,
+        archive_jobs.source_path,
+        archive_jobs.dest_path,
+        archive_jobs.priority,
+        archive_jobs.retry_count AS current_retry_count;
+>>>>>>> e5d80f2 (Mise à jour des fichiers et ajout de nouveaux scripts et tests)
 END;
 $$ LANGUAGE plpgsql;
 
