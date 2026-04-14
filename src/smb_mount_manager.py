@@ -108,7 +108,8 @@ class SMBMountManager:
                 return True
             
             # Construire le chemin UNC
-            unc_path = f"//{server}/{share.replace('\\', '/')}"
+            share_clean = share.replace('\\', '/')
+            unc_path = f"//{server}/{share_clean}"
             
             # Options de montage sécurisées
             options = f"username={username},password={password},domain={domain},rw,iocharset=utf8,vers=3.0"

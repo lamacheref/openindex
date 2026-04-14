@@ -7,6 +7,7 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 
     <script src="/assets/alpine.min.js" defer></script>
+    <script src="/assets/auth.js" defer></script>
     <link rel="stylesheet" href="/assets/tailwind.css">
     <link rel="stylesheet" href="/assets/fontawesome/css/all.min.css">
 
@@ -107,7 +108,7 @@
                         </div>
                     </div>
 
-                    <button @click="openConfiguration('crawler')"
+                    <button x-show="currentUser.is_admin" @click="openConfiguration('crawler')"
                             class="h-10 w-10 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
                             aria-label="Configuration"
                             title="Configuration">
@@ -118,6 +119,12 @@
                             aria-label="Profil utilisateur"
                             title="Profil utilisateur">
                         <i class="fas fa-user"></i>
+                    </button>
+                    <button @click="logout()"
+                            class="h-10 w-10 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                            aria-label="Déconnexion"
+                            title="Déconnexion">
+                        <i class="fas fa-sign-out-alt"></i>
                     </button>
                 </div>
             </div>
@@ -141,7 +148,7 @@
                     </div>
                 </section>
 
-                <section class="card p-5">
+                <section x-show="currentUser.is_admin" class="card p-5">
                     <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">Dernier lancement</p>
                     <p class="mt-3 text-sm font-semibold" x-text="latestRunDisplayLabel"></p>
                     <p class="mt-1 text-xs text-slate-500" x-text="latestRunDateLabel"></p>
@@ -159,7 +166,7 @@
                 </section>
 
                 <nav class="space-y-2">
-                    <button @click="currentView = 'dashboard'"
+                    <button x-show="currentUser.is_admin" @click="currentView = 'dashboard'"
                             class="w-full rounded-2xl px-4 py-3 text-left transition"
                             :class="currentView === 'dashboard' ? 'bg-teal-700 text-white shadow-lg shadow-teal-700/15' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'">
                         <span class="flex items-center justify-between">
@@ -465,7 +472,7 @@
                                 <p class="mt-2 text-sm text-slate-500">Classement manuel entre l’espace SMB actif et un espace d’archivage déjà configuré.</p>
                             </div>
                             <div class="flex flex-wrap gap-3">
-                                <button @click="openConfiguration('fileExplorer')"
+                                <button x-show="currentUser.is_admin" @click="openConfiguration('fileExplorer')"
                                         class="rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
                                     <i class="fas fa-sliders mr-2"></i>Configurer
                                 </button>
@@ -942,21 +949,21 @@
 
             <div class="px-6 py-6">
                 <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
-                    <button @click="configSection = 'crawler'; loadCrawlConfigs()" class="rounded-2xl px-4 py-3 text-sm font-medium"
+                    <button x-show="currentUser.is_admin" @click="configSection = 'crawler'; loadCrawlConfigs()" class="rounded-2xl px-4 py-3 text-sm font-medium"
                             :class="configSection === 'crawler' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">Espaces explorés</button>
-                    <button @click="configSection = 'fileExplorer'" class="rounded-2xl px-4 py-3 text-sm font-medium"
+                    <button x-show="currentUser.is_admin" @click="configSection = 'fileExplorer'" class="rounded-2xl px-4 py-3 text-sm font-medium"
                             :class="configSection === 'fileExplorer' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">Explorateur</button>
-                    <button @click="configSection = 'dbAnalysis'; loadDbExplain()" class="rounded-2xl px-4 py-3 text-sm font-medium"
+                    <button x-show="currentUser.is_admin" @click="configSection = 'dbAnalysis'; loadDbExplain()" class="rounded-2xl px-4 py-3 text-sm font-medium"
                             :class="configSection === 'dbAnalysis' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">Base de données</button>
                     <button x-show="currentUser.is_admin" @click="configSection = 'users'" class="rounded-2xl px-4 py-3 text-sm font-medium"
                             :class="configSection === 'users' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">Utilisateurs</button>
                     <button @click="configSection = 'profile'" class="rounded-2xl px-4 py-3 text-sm font-medium"
                             :class="configSection === 'profile' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">Profil</button>
-                    <button @click="configSection = 'monitoring'; loadMonitoringSummary()" class="rounded-2xl px-4 py-3 text-sm font-medium"
+                    <button x-show="currentUser.is_admin" @click="configSection = 'monitoring'; loadMonitoringSummary()" class="rounded-2xl px-4 py-3 text-sm font-medium"
                             :class="configSection === 'monitoring' ? 'bg-teal-700 text-white' : 'bg-white text-slate-700 border border-slate-300'">Monitoring</button>
                 </div>
 
-                <div x-show="configSection === 'monitoring'" class="fade-in mt-6 card p-6">
+                <div x-show="configSection === 'monitoring' && currentUser.is_admin" class="fade-in mt-6 card p-6">
                     <div class="flex items-center justify-between">
                         <div>
                             <h3 class="text-xl font-semibold">Monitoring</h3>
@@ -975,7 +982,7 @@
                     </div>
                 </div>
 
-                <div x-show="configSection === 'fileExplorer'" class="fade-in mt-6 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+                <div x-show="configSection === 'fileExplorer' && currentUser.is_admin" class="fade-in mt-6 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
                     <div class="card p-6">
                         <div class="flex items-start justify-between gap-3">
                             <div>
@@ -1020,7 +1027,7 @@
                     </div>
                 </div>
 
-                <div x-show="configSection === 'crawler'" class="fade-in mt-6 grid grid-cols-1 gap-5 xl:grid-cols-2">
+                <div x-show="configSection === 'crawler' && currentUser.is_admin" class="fade-in mt-6 grid grid-cols-1 gap-5 xl:grid-cols-2">
                     <div class="card p-6">
                         <div class="flex items-start justify-between gap-3">
                             <div>
@@ -1116,6 +1123,11 @@
                             <p class="mt-2 text-base font-semibold" x-text="currentUser.role_label"></p>
                         </div>
                         <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <button @click="logout()" class="w-full rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">
+                                <i class="fas fa-sign-out-alt mr-2"></i>Déconnexion
+                            </button>
+                        </div>
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                             <label class="text-xs uppercase tracking-[0.22em] text-slate-400">Fuseau horaire d'affichage</label>
                             <select x-model="displayTimezone" @change="saveDisplayTimezone()" class="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
                                 <template x-for="timezone in timezoneOptions" :key="timezone">
@@ -1127,7 +1139,7 @@
                     </div>
                 </div>
 
-                <div x-show="configSection === 'dbAnalysis'" class="fade-in mt-6 card p-6">
+                <div x-show="configSection === 'dbAnalysis' && currentUser.is_admin" class="fade-in mt-6 card p-6">
                     <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                         <div>
                             <h3 class="text-xl font-semibold">Explain / Analyze DB</h3>
@@ -1465,7 +1477,7 @@
     <script>
         function openIndexApp() {
             return {
-                currentView: 'dashboard',
+                currentView: 'dashboard', // Sera mis à jour dans init() selon le rôle
                 configSection: 'crawler',
                 stats: {},
                 wsConnected: false,
@@ -1507,10 +1519,10 @@
                 },
                 loadingSummary: false,
                 currentUser: {
-                    name: 'Administrateur local',
-                    role: 'admin',
-                    role_label: 'Administrateur',
-                    is_admin: true
+                    name: 'Chargement...',
+                    role: 'guest',
+                    role_label: 'Invité',
+                    is_admin: false
                 },
                 crawlOverview: {
                     monitoring: {
@@ -1713,6 +1725,7 @@
                 async init() {
                     this.displayTimezone = localStorage.getItem('openindex.displayTimezone') || 'Europe/Paris';
                     this.preferredArchiveRoot = localStorage.getItem('openindex.fileExplorer.archiveRoot') || '';
+                    await this.initUser();
                     this.startRealtimeClock();
                     this.startAutoRefresh();
                     await this.loadSpaces();
@@ -1729,14 +1742,21 @@
                     this.startOperationsPolling();
                 },
 
-                openConfiguration(section = 'crawler') {
+                openConfiguration(section) {
                     this.showConfigOverlay = true;
-                    this.configSection = section;
-                    if (section === 'crawler') {
+                    // Définir la section par défaut en fonction du rôle
+                    if (!section) {
+                        this.configSection = this.currentUser.is_admin ? 'crawler' : 'profile';
+                    } else {
+                        this.configSection = section;
+                    }
+                    
+                    // Charger les données spécifiques à la section
+                    if (this.configSection === 'crawler') {
                         this.loadCrawlConfigs();
-                    } else if (section === 'dbAnalysis') {
+                    } else if (this.configSection === 'dbAnalysis') {
                         this.loadDbExplain();
-                    } else if (section === 'monitoring') {
+                    } else if (this.configSection === 'monitoring') {
                         this.loadMonitoringSummary();
                     }
                 },
@@ -2816,6 +2836,52 @@
                         this.wsConnected = false;
                         setTimeout(() => this.initWebSocket(), 5000);
                     };
+                },
+
+                initUser() {
+                    // Utiliser onPbReady pour initialiser l'utilisateur
+                    if (typeof onPbReady !== 'undefined') {
+                        onPbReady((pbInstance) => {
+                            if (pbInstance && pbInstance.authStore.isValid) {
+                                const user = pbInstance.authStore.model;
+                                this.currentUser = {
+                                    name: user.name || user.email || 'Utilisateur',
+                                    role: user.isAdmin ? 'admin' : 'user',
+                                    role_label: user.isAdmin ? 'Administrateur' : 'Utilisateur',
+                                    is_admin: user.isAdmin || false
+                                };
+                                console.log('Utilisateur authentifié:', this.currentUser);
+                                
+                                // Définir la vue initiale en fonction du rôle
+                                if (!this.currentUser.is_admin) {
+                                    this.currentView = 'fileExplorer';
+                                }
+                            }
+                        });
+                    }
+                    
+                    // Fallback si onPbReady n'est pas disponible
+                    if (typeof pb !== 'undefined' && pb.authStore.isValid) {
+                        const user = pb.authStore.model;
+                        this.currentUser = {
+                            name: user.name || user.email || 'Utilisateur',
+                            role: user.isAdmin ? 'admin' : 'user',
+                            role_label: user.isAdmin ? 'Administrateur' : 'Utilisateur',
+                            is_admin: user.isAdmin || false
+                        };
+                        console.log('Utilisateur authentifié (fallback direct):', this.currentUser);
+                        
+                        if (!this.currentUser.is_admin) {
+                            this.currentView = 'fileExplorer';
+                        }
+                    }
+                },
+
+                logout() {
+                    if (typeof pb !== 'undefined') {
+                        pb.authStore.clear();
+                    }
+                    window.location.href = '/login.html';
                 },
 
                 startRealtimeClock() {
@@ -4202,7 +4268,7 @@
                         this.loadingSearch = false;
                     }
                 }
-            };
+            }
         }
     </script>
 
@@ -4539,5 +4605,7 @@ te                                       class="w-20 rounded-xl border border-sl
             </div>
         </div>
     </div>
+    }
+</script>
 </body>
 </html>

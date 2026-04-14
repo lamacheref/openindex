@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pilotage de l'exploration</title>
+    <script src="/assets/auth.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        .admin-only {
+            color: #d9534f;
+            font-weight: bold;
+        }
+        .control-panel {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Pilotage de l'exploration <span class="admin-only">(Admin)</span></h1>
+        
+        <div id="exploration-content" style="display: none;">
+            <div class="control-panel">
+                <h2>Contrôles d'exploration</h2>
+                <p>Gérez les processus d'exploration et de crawl ici.</p>
+                <button id="start-crawl" class="btn">Démarrer le crawl</button>
+                <button id="stop-crawl" class="btn">Arrêter le crawl</button>
+            </div>
+            
+            <div class="status-panel" style="margin-top: 20px;">
+                <h3>Statut actuel</h3>
+                <p id="status-message">Chargement du statut...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // Protection par blocs plutôt que par page entière
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof pb !== 'undefined' && pbInitialized) {
+            protectExplorationContent();
+        } else {
+            onPbReady(() => {
+                protectExplorationContent();
+            });
+        }
+    });
+
+    function protectExplorationContent() {
+        // Vérifier l'authentification et les permissions
+        if (!checkAuth()) {
+            window.location.replace('/login.html');
+            return;
+        }
+        
+        if (!isAdmin()) {
+            // Masquer le contenu admin plutôt que de rediriger
+            document.getElementById('exploration-content').style.display = 'none';
+            const message = document.createElement('div');
+            message.innerHTML = '<p style="color: #d9534f; padding: 20px; text-align: center;">Cette section est réservée aux administrateurs.</p>';
+            document.querySelector('.container').prepend(message);
+            return;
+        }
+        
+        // Si admin, afficher le contenu et l'initialiser
+        console.log('Contenu exploration accessible pour:', pb.authStore.model.email);
+        document.getElementById('exploration-content').style.display = 'block';
+        
+        // Initialisation des contrôles d'exploration
+        document.getElementById('start-crawl').addEventListener('click', function() {
+            console.log('Démarrage du crawl...');
+            document.getElementById('status-message').textContent = 'Crawl en cours...';
+        });
+
+        document.getElementById('stop-crawl').addEventListener('click', function() {
+            console.log('Arrêt du crawl...');
+            document.getElementById('status-message').textContent = 'Crawl arrêté.';
+        });
+    }
+    </script>
+</body>
+</html>

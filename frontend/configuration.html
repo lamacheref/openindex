@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration du système</title>
+    <script src="/assets/auth.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        .admin-only {
+            color: #d9534f;
+            font-weight: bold;
+        }
+        .config-section {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Configuration du système <span class="admin-only">(Admin)</span></h1>
+        
+        <div id="config-content" style="display: none;">
+            <div class="config-section">
+                <h2>Paramètres généraux</h2>
+                <form id="general-settings">
+                    <div>
+                        <label for="app-name">Nom de l'application:</label>
+                        <input type="text" id="app-name" value="OpenIndex">
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <label for="max-threads">Threads maximum:</label>
+                        <input type="number" id="max-threads" value="4" min="1" max="16">
+                    </div>
+                    <button type="submit" style="margin-top: 15px;">Enregistrer</button>
+                </form>
+            </div>
+            
+            <div class="config-section" style="margin-top: 20px;">
+                <h2>Paramètres avancés</h2>
+                <p>Configuration des options avancées du système.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // Protection par blocs plutôt que par page entière
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof pb !== 'undefined' && pbInitialized) {
+            protectConfigContent();
+        } else {
+            onPbReady(() => {
+                protectConfigContent();
+            });
+        }
+    });
+
+    function protectConfigContent() {
+        // Vérifier l'authentification et les permissions
+        if (!checkAuth()) {
+            window.location.replace('/login.html');
+            return;
+        }
+        
+        if (!isAdmin()) {
+            // Masquer le contenu admin plutôt que de rediriger
+            document.getElementById('config-content').style.display = 'none';
+            const message = document.createElement('div');
+            message.innerHTML = '<p style="color: #d9534f; padding: 20px; text-align: center;">Cette section est réservée aux administrateurs.</p>';
+            document.querySelector('.container').prepend(message);
+            return;
+        }
+        
+        // Si admin, afficher le contenu et l'initialiser
+        console.log('Contenu configuration accessible pour:', pb.authStore.model.email);
+        document.getElementById('config-content').style.display = 'block';
+        
+        // Gestion du formulaire de configuration
+        document.getElementById('general-settings').addEventListener('submit', function(e) {
+            e.preventDefault();
+            console.log('Configuration enregistrée');
+            alert('Configuration enregistrée avec succès !');
+        });
+    }
+    </script>
+</body>
+</html>

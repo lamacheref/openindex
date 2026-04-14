@@ -333,40 +333,22 @@ BEGIN
     RETURN QUERY
     UPDATE archive_jobs AS aj
     SET status = 'running', started_at = CURRENT_TIMESTAMP
-<<<<<<< HEAD
     WHERE id = (
         SELECT id 
         FROM archive_jobs 
         WHERE status = 'pending' 
            OR (status = 'failed' AND archive_jobs.retry_count < archive_jobs.max_retries)
         ORDER BY archive_jobs.priority ASC, archive_jobs.created_at ASC
-=======
-    WHERE id = (
-        SELECT id 
-        FROM archive_jobs 
-        WHERE status = 'pending' 
-           OR (status = 'failed' AND archive_jobs.retry_count < archive_jobs.max_retries)
-        ORDER BY archive_jobs.priority ASC, archive_jobs.created_at ASC
->>>>>>> e5d80f2 (Mise à jour des fichiers et ajout de nouveaux scripts et tests)
         LIMIT 1
         FOR UPDATE SKIP LOCKED
     )
-    RETURNING 
-<<<<<<< HEAD
+    RETURNING
         archive_jobs.id,
         archive_jobs.job_type,
         archive_jobs.source_path,
         archive_jobs.dest_path,
         archive_jobs.priority,
         archive_jobs.retry_count AS current_retry_count;
-=======
-        archive_jobs.id,
-        archive_jobs.job_type,
-        archive_jobs.source_path,
-        archive_jobs.dest_path,
-        archive_jobs.priority,
-        archive_jobs.retry_count AS current_retry_count;
->>>>>>> e5d80f2 (Mise à jour des fichiers et ajout de nouveaux scripts et tests)
 END;
 $$ LANGUAGE plpgsql;
 

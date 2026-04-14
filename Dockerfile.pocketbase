@@ -1,0 +1,24 @@
+FROM alpine:latest
+
+# Install dependencies
+RUN apk add --no-cache ca-certificates wget
+
+# Download PocketBase
+ENV POCKETBASE_VERSION=0.20.0
+RUN wget -O /usr/local/bin/pocketbase \
+    https://github.com/pocketbase/pocketbase/releases/download/v${POCKETBASE_VERSION}/pocketbase_${POCKETBASE_VERSION}_linux_amd64.zip && \
+    unzip /usr/local/bin/pocketbase -d /usr/local/bin/ && \
+    chmod +x /usr/local/bin/pocketbase && \
+    rm /usr/local/bin/pocketbase.zip
+
+# Create directory for PocketBase data
+RUN mkdir -p /pb_data /pb_hooks /pb_migrations
+
+# Set working directory
+WORKDIR /pb_data
+
+# Expose port
+EXPOSE 8090
+
+# Command to run PocketBase
+CMD ["pocketbase", "serve", "--dir", "/pb_data"]

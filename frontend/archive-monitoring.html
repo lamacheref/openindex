@@ -7,6 +7,7 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 
     <script src="/assets/alpine.min.js" defer></script>
+    <script src="/assets/auth.js" defer></script>
     <link rel="stylesheet" href="/assets/tailwind.css">
     <link rel="stylesheet" href="/assets/fontawesome/css/all.min.css">
 
@@ -449,7 +450,50 @@ function archiveMonitoring() {
             max_size_bytes: null
         },
         
+        initUser() {
+            // Vérifier l'authentification et rediriger si nécessaire
+            if (typeof onPbReady !== 'undefined') {
+                onPbReady((pbInstance) => {
+                    if (pbInstance && pbInstance.authStore.isValid) {
+                        const user = pbInstance.authStore.model;
+                        this.currentUser = {
+                            name: user.name || user.email || 'Utilisateur',
+                            role: user.isAdmin ? 'admin' : 'user',
+                            role_label: user.isAdmin ? 'Administrateur' : 'Utilisateur',
+                            is_admin: user.isAdmin || false
+                        };
+                        
+                        // Rediriger les non-admins vers l'explorateur de fichiers
+                        if (!this.currentUser.is_admin) {
+                            window.location.href = '/index.html';
+                        }
+                    } else {
+                        // Utilisateur non authentifié - rediriger vers login
+                        window.location.href = '/login.html';
+                    }
+                });
+            } else if (typeof pb !== 'undefined' && pb.authStore.isValid) {
+                // Fallback direct
+                const user = pb.authStore.model;
+                this.currentUser = {
+                    name: user.name || user.email || 'Utilisateur',
+                    role: user.isAdmin ? 'admin' : 'user',
+                    role_label: user.isAdmin ? 'Administrateur' : 'Utilisateur',
+                    is_admin: user.isAdmin || false
+                };
+                
+                // Rediriger les non-admins vers l'explorateur de fichiers
+                if (!this.currentUser.is_admin) {
+                    window.location.href = '/index.html';
+                }
+            } else {
+                // Utilisateur non authentifié - rediriger vers login
+                window.location.href = '/login.html';
+            }
+        },
+        
         async init() {
+            this.initUser();
             await this.refreshData();
             // Auto-refresh every 30 seconds
             setInterval(() => this.refreshData(), 30000);

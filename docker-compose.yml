@@ -109,11 +109,28 @@ services:
       OPENINDEX_APP_VERSION: ${OPENINDEX_APP_VERSION:-0.6.0}
       OPENINDEX_BUILD_COMMIT: ${OPENINDEX_BUILD_COMMIT:-dev}
       OPENINDEX_BUILD_DATE: ${OPENINDEX_BUILD_DATE:-unknown}
+      POCKETBASE_URL: http://pocketbase:8090
     ports:
       - "${OPENINDEX_UI_PORT:-3000}:3000"
     depends_on:
       api:
         condition: service_started
+      pocketbase:
+        condition: service_started
+    networks:
+      - openindex-network
+
+  # PocketBase - Authentication & Authorization
+  pocketbase:
+    image: adrianmusante/pocketbase:latest
+    container_name: openindex-pocketbase
+    restart: unless-stopped
+    environment:
+      TZ: ${OPENINDEX_TIMEZONE:-Europe/Paris}
+    volumes:
+      - pocketbase_data:/pb/pb_data
+    ports:
+      - "${POCKETBASE_PORT:-8090}:8090"
     networks:
       - openindex-network
 
@@ -190,6 +207,8 @@ volumes:
   postgres_data:
     driver: local
   logs_data:
+    driver: local
+  pocketbase_data:
     driver: local
 
 networks:
