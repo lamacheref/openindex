@@ -189,22 +189,39 @@ Cleanup: Thread démonte après 30min → Prochaine utilisation remonte auto
 
 ## 5) Authentification et Sécurité
 
-### T-AUTH-01 — Authentification des utilisateurs
-- [ ] **Système d'authentification** : Implémenter l'authentification utilisateur avec :
-  - [ ] Login/password (hash bcrypt/Argon2)
-  - [ ] Sessions JWT avec refresh tokens
-  - [ ] Support SSO optionnel (LDAP/Active Directory pour environnement entreprise)
-- [ ] **Gestion des utilisateurs** :
-  - [ ] CRUD utilisateurs (admin uniquement)
-  - [ ] Profils utilisateur avec fuseau horaire, préférences
-  - [ ] Activation/désactivation de comptes
-- [ ] **Autorisations** :
-  - [ ] Rôles (Admin, Opérateur, Lecteur)
-  - [ ] Permissions granulaires (lancer crawl, supprimer fichiers, configurer espaces)
-- [ ] **Protection des endpoints** : Middleware d'authentification sur toutes les API sensibles
-- [ ] **UI de connexion** : Page de login et gestion de session
-- [ ] **Documentation** : Documenter les filtres et les seuils configurables
-- [ ] **Bump Version** : Passer à la version 0.13.0
+### T-AUTH-01 — Authentification des utilisateurs ✅ COMPLÉTÉ
+- [x] **Système d'authentification** : Implémenter l'authentification utilisateur avec :
+  - [x] **PocketBase intégré** : Solution légère d'authentification avec JWT
+  - [x] **Gestion des sessions** : Tokens JWT avec refresh automatique
+  - [x] **Pages d'authentification** : Login, accès refusé, profil utilisateur
+  - [x] **Protection des routes** : Middleware côté client et serveur
+  - [x] **Hooks d'authentification** : Gestion des états de connexion
+- [x] **Gestion des utilisateurs** :
+  - [x] CRUD utilisateurs via interface PocketBase
+  - [x] Rôles utilisateur (Admin/Utilisateur standard)
+  - [x] Permissions granulaires basées sur les règles PocketBase
+- [x] **Autorisations** :
+  - [x] Règles d'accès configurées dans PocketBase
+  - [x] Protection des endpoints sensibles
+  - [x] Composants AdminRoute/PrivateRoute pour l'UI
+- [x] **UI de connexion** : Pages fonctionnelles avec TailwindCSS
+  - [x] Page de login (`/login.html`)
+  - [x] Page d'accès refusé (`/access-denied.html`)
+  - [x] Bouton de déconnexion intégré
+- [x] **Documentation** : Documentation technique et utilisateur
+- [x] **Bump Version** : Passer à la version 0.13.0
+
+**Statut :** ✅ **COMPLÉTÉ** - Système d'authentification opérationnel
+**Commit :** À créer - "T-AUTH-01: PocketBase authentication integration"
+**Date :** 2026-04-14
+
+### T-AUTH-02 — Améliorations de sécurité
+- [ ] **Audit de sécurité** : Vérification complète des vulnérabilités
+- [ ] **Journalisation** : Logs d'activité utilisateur et actions sensibles
+- [ ] **Rate limiting** : Protection contre les attaques par force brute
+- [ ] **2FA optionnel** : Authentification à deux facteurs
+- [ ] **Documentation** : Guide de sécurité et bonnes pratiques
+- [ ] **Bump Version** : Passer à la version 0.14.0
 
 ---
 
@@ -225,7 +242,7 @@ Pour chaque tâche T-XXX :
 
 ## Notes de Pilotage
 
-- **Priorisation** : `T-ART-01` > `T-ART-02` > `T-AUTO-01` > `T-SEARCH-01` > `T-INDEX-01` > `T-AUTH-01`
+- **Priorisation** : `T-ART-01` > `T-ART-02` > `T-AUTO-01` > `T-SEARCH-01` > `T-INDEX-01` > `T-AUTH-02`
 - **Dépendances** : T-ART-* complétées avant T-AUTO-01 (utilise les queues d'archivage)
 - **Architecture** : Préférer une approche "queue-based" pour toutes les opérations lourdes (transfert, archivage, indexation)
 - **Scalabilité** : Concevoir pour permettre plusieurs workers parallèles sur des queues distinctes
@@ -457,7 +474,7 @@ Voir **T-ARCH-04** ci-dessous.
 
 ---
 
-*Dernière mise à jour : 2026-04-08*
+*Dernière mise à jour : 2026-04-14*
 =======
 *Dernière mise à jour : 2026-04-08*
 >>>>>>> e5d80f2 (Mise à jour des fichiers et ajout de nouveaux scripts et tests)

@@ -48,6 +48,7 @@ Industrialiser OpenIndex pour un usage régulier en environnement SMB volumineux
 - Stabiliser le transfert de données entre sources et archives via queues de travail.
 - Implémenter un système complet de gestion du cycle de vie des données.
 - Mettre en place l'archivage automatique configurable.
+- Sécuriser l'application avec un système d'authentification robuste.
 
 ### Livraisons J6
 - **T-ARCH-01** (✅ complété 2026-04-02) : Archive Queue System
@@ -78,8 +79,15 @@ Industrialiser OpenIndex pour un usage régulier en environnement SMB volumineux
   - ✅ API endpoints `/api/smb-mounts` pour monitoring et contrôle
   - ✅ Résout Issues #80 et #85 (credentials SMB incorrects)
 
+- **T-AUTH-01** (✅ complété 2026-04-14) : Authentification des utilisateurs
+  - ✅ Intégration PocketBase pour l'authentification
+  - ✅ Pages de login et accès refusé fonctionnelles
+  - ✅ Protection des routes avec règles granulaires
+  - ✅ Gestion des sessions JWT
+  - ✅ Interface d'administration PocketBase configurée
+
 ### Prochaines livraisons prévues
 - **T-ART-01/02/03** : Gestion des artefacts et doublons
 - **T-SEARCH-01** : Moteur de recherche et sommaire
 - **T-AUTO-01** : Archivage automatique intelligent
-- **T-AUTH-01** : Authentification et sécurité
+- **T-AUTH-02** : Améliorations de sécurité (2FA, logs, rate limiting)
