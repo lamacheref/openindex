@@ -553,7 +553,8 @@
                     share: '',
                     remote_path: '',
                     username: '',
-                    password: ''
+                    password: '',
+                    domain: ''
                 },
                 
                 // Computed
@@ -669,21 +670,27 @@
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 name: this.newConfig.name,
-                                host: this.newConfig.host,
-                                share: this.newConfig.share,
-                                remote_path: this.newConfig.remote_path,
-                                username: this.newConfig.username,
-                                password: this.newConfig.password
+                                domain_zone: this.newConfig.domain || 'WORKGROUP',
+                                start_path: `//${this.newConfig.host}/${this.newConfig.share}${this.newConfig.remote_path ? '/' + this.newConfig.remote_path : ''}`,
+                                connection: {
+                                    username: this.newConfig.username,
+                                    password: this.newConfig.password,
+                                    domain: this.newConfig.domain || ''
+                                },
+                                is_archive: false,
+                                include_paths: [],
+                                exclude_paths: []
                             })
                         });
                         
                         if (res.ok) {
                             this.showNewConfigModal = false;
-                            this.newConfig = { name: '', host: '', share: '', remote_path: '', username: '', password: '' };
+                            this.newConfig = { name: '', host: '', share: '', remote_path: '', username: '', password: '', domain: '' };
                             await this.refreshData();
                         } else {
                             const err = await res.json();
-                            alert('Erreur: ' + (err.detail || 'Impossible de créer la source'));
+                            console.error('Erreur API:', err);
+                            alert('Erreur: ' + JSON.stringify(err.detail || err, null, 2));
                         }
                     } catch (err) {
                         console.error('Erreur création config:', err);
@@ -694,6 +701,10 @@
                 },
                 
                 async deleteConfig(configId) {
+                    alert('Suppression non implémentée dans l\'API pour l\'instant');
+                    return;
+                    
+                    /* TODO: Implémenter l'endpoint DELETE /api/crawl-configs/{id}
                     if (!confirm('Êtes-vous sûr de vouloir supprimer cette source ?')) return;
                     
                     try {
@@ -707,6 +718,7 @@
                     } catch (err) {
                         console.error('Erreur suppression config:', err);
                     }
+                    */
                 },
                 
                 async startIndexing(configId) {
@@ -815,6 +827,11 @@
                         <input type="password" x-model="newConfig.password" placeholder="••••••••"
                                class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                     </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Domaine Windows</label>
+                    <input type="text" x-model="newConfig.domain" placeholder="ex: WORKGROUP ou MONDOMAINE (optionnel)"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                 </div>
                 <div class="bg-blue-50 rounded-lg p-3 text-sm">
                     <p class="text-blue-800"><i class="fas fa-info-circle mr-1"></i> Cette source sera utilisée pour indexer les fichiers SMB.</p>
