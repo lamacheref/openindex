@@ -142,7 +142,7 @@ class IndexerWorker:
     def _fetch_next_job(self) -> Optional[IndexerJob]:
         """Récupère le prochain job pending depuis la base de données"""
         try:
-            from src.postgres_adapter import PostgreSQLAdapter
+            from src.api.main import PostgreSQLAdapter
             import os
             
             # Configuration DB
@@ -295,7 +295,7 @@ class IndexerWorker:
     def _get_smb_config(self, config_id: str) -> Optional[Dict]:
         """Récupère la configuration SMB depuis la DB"""
         try:
-            from src.postgres_adapter import PostgreSQLAdapter
+            from src.api.main import PostgreSQLAdapter
             import os
             
             config = {
@@ -307,16 +307,34 @@ class IndexerWorker:
             }
             
             db = PostgreSQLAdapter(config)
-            result = db.get_crawl_config(config_id)
+            result = db.get_crawl_config_by_id(config_id)
             
             if result:
+                # Parser start_path pour extraire host, share et remote_path
+                # Format attendu: //host/share/remote_path
+                import re
+                start_path = result.get('start_path', '')
+                path_match = re.match(r'^//([^/]+)/([^/]+)(?:/(.*))?$', start_path) if start_path else None
+                
+                if path_match:
+                    host = path_match.group(1)
+                    share = path_match.group(2)
+                    remote_path = path_match.group(3) or ''
+                else:
+                    # Fallback: essayer de parser manuellement
+                    parts = start_path.replace('//', '').split('/')
+                    host = parts[0] if len(parts) > 0 else ''
+                    share = parts[1] if len(parts) > 1 else ''
+                    remote_path = '/'.join(parts[2:]) if len(parts) > 2 else ''
+                
                 return {
                     'id': result['id'],
-                    'host': result['host'],
-                    'share': result['share'],
-                    'remote_path': result.get('remote_path', ''),
-                    'username': result['username'],
-                    'password': result['password'],
+                    'host': host,
+                    'share': share,
+                    'remote_path': remote_path,
+                    'username': result.get('connection_username', ''),
+                    'password': '',  # Le mot de passe n'est pas retourné par l'API pour des raisons de sécurité
+                    'domain': result.get('connection_domain', ''),
                     'name': result.get('name', 'Unnamed')
                 }
             return None
@@ -328,7 +346,7 @@ class IndexerWorker:
     def _insert_file(self, file_info: Dict, config_id: str):
         """Insère un fichier dans la base de données"""
         try:
-            from src.postgres_adapter import PostgreSQLAdapter
+            from src.api.main import PostgreSQLAdapter
             import os
             
             db_config = {
@@ -348,7 +366,7 @@ class IndexerWorker:
     def _update_job_status(self, job: IndexerJob):
         """Met à jour le statut du job dans la DB"""
         try:
-            from src.postgres_adapter import PostgreSQLAdapter
+            from src.api.main import PostgreSQLAdapter
             import os
             
             db_config = {
@@ -390,7 +408,7 @@ class IndexerWorker:
     def _update_job_progress(self, job: IndexerJob):
         """Met à jour la progression du job"""
         try:
-            from src.postgres_adapter import PostgreSQLAdapter
+            from src.api.main import PostgreSQLAdapter
             import os
             
             db_config = {

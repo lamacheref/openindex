@@ -119,10 +119,6 @@
             
             <!-- Navigation -->
             <nav class="flex-1 p-3 space-y-1">
-                <a href="index.html" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-600">
-                    <i class="fas fa-home w-5 text-center"></i>
-                    <span class="font-medium">Console</span>
-                </a>
                 
                 <button @click="currentView = 'dashboard'" 
                         :class="{ 'active': currentView === 'dashboard' }"
@@ -146,13 +142,6 @@
                         class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-600">
                     <i class="fas fa-folder-tree w-5 text-center"></i>
                     <span class="font-medium">Sources</span>
-                </button>
-                
-                <button @click="currentView = 'archive'"
-                        :class="{ 'active': currentView === 'archive' }"
-                        class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-600">
-                    <i class="fas fa-archive w-5 text-center"></i>
-                    <span class="font-medium">Archivage</span>
                 </button>
             </nav>
             
@@ -194,7 +183,7 @@
                         <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
                     </button>
                     
-                    <button @click="showNewJobModal = true"
+                    <button x-show="currentView === 'jobs'" @click="showNewJobModal = true"
                             class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors shadow-sm">
                         <i class="fas fa-plus"></i>
                         Nouveau Job
@@ -416,7 +405,7 @@
                                         </div>
                                         <div>
                                             <h4 class="font-semibold text-gray-900" x-text="config.name"></h4>
-                                            <p class="text-sm text-gray-500" x-text="config.host"></p>
+                                            <p class="text-sm text-gray-500" x-text="config.domain_zone"></p>
                                         </div>
                                     </div>
                                     <div class="flex gap-1">
@@ -434,20 +423,20 @@
                                 <div class="space-y-2 text-sm">
                                     <div class="flex items-center gap-2 text-gray-600">
                                         <i class="fas fa-folder w-4 text-center text-gray-400"></i>
-                                        <span class="truncate" x-text="`//${config.host}/${config.share}`"></span>
+                                        <span class="truncate" x-text="config.start_path"></span>
                                     </div>
                                     <div class="flex items-center gap-2 text-gray-600">
                                         <i class="fas fa-user w-4 text-center text-gray-400"></i>
-                                        <span x-text="config.username"></span>
+                                        <span x-text="config.connection_username || 'Non configuré'"></span>
                                     </div>
-                                    <div x-show="config.remote_path" class="flex items-center gap-2 text-gray-600">
-                                        <i class="fas fa-folder-tree w-4 text-center text-gray-400"></i>
-                                        <span class="truncate" x-text="config.remote_path"></span>
+                                    <div x-show="config.connection_domain" class="flex items-center gap-2 text-gray-600">
+                                        <i class="fas fa-building w-4 text-center text-gray-400"></i>
+                                        <span class="truncate" x-text="config.connection_domain"></span>
                                     </div>
                                 </div>
                                 
                                 <div class="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
-                                    <span class="text-xs text-gray-500">Dernière indexation: <span x-text="config.last_indexed || 'Jamais'"></span></span>
+                                    <span class="text-xs text-gray-500">Créée le: <span x-text="new Date(config.created_at).toLocaleDateString('fr-FR')"></span></span>
                                     <button @click="startIndexing(config.id)" 
                                             class="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1">
                                         <i class="fas fa-play"></i>

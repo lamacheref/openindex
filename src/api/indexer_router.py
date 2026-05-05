@@ -69,7 +69,7 @@ class WorkerActionResponse(BaseModel):
 def get_db_adapter():
     """Retourne l'adaptateur de base de données"""
     try:
-        from src.postgres_adapter import PostgreSQLAdapter
+        from src.api.main import PostgreSQLAdapter
         import os
         
         config = {
@@ -253,7 +253,7 @@ async def create_indexer_job(payload: IndexerJobCreate):
         db = get_db_adapter()
         
         # Vérifier que la config existe
-        config = db.get_crawl_config(payload.config_id)
+        config = db.get_crawl_config_by_id(payload.config_id)
         if not config:
             raise HTTPException(status_code=404, detail="Configuration introuvable")
         
@@ -269,10 +269,10 @@ async def create_indexer_job(payload: IndexerJobCreate):
         
         results = db.execute_query(query, [
             job_id,
-            f"//{config['host']}/{config['share']}{config.get('remote_path', '')}",
+            config.get('start_path', ''),
             payload.config_id,
             config.get('name', 'Unnamed')
-        ])
+        ], commit=True)
         
         if not results:
             raise HTTPException(status_code=500, detail="Échec de la création du job")
