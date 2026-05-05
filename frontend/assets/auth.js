@@ -56,8 +56,10 @@ function initPocketBase() {
 document.addEventListener('DOMContentLoaded', initPocketBase);
 
 // Vérifier si l'utilisateur est connecté
+// AUTHENTIFICATION DESACTIVEE POUR LE MOMENT - TOUJOURS RETOURNER TRUE
 function checkAuth() {
-  return pbInitialized && pb.authStore.isValid;
+  return true; // Authentification désactivée temporairement
+  // return pbInitialized && pb.authStore.isValid;
 }
 
 // Normaliser la détection du rôle admin entre PocketBase et le fallback local
