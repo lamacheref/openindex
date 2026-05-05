@@ -1,0 +1,48 @@
+# Dockerfile pour le service Indexer Worker
+FROM python:3.11-slim
+
+ARG OPENINDEX_APP_VERSION=0.7.0
+ARG OPENINDEX_BUILD_COMMIT=dev
+ARG OPENINDEX_BUILD_DATE=unknown
+
+LABEL maintainer="OpenIndex Team"
+LABEL version="${OPENINDEX_APP_VERSION}"
+LABEL description="Indexer Worker Service - Indexation de fichiers"
+
+# Variables d'environnement
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV TZ=Europe/Paris
+ENV OPENINDEX_APP_VERSION=${OPENINDEX_APP_VERSION}
+ENV OPENINDEX_BUILD_COMMIT=${OPENINDEX_BUILD_COMMIT}
+ENV OPENINDEX_BUILD_DATE=${OPENINDEX_BUILD_DATE}
+
+# Dépendances système
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copier et installer les dépendances Python
+COPY requirements/dev.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copier les sources
+COPY VERSION ./VERSION
+COPY src/ ./src/
+COPY config/ ./config/
+COPY database/ ./database/
+
+# Créer les répertoires nécessaires
+RUN mkdir -p logs data
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "from src.indexer_worker import get_worker; w = get_worker(); print('OK' if w.running else 'STOPPED')" || exit 1
+
+# Commande de démarrage
+CMD ["python", "-c", "from src.indexer_worker import start_worker; import time; w = start_worker(); print('Indexer Worker started'); [time.sleep(1) for _ in iter(int, 1)]"]

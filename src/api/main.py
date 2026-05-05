@@ -94,6 +94,10 @@ app.include_router(duplicate_details_router)
 from src.api.artefact_filters_router import router as artefact_filters_router
 app.include_router(artefact_filters_router)
 
+# Inclusion du router pour le service d'indexation (Indexer Worker)
+from src.api.indexer_router import router as indexer_router
+app.include_router(indexer_router)
+
 # Configuration CORS pour le frontend
 app.add_middleware(
     CORSMiddleware,
