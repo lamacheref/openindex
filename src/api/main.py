@@ -1105,6 +1105,22 @@ class PostgreSQLAdapter:
             "created_at": row[9],
         }
 
+    def delete_crawl_config(self, config_id: str) -> bool:
+        """Supprime une configuration de crawl par son ID"""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        "DELETE FROM crawl_configs WHERE id::text = %s RETURNING id",
+                        [config_id]
+                    )
+                    result = cursor.fetchone()
+                    conn.commit()
+                    return result is not None
+        except Exception as e:
+            logger.error(f"Erreur lors de la suppression de la config {config_id}: {e}")
+            return False
+
     def start_crawl(self, config_id: str) -> Optional[Dict[str, Any]]:
         existing_run = self.execute_query(
             """
@@ -3266,6 +3282,31 @@ async def update_crawl_config(config_id: str, payload: CrawlConfigUpdate):
     except Exception as e:
         logger.error(f"Erreur update_crawl_config: {e}")
         raise HTTPException(status_code=500, detail="Erreur lors de la mise à jour de la configuration d'exploration")
+
+
+@app.delete("/api/crawl-configs/{config_id}")
+async def delete_crawl_config_endpoint(config_id: str):
+    """Supprime une configuration de crawl"""
+    try:
+        db = get_db_adapter()
+        ensure_crawl_storage_ready(db)
+        
+        # Vérifier d'abord si la config existe
+        config = db.get_crawl_config_by_id(config_id)
+        if not config:
+            raise HTTPException(status_code=404, detail="Configuration introuvable")
+        
+        # Supprimer la config
+        success = db.delete_crawl_config(config_id)
+        if success:
+            return {"success": True, "message": "Configuration supprimée avec succès"}
+        else:
+            raise HTTPException(status_code=500, detail="Échec de la suppression")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur delete_crawl_config: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la suppression: {e}")
 
 
 @app.post("/api/crawls/start", response_model=CrawlRun)
