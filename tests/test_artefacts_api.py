@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 from datetime import datetime
 
 # Importer l'application FastAPI
-from src.api.main import app
+from backend.src.api.main import app
 
 client = TestClient(app)
 

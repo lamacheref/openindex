@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch, MagicMock
 # Ajouter le chemin du projet au path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from src.smb_crawler import SMBCrawler
+from backend.src.smb_crawler import SMBCrawler
 
 
 def test_queue_initialization():

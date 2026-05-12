@@ -7,7 +7,7 @@ import unittest
 import os
 import sqlite3
 from unittest.mock import Mock, patch
-from src.smb_crawler import SMBCrawler
+from backend.src.smb_crawler import SMBCrawler
 
 
 class TestSMBCrawler(unittest.TestCase):

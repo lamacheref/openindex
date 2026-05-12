@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from unittest.mock import MagicMock, patch
 
 # Importer l'application FastAPI
-from src.api.main import app
+from backend.src.api.main import app
 
 client = TestClient(app)
 
