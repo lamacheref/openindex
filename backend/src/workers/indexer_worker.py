@@ -413,8 +413,13 @@ class IndexerWorker:
             logger.error(f"Erreur récupération config: {e}")
             return None
     
+    def _is_garbage_file(self, file_name: str) -> bool:
+        """Détecte si un fichier correspond à un pattern indésirable"""
+        garbage_patterns = ['.tmp', '~', 'Thumbs.db', '.DS_Store', '.bak', '.swp']
+        return any(file_name.endswith(pattern) or file_name.startswith(pattern) for pattern in garbage_patterns)
+
     def _insert_file(self, file_info: Dict, config_id: str):
-        """Insère un fichier dans la base de données avec détection de changements"""
+        """Insère un fichier dans la base de données avec détection de changements et gestion des ordures"""
         try:
             from backend.src.database.postgres_adapter import PostgreSQLAdapter
             import os
@@ -431,9 +436,13 @@ class IndexerWorker:
             
             # Vérifier si le fichier a changé depuis la dernière indexation
             file_path = file_info.get('path', '')
+            file_name = file_info.get('name', '')
             file_hash = file_info.get('checksum', '')
             file_size = file_info.get('size', 0)
             file_mtime = file_info.get('modified_at', datetime.now(timezone.utc))
+            
+            # Détecter si c'est un fichier indésirable (garbage)
+            is_garbage = self._is_garbage_file(file_name)
             
             # Appeler la fonction check_file_changed
             changed = db.execute_query(
@@ -448,7 +457,25 @@ class IndexerWorker:
             if has_changed:
                 # Fichier nouveau ou modifié → insérer/mettre à jour
                 db.insert_file(file_info, config_id)
-                logger.info(f"Fichier indexé (changé): {file_path}")
+                
+                if is_garbage:
+                    logger.info(f"Fichier indexé (garbage): {file_path}")
+                    # Marquer comme garbage dans la base
+                    db.execute_query(
+                        """
+                        INSERT INTO garbage_files (file_id, pattern, detected_at)
+                        VALUES (
+                            (SELECT id FROM indexed_files_optimized WHERE path = %s),
+                            %s,
+                            CURRENT_TIMESTAMP
+                        )
+                        ON CONFLICT (file_id) DO NOTHING
+                        """,
+                        [file_path, self._get_garbage_pattern(file_name)],
+                        fetch=False
+                    )
+                else:
+                    logger.info(f"Fichier indexé (changé): {file_path}")
                 
                 # Mettre à jour la table indexed_files
                 db.execute_query(
@@ -482,6 +509,22 @@ class IndexerWorker:
             
         except Exception as e:
             logger.warning(f"Erreur insertion fichier: {e}")
+
+    def _get_garbage_pattern(self, file_name: str) -> str:
+        """Retourne le pattern correspondant au fichier indésirable"""
+        if file_name.endswith('.tmp'):
+            return '*.tmp'
+        elif file_name.startswith('~'):
+            return '~*'
+        elif file_name == 'Thumbs.db':
+            return 'Thumbs.db'
+        elif file_name == '.DS_Store':
+            return '.DS_Store'
+        elif file_name.endswith('.bak'):
+            return '*.bak'
+        elif file_name.endswith('.swp'):
+            return '*.swp'
+        return 'unknown'
     
     def _mark_deleted_files(self, job: IndexerJob):
         """Marque les fichiers supprimés depuis la dernière indexation"""
