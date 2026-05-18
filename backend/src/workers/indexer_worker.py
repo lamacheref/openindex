@@ -78,8 +78,10 @@ class IndexerWorker:
     - Fournit des métriques en temps réel
     """
     
-    def __init__(self, poll_interval: int = 5):
+    def __init__(self, poll_interval: int = 5, slow_queue_enabled: bool = True):
         self.poll_interval = poll_interval
+        self.slow_queue_enabled = slow_queue_enabled
+        self.SLOW_THRESHOLD_BYTES = 200 * 1024 * 1024  # 200 Mo
         self.running = False
         self.current_job: Optional[IndexerJob] = None
         self.jobs_history: List[IndexerJob] = []
@@ -157,13 +159,16 @@ class IndexerWorker:
             db = PostgreSQLAdapter(config)
             
             # Récupérer le plus ancien job pending
+            # Priorité à la queue rapide (fast) → slow traitée entre deux fast
             query = """
                 SELECT id, path, config_id, config_name, status, created_at,
                        started_at, completed_at, files_found, files_indexed, 
-                       bytes_total, error_message
+                       bytes_total, error_message, queue_type
                 FROM indexer_jobs
                 WHERE status = 'pending'
-                ORDER BY created_at ASC
+                ORDER BY 
+                    CASE WHEN queue_type = 'fast' THEN 0 ELSE 1 END,
+                    created_at ASC
                 LIMIT 1
             """
             
@@ -185,6 +190,8 @@ class IndexerWorker:
                     bytes_total=row[10] or 0,
                     error_message=row[11]
                 )
+                queue_type = row[12] if len(row) > 12 else 'fast'
+                logger.info(f"Job {job.id} récupéré (queue: {queue_type})")
                 return job
             
             return None
@@ -223,6 +230,10 @@ class IndexerWorker:
             self._add_to_history(job)
             self.current_job = None
     
+    def _get_queue_type(self, file_size: int) -> str:
+        """Détermine le type de queue en fonction de la taille du fichier"""
+        return 'slow' if file_size >= self.SLOW_THRESHOLD_BYTES else 'fast'
+
     def _index_path(self, job: IndexerJob):
         """Indexe récursivement un chemin"""
         from backend.src.crawl_utils import SMBClient, normalize_smb_path, get_file_info
@@ -263,9 +274,17 @@ class IndexerWorker:
                 if self._stop_event.is_set():
                     raise InterruptedError("Indexation interrompue")
                 
-                full_remote = f"{remote_path}/{entry.filename}" if remote_path else entry.filename
+                # Support les deux formats : dict (crawl_utils) et objets (smbprotocol)
+                if isinstance(entry, dict):
+                    entry_name = entry.get('name', '')
+                    is_directory = entry.get('is_directory', False)
+                else:
+                    entry_name = getattr(entry, 'filename', '')
+                    is_directory = getattr(entry, 'isDirectory', False)
                 
-                if entry.isDirectory:
+                full_remote = f"{remote_path}/{entry_name}" if remote_path else entry_name
+                
+                if is_directory:
                     # Récursion dans les sous-dossiers
                     self._crawl_recursive(client, full_remote, job, config)
                 else:
@@ -275,15 +294,29 @@ class IndexerWorker:
                     try:
                         file_info = get_file_info(client, full_remote)
                         
-                        # Insérer dans la base
-                        self._insert_file(file_info, job.config_id)
-                        job.files_indexed += 1
-                        job.bytes_total += file_info.get('size', 0)
+                        if not file_info:
+                            continue
+                        
+                        file_size = file_info.get('size', 0)
+                        
+                        # Files différenciées : si le job est en mode slow et fichier fast,
+                        # on l'indexe normalement. Si le fichier est slow et le job fast,
+                        # on crée un sous-job dédié pour la queue lente.
+                        file_queue_type = self._get_queue_type(file_size)
+                        
+                        if file_queue_type == 'slow' and self.slow_queue_enabled:
+                            # Créer un job dédié pour les gros fichiers
+                            self._create_slow_file_job(file_info, job)
+                        else:
+                            # Insérer directement pour les petits fichiers
+                            self._insert_file(file_info, job.config_id)
+                            job.files_indexed += 1
+                            job.bytes_total += file_size
                         
                         # Mettre à jour les stats toutes les 100 fichiers
-                        if job.files_indexed % 100 == 0:
+                        if job.files_found % 100 == 0:
                             self._update_job_progress(job)
-                            logger.info(f"Progression job {job.id}: {job.files_indexed} fichiers")
+                            logger.info(f"Progression job {job.id}: {job.files_found} fichiers trouvés")
                         
                     except Exception as e:
                         logger.warning(f"Erreur indexation fichier {full_remote}: {e}")
@@ -291,6 +324,40 @@ class IndexerWorker:
         except Exception as e:
             logger.error(f"Erreur crawl {remote_path}: {e}")
             raise
+    
+    def _create_slow_file_job(self, file_info: Dict, parent_job: IndexerJob):
+        """Crée un job séparé pour un fichier >= 200Mo dans la queue lente"""
+        try:
+            from backend.src.database.postgres_adapter import PostgreSQLAdapter
+            import os
+            import uuid
+            
+            db_config = {
+                'host': os.getenv('POSTGRES_HOST', 'postgres'),
+                'port': int(os.getenv('POSTGRES_PORT', 5432)),
+                'database': os.getenv('POSTGRES_DB', 'openindex'),
+                'user': os.getenv('POSTGRES_USER', 'openindex_user'),
+                'password': os.getenv('POSTGRES_PASSWORD', 'openindex_secure_password')
+            }
+            
+            db = PostgreSQLAdapter(db_config)
+            slow_job_id = str(uuid.uuid4())
+            
+            db.execute_query(
+                """
+                INSERT INTO indexer_jobs (id, path, config_id, config_name, status, 
+                                          created_at, queue_type)
+                VALUES (%s, %s, %s, %s, 'pending', CURRENT_TIMESTAMP, 'slow')
+                """,
+                [slow_job_id, file_info.get('path', ''), parent_job.config_id,
+                 parent_job.config_name],
+                fetch=False
+            )
+            
+            logger.info(f"Job lent créé: {slow_job_id} pour {file_info.get('path', '')}")
+            
+        except Exception as e:
+            logger.warning(f"Erreur création job lent: {e}")
     
     def _get_smb_config(self, config_id: str) -> Optional[Dict]:
         """Récupère la configuration SMB depuis la DB"""
@@ -464,7 +531,9 @@ class IndexerWorker:
             "running": self.running,
             "current_job": self.get_current_job(),
             "history_count": len(self.jobs_history),
-            "poll_interval": self.poll_interval
+            "poll_interval": self.poll_interval,
+            "slow_queue_enabled": self.slow_queue_enabled,
+            "slow_threshold_bytes": self.SLOW_THRESHOLD_BYTES
         }
 
 
