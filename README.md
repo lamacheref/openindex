@@ -2,11 +2,30 @@
 
 Solution d’indexation de partages SMB avec **crawler Python**, **API FastAPI**, **frontend statique** et **PostgreSQL**.
 
-## État actuel (J6 — avril 2026)
+## État actuel (J6 — mai 2026)
 
-Le projet dispose désormais d'un **système complet de queue d'archivage** avec worker dédié, retry automatique et monitoring temps réel.
+Le projet dispose désormais d'un **système complet de queue d'archivage** avec worker dédié, retry automatique et monitoring temps réel, ainsi qu'un **indexeur SMB performant** avec détection des changements et gestion des files prioritaires.
 
-### Dernière livrason majeure — T-ARCH-01 (2026-04-02)
+### Dernière livraison majeure — T-INDEX-01 (2026-05-18)
+- **Commit:** `1b978783c90eb1ba2d8f0ae088a3eefe2ea1ea62`
+- **Version:** 0.7.0 (prévue après finalisation)
+- **Status:** ✅ Opérationnel avec toutes les fonctionnalités principales implémentées
+
+**Nouvelles fonctionnalités T-INDEX-01:**
+- **Indexeur SMB complet** : Crawler récursif avec support multi-espaces
+- **Scrutation périodique** : Scheduler cron avec planification flexible
+- **Files différenciées** : Queue rapide/lente avec seuil automatique 200Mo
+- **Hashage xxHash** : Calcul de checksums optimisé pour les gros fichiers
+- **Détection des changements** : Mode incrémentiel pour réindexation rapide
+- **Gestion des ordures** : Détection automatique des fichiers indésirables (*.tmp, Thumbs.db, etc.)
+- **Base PostgreSQL optimisée** : Schéma complet avec 5 tables optimisées et vues de monitoring
+- **Métriques temps réel** : Endpoints de performance et health checks
+- **Queue retry** : Mécanisme automatique pour fichiers verrouillés (max 3 tentatives)
+- **Optimisation PostgreSQL** : Batch insert, requêtes préparées, analyse des goulets
+- **Logs structurés JSON** : Format standardisé pour tous les composants
+- **Tests complets** : 70+ tests unitaires couvrant tous les modules
+
+### Infrastructure précédente — T-ARCH-01 (2026-04-02)
 - **Commit:** `70312f587e2f4ebb10bd7fad453e0f751220cf30`
 - **Version:** 0.4.18
 - **Status:** ✅ Opérationnel avec corrections critiques appliquées
@@ -40,6 +59,22 @@ Le projet dispose désormais d'un **système complet de queue d'archivage** avec
 
 ## Fonctionnalités disponibles
 
+### Indexeur SMB (T-INDEX-01)
+- **Indexation complète SMB** : Crawler récursif avec support multi-espaces
+- **Scrutation périodique** : Scheduler cron avec planification flexible via `POST /api/indexer/schedules`
+- **Files différenciées** : Queue rapide/lente avec seuil automatique 200Mo
+- **Hashage xxHash** : Calcul de checksums optimisé pour les gros fichiers via streaming
+- **Détection des changements** : Mode incrémentiel pour réindexation rapide (`incremental: true`)
+- **Gestion des ordures** : Détection automatique des fichiers indésirables (*.tmp, Thumbs.db, *.bak, etc.)
+- **Base PostgreSQL optimisée** : 5 tables dédiées avec index et vues de monitoring
+- **Métriques temps réel** : Endpoints `/api/indexer/performance` et `/api/indexer/health`
+- **Queue retry** : Mécanisme automatique pour fichiers verrouillés (max 3 tentatives)
+- **Optimisation PostgreSQL** : Batch insert, requêtes préparées, analyse des goulets
+- **Logs structurés JSON** : Format standardisé pour tous les composants
+- **API REST Indexeur** : 12+ endpoints pour gestion complète (`/api/indexer/*`)
+- **Monitoring complet** : Dashboard d'indexation avec stats en temps réel
+
+### Archivage et Exploration (T-ARCH-01)
 - Indexation et inventaire de fichiers SMB avec stockage dans **PostgreSQL**.
 - Statistiques globales (`/api/stats`).
 - Listing/recherche de fichiers (`/api/files`).
@@ -115,6 +150,7 @@ pytest -q tests/test_frontend_structure.py
 - Décision Go/No-Go J4 : `docs/2026-03-18_j4_go-no-go.md`
 - Rapport d'exécution J4 : `docs/2026-03-18_j4_execution_report.md`
 - Runbook hebdo d'exploitation PostgreSQL : `docs/operations/EXPLOITATION.md`
+- **Guide d'administration de l'indexation** : `docs/operations/INDEXATION.md`
 - Plan d'accélération 2 semaines : `docs/phases/J4_MIGRATION.md`
 
 ## Limitations connues
