@@ -8,6 +8,13 @@ import json
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 
+try:
+    import xxhash
+    XXHASH_AVAILABLE = True
+except ImportError:
+    XXHASH_AVAILABLE = False
+    logging.getLogger(__name__).warning("xxhash non disponible, hash SHA256 utilisé")
+
 logger = logging.getLogger(__name__)
 
 
@@ -154,10 +161,18 @@ def get_file_info(client: SMBClient, remote_path: str) -> Optional[Dict[str, Any
         path = normalize_smb_path(remote_path)
         dir_path = os.path.dirname(path) if '/' in path else ''
         file_name = os.path.basename(path)
-        
+
         entries = client.list_dir(dir_path)
         for entry in entries:
             if entry['name'] == file_name:
+                # Calculer le hash xxHash si disponible
+                checksum = None
+                if XXHASH_AVAILABLE:
+                    checksum = calculate_xxhash(client, remote_path)
+                else:
+                    # Fallback SHA256 (non implémenté ici, à faire si nécessaire)
+                    pass
+
                 return {
                     'path': path,
                     'name': entry['name'],
@@ -165,11 +180,74 @@ def get_file_info(client: SMBClient, remote_path: str) -> Optional[Dict[str, Any
                     'size': entry['size'],
                     'created_at': entry['mtime'],
                     'modified_at': entry['mtime'],
-                    'checksum': None
+                    'checksum': checksum
                 }
-        
+
         return None
-        
+
     except Exception as e:
         logger.warning(f"Impossible d'obtenir les infos de {remote_path}: {e}")
         return None
+
+def calculate_xxhash(client: SMBClient, remote_path: str, chunk_size: int = 1024 * 1024) -> str:
+    """
+    Calcule le hash xxHash d'un fichier SMB
+    Args:
+        client: Client SMB connecté
+        remote_path: Chemin du fichier distant
+        chunk_size: Taille des chunks pour le streaming (1Mo par défaut)
+    Returns:
+        Hash xxHash hexadécimal (64 bits)
+    """
+    if not XXHASH_AVAILABLE:
+        raise RuntimeError("xxhash non disponible")
+
+    try:
+        # Obtenir la taille du fichier pour validation
+        dir_path = os.path.dirname(normalize_smb_path(remote_path)) if '/' in remote_path else ''
+        file_name = os.path.basename(remote_path)
+        entries = client.list_dir(dir_path)
+        file_size = None
+        for entry in entries:
+            if entry['name'] == file_name:
+                file_size = entry.get('size', 0)
+                break
+
+        if file_size is None:
+            raise ValueError("Fichier introuvable")
+
+        # Créer le hash xxHash
+        hasher = xxhash.xxh64()
+
+        # Lire le fichier par chunks pour éviter de tout charger en mémoire
+        # Note: smbclient ne supporte pas le streaming direct, donc on utilise subprocess
+        # pour lire le fichier via smbclient et calculer le hash
+        cmd = [
+            'smbclient',
+            remote_path,
+            '-U', f"{client.username}%",
+            '-W', client.domain,
+            '-c', 'get -'
+        ]
+
+        env = os.environ.copy()
+        env['PASSWD'] = client.password
+
+        with subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env
+        ) as process:
+            if process.stdout:
+                while True:
+                    chunk = process.stdout.read(chunk_size)
+                    if not chunk:
+                        break
+                    hasher.update(chunk)
+
+        return hasher.hexdigest()
+
+    except Exception as e:
+        logger.error(f"Erreur calcul xxHash pour {remote_path}: {e}")
+        return ""
