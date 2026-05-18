@@ -1008,6 +1008,97 @@ class PostgreSQLAdapter:
             conn.commit()
             return cursor.rowcount
 
+    def get_crawl_config_by_id(self, config_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Récupère une configuration de crawl par son ID.
+        
+        Args:
+            config_id: Identifiant de la configuration
+            
+        Returns:
+            Dictionnaire de la configuration ou None si introuvable
+        """
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT
+                        id::text,
+                        name,
+                        domain_zone,
+                        start_path,
+                        is_archive,
+                        include_paths,
+                        exclude_paths,
+                        connection_username,
+                        connection_password,
+                        connection_domain,
+                        created_at::text
+                    FROM crawl_configs
+                    WHERE id::text = %s
+                    LIMIT 1
+                    """,
+                    [config_id]
+                )
+                row = cursor.fetchone()
+                if not row:
+                    return None
+                return {
+                    "id": row[0],
+                    "name": row[1],
+                    "domain_zone": row[2],
+                    "start_path": row[3],
+                    "is_archive": bool(row[4]),
+                    "include_paths": row[5] or [],
+                    "exclude_paths": row[6] or [],
+                    "connection_username": row[7],
+                    "connection_password": row[8],
+                    "connection_domain": row[9],
+                    "created_at": row[10],
+                }
+
+    def insert_file(self, file_info: Dict[str, Any], config_id: str) -> None:
+        """
+        Insère ou met à jour un fichier dans la base de données.
+        Utilise un UPSERT basé sur le chemin du fichier.
+        
+        Args:
+            file_info: Dictionnaire contenant les métadonnées du fichier
+                       (path, name, size, checksum, last_modified)
+            config_id: Identifiant de la configuration de crawl associée
+        """
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO files (
+                        path, name, size, checksum, last_modified,
+                        is_directory, is_duplicate, duplicate_of, crawl_config_id,
+                        created_at, updated_at
+                    )
+                    VALUES (%s, %s, %s, %s, %s, FALSE, FALSE, NULL, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    ON CONFLICT (path) DO UPDATE SET
+                        name = EXCLUDED.name,
+                        size = EXCLUDED.size,
+                        checksum = EXCLUDED.checksum,
+                        last_modified = EXCLUDED.last_modified,
+                        is_directory = FALSE,
+                        is_duplicate = COALESCE(files.is_duplicate, FALSE),
+                        duplicate_of = files.duplicate_of,
+                        crawl_config_id = EXCLUDED.crawl_config_id,
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    [
+                        file_info.get('path', ''),
+                        file_info.get('name', ''),
+                        file_info.get('size', 0),
+                        file_info.get('checksum'),
+                        file_info.get('last_modified'),
+                        config_id,
+                    ]
+                )
+            conn.commit()
+
 # Fonction utilitaire pour créer l'adaptateur à partir de la configuration
 def create_postgres_adapter(config_manager) -> PostgreSQLAdapter:
     """

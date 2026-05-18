@@ -142,7 +142,7 @@ class IndexerWorker:
     def _fetch_next_job(self) -> Optional[IndexerJob]:
         """Récupère le prochain job pending depuis la base de données"""
         try:
-            from backend.src.api.main import PostgreSQLAdapter
+            from backend.src.database.postgres_adapter import PostgreSQLAdapter
             import os
             
             # Configuration DB
@@ -295,7 +295,7 @@ class IndexerWorker:
     def _get_smb_config(self, config_id: str) -> Optional[Dict]:
         """Récupère la configuration SMB depuis la DB"""
         try:
-            from backend.src.api.main import PostgreSQLAdapter
+            from backend.src.database.postgres_adapter import PostgreSQLAdapter
             import os
             
             config = {
@@ -333,7 +333,7 @@ class IndexerWorker:
                     'share': share,
                     'remote_path': remote_path,
                     'username': result.get('connection_username', ''),
-                    'password': '',  # Le mot de passe n'est pas retourné par l'API pour des raisons de sécurité
+                    'password': result.get('connection_password', ''),  # Récupéré directement depuis la DB via postgres_adapter
                     'domain': result.get('connection_domain', ''),
                     'name': result.get('name', 'Unnamed')
                 }
@@ -346,7 +346,7 @@ class IndexerWorker:
     def _insert_file(self, file_info: Dict, config_id: str):
         """Insère un fichier dans la base de données"""
         try:
-            from backend.src.api.main import PostgreSQLAdapter
+            from backend.src.database.postgres_adapter import PostgreSQLAdapter
             import os
             
             db_config = {
@@ -366,7 +366,7 @@ class IndexerWorker:
     def _update_job_status(self, job: IndexerJob):
         """Met à jour le statut du job dans la DB"""
         try:
-            from backend.src.api.main import PostgreSQLAdapter
+            from backend.src.database.postgres_adapter import PostgreSQLAdapter
             import os
             
             db_config = {
@@ -408,7 +408,7 @@ class IndexerWorker:
     def _update_job_progress(self, job: IndexerJob):
         """Met à jour la progression du job"""
         try:
-            from backend.src.api.main import PostgreSQLAdapter
+            from backend.src.database.postgres_adapter import PostgreSQLAdapter
             import os
             
             db_config = {
