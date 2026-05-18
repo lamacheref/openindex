@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenIndex - Monitoring Archivage</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+
+    <script src="/assets/alpine.min.js" defer></script>
+    <script src="/assets/auth.js" defer></script>
+    <link rel="stylesheet" href="/assets/tailwind.css">
+    <link rel="stylesheet" href="/assets/fontawesome/css/all.min.css">
+
+    <style>
+        [x-cloak] { display: none !important; }
+        .fade-in { animation: fadeIn 0.25s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
+        .card {
+            background: rgba(255, 255, 255, 0.94);
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            border-radius: 18px;
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+        }
+        
+        .status-pending { background: #fef3c7; color: #92400e; }
+        .status-running { background: #dbeafe; color: #1e40af; }
+        .status-completed { background: #d1fae5; color: #065f46; }
+        .status-failed { background: #fee2e2; color: #991b1b; }
+        .status-cancelled { background: #f3f4f6; color: #4b5563; }
+        
+        .progress-bar {
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #0d9488, #14b8a6);
+            transition: width 0.3s ease;
+        }
+        
+        .metric-card {
+            background: linear-gradient(135deg, #fff 0%, #f8fafc 100%);
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 1.5rem;
+        }
+        
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #0f172a;
+        }
+        
+        .metric-label {
+            font-size: 0.875rem;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .table-modern {
+            border-collapse: separate;
+            border-spacing: 0;
+            width: 100%;
+        }
+        .table-modern th {
+            background: #f8fafc;
+            font-weight: 600;
+            text-align: left;
+            padding: 12px 16px;
+            color: #334155;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        .table-modern td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #e2e8f0;
+            vertical-align: middle;
+        }
+        .table-modern tr:hover { background: #f8fafc; }
+        
+        .btn-action {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #0d9488;
+            color: white;
+        }
+        .btn-primary:hover { background: #0f766e; }
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #475569;
+        }
+        .btn-secondary:hover { background: #e2e8f0; }
+        
+        .schedule-card {
+            border-left: 4px solid #0d9488;
+            background: #fff;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .schedule-card.inactive {
+            border-left-color: #9ca3af;
+            opacity: 0.7;
+        }
+        
+        .cron-badge {
+            font-family: monospace;
+            background: #1e293b;
+            color: #10b981;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+
+<div x-data="archiveMonitoring()" x-init="init()">
+
+    <!-- Header -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center gap-3">
+                    <a href="/" class="text-slate-500 hover:text-slate-700">
+                        <i class="fas fa-arrow-left"></i>
+                    </a>
+                    <i class="fas fa-archive text-teal-600 text-xl"></i>
+                    <h1 class="text-xl font-semibold text-slate-800">Monitoring Archivage</h1>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button @click="refreshData()" class="btn-action btn-secondary" :disabled="loading">
+                        <i class="fas fa-sync-alt mr-2" :class="{'fa-spin': loading}"></i>
+                        Rafraîchir
+                    </button>
+                    <button @click="showCreateSchedule = true" class="btn-action btn-primary">
+                        <i class="fas fa-plus mr-2"></i>
+                        Nouveau Schedule
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        <!-- Dashboard Metrics -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="metric-card">
+                <div class="metric-label">Jobs en attente</div>
+                <div class="metric-value text-amber-600" x-text="dashboard.queue_status?.pending?.count || 0">0</div>
+                <div class="text-sm text-slate-500 mt-1">
+                    <span x-text="formatBytes(dashboard.queue_status?.pending?.bytes_transferred || 0)"></span>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Jobs en cours</div>
+                <div class="metric-value text-blue-600" x-text="dashboard.queue_status?.running?.count || 0">0</div>
+                <div class="text-sm text-slate-500 mt-1">
+                    <span x-text="formatBytes(dashboard.queue_status?.running?.bytes_transferred || 0)"></span>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Complétés 24h</div>
+                <div class="metric-value text-emerald-600" x-text="dashboard.recent_activity?.completed_24h || 0">0</div>
+                <div class="text-sm text-slate-500 mt-1">
+                    <span x-text="formatBytes(dashboard.recent_activity?.bytes_transferred_24h || 0)"></span>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Taux de succès</div>
+                <div class="metric-value" 
+                     :class="dashboard.overall_success_rate > 0.9 ? 'text-emerald-600' : (dashboard.overall_success_rate > 0.7 ? 'text-amber-600' : 'text-red-600')"
+                     x-text="(dashboard.overall_success_rate * 100).toFixed(1) + '%'">0%</div>
+                <div class="text-sm text-slate-500 mt-1">
+                    <span x-text="dashboard.total_jobs || 0"></span> jobs total
+                </div>
+            </div>
+        </div>
+
+        <!-- Schedules Section -->
+        <div class="card p-6 mb-8">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-lg font-semibold text-slate-800">
+                    <i class="fas fa-clock mr-2 text-teal-600"></i>
+                    Tâches Planifiées
+                </h2>
+                <span class="text-sm text-slate-500" x-text="schedules.length + ' schedules'">0 schedules</span>
+            </div>
+            
+            <div class="space-y-4">
+                <template x-for="schedule in schedules" :key="schedule.id">
+                    <div class="schedule-card" :class="{ 'inactive': !schedule.is_active }">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="flex items-center gap-2 mb-2">
+                                    <h3 class="font-semibold text-slate-800" x-text="schedule.name"></h3>
+                                    <span class="cron-badge" x-text="schedule.cron_expression"></span>
+                                    <span class="text-xs px-2 py-1 rounded-full"
+                                          :class="schedule.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'"
+                                          x-text="schedule.is_active ? 'Actif' : 'Inactif'"></span>
+                                </div>
+                                <p class="text-sm text-slate-500 mb-2" x-text="schedule.description || 'Aucune description'"></p>
+                                <div class="flex items-center gap-4 text-sm text-slate-600">
+                                    <span><i class="fas fa-folder mr-1"></i> <span x-text="schedule.source_pattern"></span></span>
+                                    <span><i class="fas fa-arrow-right mr-1"></i> <span x-text="schedule.dest_path || 'N/A'"></span></span>
+                                    <span><i class="fas fa-cog mr-1"></i> <span x-text="schedule.job_type"></span></span>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="text-right mr-4">
+                                    <div class="text-sm text-slate-500">Prochaine exécution</div>
+                                    <div class="font-medium" x-text="formatDate(schedule.next_run_at) || 'Jamais'"></div>
+                                    <div class="text-xs text-slate-400" x-text="schedule.run_count + ' exécutions'"></div>
+                                </div>
+                                <button @click="toggleSchedule(schedule)" class="btn-action" 
+                                        :class="schedule.is_active ? 'btn-secondary' : 'btn-primary'">
+                                    <i class="fas" :class="schedule.is_active ? 'fa-pause' : 'fa-play'"></i>
+                                </button>
+                                <button @click="deleteSchedule(schedule.id)" class="btn-action btn-danger">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+                <div x-show="schedules.length === 0" class="text-center py-8 text-slate-500">
+                    <i class="fas fa-clock text-4xl mb-3 opacity-50"></i>
+                    <p>Aucun schedule configuré</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Queue Monitoring -->
+        <div class="card p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-lg font-semibold text-slate-800">
+                    <i class="fas fa-tasks mr-2 text-teal-600"></i>
+                    File d'Attente en Temps Réel
+                </h2>
+                <div class="flex items-center gap-3">
+                    <select x-model="filterStatus" @change="loadQueue()" class="border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                        <option value="">Tous les statuts</option>
+                        <option value="En attente">En attente</option>
+                        <option value="En cours">En cours</option>
+                        <option value="Terminé">Terminé</option>
+                        <option value="Échoué">Échoué</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="table-modern">
+                    <thead>
+                        <tr>
+                            <th>Statut</th>
+                            <th>Type</th>
+                            <th>Source</th>
+                            <th>Destination</th>
+                            <th>Priorité</th>
+                            <th>Progression</th>
+                            <th>Durée</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="job in queue" :key="job.id">
+                            <tr>
+                                <td>
+                                    <span class="px-2 py-1 rounded-full text-xs font-medium"
+                                          :class="'status-' + job.status"
+                                          x-text="job.status_label"></span>
+                                </td>
+                                <td>
+                                    <span class="text-sm font-medium" x-text="job.job_type.toUpperCase()"></span>
+                                </td>
+                                <td>
+                                    <div class="text-sm text-slate-600 truncate max-w-xs" :title="job.source_path" x-text="truncatePath(job.source_path)"></div>
+                                </td>
+                                <td>
+                                    <div class="text-sm text-slate-600 truncate max-w-xs" :title="job.dest_path" x-text="job.dest_path ? truncatePath(job.dest_path) : '-'"></div>
+                                </td>
+                                <td>
+                                    <span class="text-sm font-medium" x-text="job.priority"></span>
+                                </td>
+                                <td>
+                                    <div x-show="job.status === 'running'">
+                                        <div class="flex items-center gap-2">
+                                            <div class="progress-bar w-24">
+                                                <div class="progress-fill" :style="'width: ' + job.progress_percent + '%'"></div>
+                                            </div>
+                                            <span class="text-xs text-slate-500" x-text="job.progress_percent.toFixed(0) + '%'"></span>
+                                        </div>
+                                        <div class="text-xs text-slate-500 mt-1">
+                                            <span x-text="formatBytes(job.bytes_transferred)"></span> / <span x-text="formatBytes(job.source_size)"></span>
+                                        </div>
+                                    </div>
+                                    <div x-show="job.status !== 'running'" class="text-sm text-slate-500">
+                                        <span x-text="formatBytes(job.bytes_transferred)"></span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="text-sm text-slate-600" x-text="formatDuration(job.duration_seconds)"></span>
+                                </td>
+                                <td>
+                                    <div class="flex items-center gap-1">
+                                        <button x-show="job.status === 'pending'" 
+                                                @click="cancelJob(job.id)"
+                                                class="btn-action btn-danger text-xs">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                        <button x-show="job.status === 'failed'" 
+                                                @click="retryJob(job.id)"
+                                                class="btn-action btn-primary text-xs">
+                                            <i class="fas fa-redo"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+                <div x-show="queue.length === 0" class="text-center py-8 text-slate-500">
+                    <i class="fas fa-check-circle text-4xl mb-3 opacity-50"></i>
+                    <p>Aucun job dans la file d'attente</p>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Create Schedule Modal -->
+    <div x-show="showCreateSchedule" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" x-cloak>
+        <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-slate-200">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-semibold text-slate-800">Nouvelle Tâche Planifiée</h3>
+                    <button @click="showCreateSchedule = false" class="text-slate-400 hover:text-slate-600">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Nom</label>
+                    <input type="text" x-model="newSchedule.name" class="w-full border border-slate-300 rounded-lg px-3 py-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
+                    <textarea x-model="newSchedule.description" class="w-full border border-slate-300 rounded-lg px-3 py-2" rows="2"></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Expression Cron</label>
+                        <input type="text" x-model="newSchedule.cron_expression" placeholder="0 2 * * *" 
+                               class="w-full border border-slate-300 rounded-lg px-3 py-2 font-mono">
+                        <p class="text-xs text-slate-500 mt-1">Ex: 0 2 * * * = tous les jours à 2h</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Timezone</label>
+                        <input type="text" x-model="newSchedule.timezone" value="Europe/Paris" 
+                               class="w-full border border-slate-300 rounded-lg px-3 py-2">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Type de Job</label>
+                        <select x-model="newSchedule.job_type" class="w-full border border-slate-300 rounded-lg px-3 py-2">
+                            <option value="copy">Copie</option>
+                            <option value="move">Déplacement</option>
+                            <option value="delete">Suppression</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Priorité (1-10)</label>
+                        <input type="number" x-model="newSchedule.priority" min="1" max="10" value="5" 
+                               class="w-full border border-slate-300 rounded-lg px-3 py-2">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Pattern Source</label>
+                    <input type="text" x-model="newSchedule.source_pattern" placeholder="\\\\server\share\*.txt" 
+                           class="w-full border border-slate-300 rounded-lg px-3 py-2 font-mono">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Destination (optionnel pour delete)</label>
+                    <input type="text" x-model="newSchedule.dest_path" placeholder="\\\\archive\storage\" 
+                           class="w-full border border-slate-300 rounded-lg px-3 py-2 font-mono">
+                </div>
+                <div class="grid grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Âge max (jours)</label>
+                        <input type="number" x-model="newSchedule.max_age_days" 
+                               class="w-full border border-slate-300 rounded-lg px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Taille min (bytes)</label>
+                        <input type="number" x-model="newSchedule.min_size_bytes" 
+                               class="w-full border border-slate-300 rounded-lg px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Taille max (bytes)</label>
+                        <input type="number" x-model="newSchedule.max_size_bytes" 
+                               class="w-full border border-slate-300 rounded-lg px-3 py-2">
+                    </div>
+                </div>
+            </div>
+            <div class="p-6 border-t border-slate-200 flex justify-end gap-3">
+                <button @click="showCreateSchedule = false" class="btn-action btn-secondary">Annuler</button>
+                <button @click="createSchedule()" class="btn-action btn-primary">Créer</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+function archiveMonitoring() {
+    return {
+        loading: false,
+        schedules: [],
+        queue: [],
+        dashboard: {},
+        filterStatus: '',
+        showCreateSchedule: false,
+        newSchedule: {
+            name: '',
+            description: '',
+            cron_expression: '0 2 * * *',
+            timezone: 'Europe/Paris',
+            job_type: 'copy',
+            source_pattern: '',
+            dest_path: '',
+            priority: 5,
+            max_age_days: null,
+            min_size_bytes: null,
+            max_size_bytes: null
+        },
+        
+        initUser() {
+            const isTruthyAdminValue = (value) => {
+                if (typeof value === 'string') {
+                    const normalizedValue = value.trim().toLowerCase();
+                    return normalizedValue === 'true' || normalizedValue === '1' || normalizedValue === 'yes';
+                }
+
+                return value === true || value === 1;
+            };
+
+            const resolveUserAdminStatus = (user) => {
+                if (typeof resolveAdminStatus === 'function') {
+                    return resolveAdminStatus(user);
+                }
+
+                return Boolean(
+                    isTruthyAdminValue(user?.isAdmin) ||
+                    isTruthyAdminValue(user?.is_admin) ||
+                    isTruthyAdminValue(user?.admin) ||
+                    user?.role === 'admin'
+                );
+            };
+
+            // Vérifier l'authentification et rediriger si nécessaire
+            if (typeof onPbReady !== 'undefined') {
+                onPbReady((pbInstance) => {
+                    if (pbInstance && pbInstance.authStore.isValid) {
+                        const user = pbInstance.authStore.model;
+                        const isAdmin = resolveUserAdminStatus(user);
+                        this.currentUser = {
+                            name: user.name || user.email || 'Utilisateur',
+                            role: isAdmin ? 'admin' : 'user',
+                            role_label: isAdmin ? 'Administrateur' : 'Utilisateur',
+                            is_admin: isAdmin
+                        };
+                        
+                        // Rediriger les non-admins vers l'explorateur de fichiers
+                        if (!this.currentUser.is_admin) {
+                            window.location.href = '/index.html';
+                        }
+                    } else {
+                        // Utilisateur non authentifié - rediriger vers login
+                        window.location.href = '/login.html';
+                    }
+                });
+            } else if (typeof pb !== 'undefined' && pb.authStore.isValid) {
+                // Fallback direct
+                const user = pb.authStore.model;
+                const isAdmin = resolveUserAdminStatus(user);
+                this.currentUser = {
+                    name: user.name || user.email || 'Utilisateur',
+                    role: isAdmin ? 'admin' : 'user',
+                    role_label: isAdmin ? 'Administrateur' : 'Utilisateur',
+                    is_admin: isAdmin
+                };
+                
+                // Rediriger les non-admins vers l'explorateur de fichiers
+                if (!this.currentUser.is_admin) {
+                    window.location.href = '/index.html';
+                }
+            } else {
+                // Utilisateur non authentifié - rediriger vers login
+                window.location.href = '/login.html';
+            }
+        },
+        
+        async init() {
+            this.initUser();
+            await this.refreshData();
+            // Auto-refresh every 30 seconds
+            setInterval(() => this.refreshData(), 30000);
+        },
+        
+        async refreshData() {
+            this.loading = true;
+            await Promise.all([
+                this.loadDashboard(),
+                this.loadSchedules(),
+                this.loadQueue()
+            ]);
+            this.loading = false;
+        },
+        
+        async loadDashboard() {
+            try {
+                const response = await fetch('/api/archive/monitoring/dashboard');
+                if (response.ok) {
+                    this.dashboard = await response.json();
+                }
+            } catch (e) {
+                console.error('Error loading dashboard:', e);
+            }
+        },
+        
+        async loadSchedules() {
+            try {
+                const response = await fetch('/api/archive/schedules');
+                if (response.ok) {
+                    this.schedules = await response.json();
+                }
+            } catch (e) {
+                console.error('Error loading schedules:', e);
+            }
+        },
+        
+        async loadQueue() {
+            try {
+                let url = '/api/archive/monitoring/queue?limit=100';
+                if (this.filterStatus) {
+                    url += '&status=' + encodeURIComponent(this.filterStatus);
+                }
+                const response = await fetch(url);
+                if (response.ok) {
+                    this.queue = await response.json();
+                }
+            } catch (e) {
+                console.error('Error loading queue:', e);
+            }
+        },
+        
+        async createSchedule() {
+            try {
+                const response = await fetch('/api/archive/schedules', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.newSchedule)
+                });
+                
+                if (response.ok) {
+                    this.showCreateSchedule = false;
+                    this.resetNewSchedule();
+                    await this.loadSchedules();
+                } else {
+                    const error = await response.json();
+                    alert('Erreur: ' + error.detail);
+                }
+            } catch (e) {
+                console.error('Error creating schedule:', e);
+                alert('Erreur lors de la création');
+            }
+        },
+        
+        async toggleSchedule(schedule) {
+            try {
+                const response = await fetch(`/api/archive/schedules/${schedule.id}/toggle`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    await this.loadSchedules();
+                }
+            } catch (e) {
+                console.error('Error toggling schedule:', e);
+            }
+        },
+        
+        async deleteSchedule(id) {
+            if (!confirm('Êtes-vous sûr de vouloir supprimer ce schedule ?')) return;
+            
+            try {
+                const response = await fetch(`/api/archive/schedules/${id}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    await this.loadSchedules();
+                }
+            } catch (e) {
+                console.error('Error deleting schedule:', e);
+            }
+        },
+        
+        async cancelJob(id) {
+            try {
+                const response = await fetch(`/api/archive/queue/${id}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    await this.loadQueue();
+                }
+            } catch (e) {
+                console.error('Error cancelling job:', e);
+            }
+        },
+        
+        async retryJob(id) {
+            try {
+                const response = await fetch(`/api/archive/queue/${id}/retry`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    await this.loadQueue();
+                }
+            } catch (e) {
+                console.error('Error retrying job:', e);
+            }
+        },
+        
+        resetNewSchedule() {
+            this.newSchedule = {
+                name: '',
+                description: '',
+                cron_expression: '0 2 * * *',
+                timezone: 'Europe/Paris',
+                job_type: 'copy',
+                source_pattern: '',
+                dest_path: '',
+                priority: 5,
+                max_age_days: null,
+                min_size_bytes: null,
+                max_size_bytes: null
+            };
+        },
+        
+        formatBytes(bytes) {
+            if (!bytes || bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        },
+        
+        formatDate(dateStr) {
+            if (!dateStr) return null;
+            const date = new Date(dateStr);
+            return date.toLocaleString('fr-FR');
+        },
+        
+        formatDuration(seconds) {
+            if (!seconds) return '-';
+            if (seconds < 60) return Math.round(seconds) + 's';
+            if (seconds < 3600) return Math.round(seconds / 60) + 'min';
+            return Math.round(seconds / 3600 * 10) / 10 + 'h';
+        },
+        
+        truncatePath(path, maxLength = 40) {
+            if (!path) return '-';
+            if (path.length <= maxLength) return path;
+            return '...' + path.slice(-maxLength + 3);
+        }
+    }
+}
+</script>
+
+</body>
+</html>

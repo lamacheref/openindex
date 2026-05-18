@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenIndex - Gestionnaire d'Indexation</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
+    <style>
+        /* Style inspiré de l'explorateur Windows moderne */
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+        
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(229, 231, 235, 0.8);
+        }
+        
+        .nav-item {
+            transition: all 0.2s ease;
+        }
+        
+        .nav-item:hover {
+            background: rgba(243, 244, 246, 0.8);
+        }
+        
+        .nav-item.active {
+            background: rgba(219, 234, 254, 0.6);
+            color: rgb(37, 99, 235);
+        }
+        
+        .metric-card {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+        
+        .job-row {
+            transition: background-color 0.15s ease;
+        }
+        
+        .job-row:hover {
+            background-color: rgba(243, 244, 246, 0.5);
+        }
+        
+        .status-badge {
+            font-size: 0.75rem;
+            font-weight: 500;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+        }
+        
+        .status-pending { background: #fef3c7; color: #92400e; }
+        .status-running { background: #dbeafe; color: #1e40af; }
+        .status-completed { background: #d1fae5; color: #065f46; }
+        .status-failed { background: #fee2e2; color: #991b1b; }
+        
+        .progress-bar {
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6, #60a5fa);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+        
+        /* Scrollbar moderne */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 h-screen overflow-hidden" x-data="indexerApp()" x-init="init()">
+    
+    <div class="flex h-full">
+        <!-- Sidebar Navigation -->
+        <aside class="w-64 bg-white border-r border-gray-200 flex flex-col">
+            <!-- Logo -->
+            <div class="p-4 border-b border-gray-100">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center">
+                        <i class="fas fa-database text-white text-lg"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-gray-900">OpenIndex</h1>
+                        <p class="text-xs text-gray-500">Gestionnaire d'Indexation</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Navigation -->
+            <nav class="flex-1 p-3 space-y-1">
+                
+                <button @click="currentView = 'dashboard'" 
+                        :class="{ 'active': currentView === 'dashboard' }"
+                        class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-600">
+                    <i class="fas fa-chart-line w-5 text-center"></i>
+                    <span class="font-medium">Tableau de bord</span>
+                </button>
+                
+                <button @click="currentView = 'jobs'"
+                        :class="{ 'active': currentView === 'jobs' }"
+                        class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-600">
+                    <i class="fas fa-tasks w-5 text-center"></i>
+                    <span class="font-medium">Jobs d'indexation</span>
+                    <span x-show="pendingCount > 0" 
+                          x-text="pendingCount"
+                          class="ml-auto bg-amber-100 text-amber-700 text-xs font-semibold px-2 py-0.5 rounded-full"></span>
+                </button>
+                
+                <button @click="currentView = 'configs'"
+                        :class="{ 'active': currentView === 'configs' }"
+                        class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-600">
+                    <i class="fas fa-folder-tree w-5 text-center"></i>
+                    <span class="font-medium">Sources</span>
+                </button>
+            </nav>
+            
+            <!-- Status Worker -->
+            <div class="p-4 border-t border-gray-100">
+                <div class="bg-gray-50 rounded-lg p-3">
+                    <div class="flex items-center gap-2 mb-2">
+                        <div class="w-2 h-2 rounded-full" 
+                             :class="workerRunning ? 'bg-green-500 animate-pulse' : 'bg-red-500'"></div>
+                        <span class="text-sm font-medium" x-text="workerRunning ? 'Worker actif' : 'Worker arrêté'"></span>
+                    </div>
+                    <button @click="toggleWorker()"
+                            class="w-full py-2 px-3 rounded-lg text-sm font-medium transition-colors"
+                            :class="workerRunning ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-green-100 text-green-700 hover:bg-green-200'"
+                            x-text="workerRunning ? 'Arrêter' : 'Démarrer'">
+                    </button>
+                </div>
+            </div>
+        </aside>
+        
+        <!-- Main Content -->
+        <main class="flex-1 flex flex-col overflow-hidden">
+            <!-- Header -->
+            <header class="glass-panel h-16 flex items-center justify-between px-6 border-b">
+                <div class="flex items-center gap-4">
+                    <h2 class="text-xl font-semibold" x-text="pageTitle"></h2>
+                    <span x-show="currentJob" 
+                          class="text-sm text-blue-600 bg-blue-50 px-3 py-1 rounded-full flex items-center gap-2">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        Indexation en cours...
+                    </span>
+                </div>
+                
+                <div class="flex items-center gap-3">
+                    <button @click="refreshData()" 
+                            :disabled="loading"
+                            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                            title="Rafraîchir">
+                        <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
+                    </button>
+                    
+                    <button x-show="currentView === 'jobs'" @click="showNewJobModal = true"
+                            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors shadow-sm">
+                        <i class="fas fa-plus"></i>
+                        Nouveau Job
+                    </button>
+                </div>
+            </header>
+            
+            <!-- Content Area -->
+            <div class="flex-1 overflow-auto p-6">
+                
+                <!-- DASHBOARD VIEW -->
+                <div x-show="currentView === 'dashboard'" class="space-y-6">
+                    <!-- Metrics Grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="metric-card rounded-xl p-5">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-gray-500 text-sm font-medium">Jobs en attente</span>
+                                <div class="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-clock text-amber-600"></i>
+                                </div>
+                            </div>
+                            <div class="text-3xl font-bold text-gray-900" x-text="stats.pending_count || 0"></div>
+                        </div>
+                        
+                        <div class="metric-card rounded-xl p-5">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-gray-500 text-sm font-medium">Jobs complétés</span>
+                                <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-check-circle text-green-600"></i>
+                                </div>
+                            </div>
+                            <div class="text-3xl font-bold text-gray-900" x-text="stats.completed_count || 0"></div>
+                        </div>
+                        
+                        <div class="metric-card rounded-xl p-5">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-gray-500 text-sm font-medium">Fichiers indexés</span>
+                                <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-file text-blue-600"></i>
+                                </div>
+                            </div>
+                            <div class="text-3xl font-bold text-gray-900" x-text="formatNumber(stats.total_files_indexed || 0)"></div>
+                        </div>
+                        
+                        <div class="metric-card rounded-xl p-5">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-gray-500 text-sm font-medium">Volume indexé</span>
+                                <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-hdd text-purple-600"></i>
+                                </div>
+                            </div>
+                            <div class="text-3xl font-bold text-gray-900" x-text="formatBytes(stats.total_bytes_indexed || 0)"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Current Job Progress -->
+                    <div x-show="currentJob" class="bg-white rounded-xl border border-gray-200 p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="font-semibold text-gray-900" x-text="currentJob?.config_name || 'Indexation en cours'"></h3>
+                                <p class="text-sm text-gray-500 mt-1" x-text="currentJob?.path"></p>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-2xl font-bold text-blue-600">
+                                    <span x-text="Math.round((currentJob?.files_indexed / currentJob?.files_found) * 100) || 0"></span>%
+                                </div>
+                                <p class="text-sm text-gray-500">
+                                    <span x-text="currentJob?.files_indexed || 0"></span> / <span x-text="currentJob?.files_found || 0"></span> fichiers
+                                </p>
+                            </div>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" 
+                                 :style="`width: ${(currentJob?.files_indexed / currentJob?.files_found) * 100 || 0}%`"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Recent Jobs -->
+                    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                            <h3 class="font-semibold text-gray-900">Jobs récents</h3>
+                            <button @click="currentView = 'jobs'" class="text-blue-600 hover:text-blue-700 text-sm font-medium">
+                                Voir tout →
+                            </button>
+                        </div>
+                        <div class="divide-y divide-gray-100">
+                            <template x-for="job in recentJobs" :key="job.id">
+                                <div class="px-6 py-4 flex items-center justify-between job-row">
+                                    <div class="flex items-center gap-4">
+                                        <div class="w-10 h-10 rounded-lg flex items-center justify-center"
+                                             :class="{
+                                                 'bg-amber-100': job.status === 'pending',
+                                                 'bg-blue-100': job.status === 'running',
+                                                 'bg-green-100': job.status === 'completed',
+                                                 'bg-red-100': job.status === 'failed'
+                                             }">
+                                            <i class="fas" :class="{
+                                                'fa-clock text-amber-600': job.status === 'pending',
+                                                'fa-spinner fa-spin text-blue-600': job.status === 'running',
+                                                'fa-check text-green-600': job.status === 'completed',
+                                                'fa-exclamation text-red-600': job.status === 'failed'
+                                            }"></i>
+                                        </div>
+                                        <div>
+                                            <p class="font-medium text-gray-900" x-text="job.config_name || 'Job sans nom'"></p>
+                                            <p class="text-sm text-gray-500" x-text="formatDate(job.created_at)"></p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-4">
+                                        <span class="status-badge" 
+                                              :class="`status-${job.status}`"
+                                              x-text="formatStatus(job.status)"></span>
+                                        <span class="text-sm text-gray-500" x-text="`${job.files_indexed} fichiers`"></span>
+                                    </div>
+                                </div>
+                            </template>
+                            <div x-show="recentJobs.length === 0" class="px-6 py-8 text-center text-gray-500">
+                                Aucun job récent
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- JOBS VIEW -->
+                <div x-show="currentView === 'jobs'" class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                    <div class="px-6 py-4 border-b border-gray-100 flex items-center gap-4">
+                        <div class="flex-1 flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
+                            <i class="fas fa-search text-gray-400"></i>
+                            <input type="text" 
+                                   x-model="jobFilter"
+                                   placeholder="Rechercher un job..."
+                                   class="bg-transparent border-none outline-none flex-1 text-sm">
+                        </div>
+                        <select x-model="statusFilter" class="bg-gray-50 border-none rounded-lg px-3 py-2 text-sm">
+                            <option value="">Tous les statuts</option>
+                            <option value="pending">En attente</option>
+                            <option value="running">En cours</option>
+                            <option value="completed">Terminé</option>
+                            <option value="failed">Échoué</option>
+                        </select>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead class="bg-gray-50 border-b border-gray-100">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Source</th>
+                                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Statut</th>
+                                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Progression</th>
+                                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Date</th>
+                                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <template x-for="job in filteredJobs" :key="job.id">
+                                    <tr class="job-row">
+                                        <td class="px-6 py-4">
+                                            <div class="font-medium text-gray-900" x-text="job.config_name || 'Sans nom'"></div>
+                                            <div class="text-sm text-gray-500 truncate max-w-xs" x-text="job.path"></div>
+                                        </td>
+                                        <td class="px-6 py-4">
+                                            <span class="status-badge" 
+                                                  :class="`status-${job.status}`"
+                                                  x-text="formatStatus(job.status)"></span>
+                                        </td>
+                                        <td class="px-6 py-4">
+                                            <div x-show="job.status === 'running'" class="w-32">
+                                                <div class="progress-bar">
+                                                    <div class="progress-fill" 
+                                                         :style="`width: ${(job.files_indexed / job.files_found) * 100 || 0}%`"></div>
+                                                </div>
+                                                <div class="text-xs text-gray-500 mt-1">
+                                                    <span x-text="job.files_indexed"></span> / <span x-text="job.files_found"></span>
+                                                </div>
+                                            </div>
+                                            <div x-show="job.status !== 'running'" class="text-sm text-gray-500">
+                                                <span x-text="job.files_indexed"></span> fichiers
+                                                <span x-show="job.bytes_total > 0" x-text="`(${formatBytes(job.bytes_total)})`"></span>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4 text-sm text-gray-500" x-text="formatDate(job.created_at)"></td>
+                                        <td class="px-6 py-4">
+                                            <button x-show="job.status === 'pending'" 
+                                                    @click="cancelJob(job.id)"
+                                                    class="text-red-600 hover:text-red-700 text-sm font-medium">
+                                                Annuler
+                                            </button>
+                                            <button x-show="job.status === 'running'" 
+                                                    @click="stopJob(job.id)"
+                                                    class="text-amber-600 hover:text-amber-700 text-sm font-medium">
+                                                Arrêter
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- CONFIGS VIEW -->
+                <div x-show="currentView === 'configs'" class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-lg font-semibold">Sources configurées</h3>
+                        <button @click="resetNewConfig(); showNewConfigModal = true"
+                                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2">
+                            <i class="fas fa-plus"></i>
+                            Ajouter une source
+                        </button>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <template x-for="config in configs" :key="config.id">
+                            <div class="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition-shadow">
+                                <div class="flex items-start justify-between mb-3">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center">
+                                            <i class="fas fa-server text-white"></i>
+                                        </div>
+                                        <div>
+                                            <h4 class="font-semibold text-gray-900" x-text="config.name"></h4>
+                                            <p class="text-sm text-gray-500" x-text="config.domain_zone"></p>
+                                        </div>
+                                    </div>
+                                    <div class="flex gap-1">
+                                        <button @click="editConfig(config)" 
+                                                class="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button @click="deleteConfig(config.id)" 
+                                                class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="space-y-2 text-sm">
+                                    <div class="flex items-center gap-2 text-gray-600">
+                                        <i class="fas fa-folder w-4 text-center text-gray-400"></i>
+                                        <span class="truncate" x-text="config.start_path"></span>
+                                    </div>
+                                    <div class="flex items-center gap-2 text-gray-600">
+                                        <i class="fas fa-user w-4 text-center text-gray-400"></i>
+                                        <span x-text="config.connection_username || 'Non configuré'"></span>
+                                    </div>
+                                    <div x-show="config.connection_domain" class="flex items-center gap-2 text-gray-600">
+                                        <i class="fas fa-building w-4 text-center text-gray-400"></i>
+                                        <span class="truncate" x-text="config.connection_domain"></span>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
+                                    <span class="text-xs text-gray-500">Créée le: <span x-text="new Date(config.created_at).toLocaleDateString('fr-FR')"></span></span>
+                                    <button @click="startIndexing(config.id)" 
+                                            class="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1">
+                                        <i class="fas fa-play"></i>
+                                        Indexer
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+                
+                <!-- ARCHIVE VIEW -->
+                <div x-show="currentView === 'archive'" class="text-center py-20">
+                    <div class="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-archive text-gray-400 text-3xl"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-2">Gestion de l'archivage</h3>
+                    <p class="text-gray-500 mb-6">Accédez à la file d'attente d'archivage</p>
+                    <a href="archive-monitoring.html" 
+                       class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-medium transition-colors">
+                        <i class="fas fa-external-link-alt"></i>
+                        Ouvrir la console d'archivage
+                    </a>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Modal: Nouveau Job -->
+    <div x-show="showNewJobModal" 
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+         @click.self="showNewJobModal = false">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h3 class="text-lg font-semibold">Nouveau job d'indexation</h3>
+                <button @click="showNewJobModal = false" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Source à indexer</label>
+                    <select x-model="newJobConfigId" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Sélectionner une source...</option>
+                        <template x-for="config in configs" :key="config.id">
+                            <option :value="config.id" x-text="config.name"></option>
+                        </template>
+                    </select>
+                </div>
+                <div x-show="newJobConfigId" class="bg-gray-50 rounded-lg p-3 text-sm">
+                    <p class="text-gray-600"><i class="fas fa-info-circle mr-1"></i> Le job sera créé pour indexer tous les fichiers de cette source.</p>
+                </div>
+            </div>
+            <div class="px-6 py-4 bg-gray-50 flex justify-end gap-3">
+                <button @click="showNewJobModal = false" class="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium">
+                    Annuler
+                </button>
+                <button @click="createJob()" 
+                        :disabled="!newJobConfigId || creatingJob"
+                        class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white px-4 py-2 rounded-lg font-medium">
+                    <span x-show="!creatingJob">Créer le job</span>
+                    <span x-show="creatingJob"><i class="fas fa-spinner fa-spin mr-1"></i> Création...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function indexerApp() {
+            return {
+                // State
+                currentView: 'dashboard',
+                loading: false,
+                workerRunning: false,
+                pendingCount: 0,
+                
+                // Data
+                stats: {},
+                currentJob: null,
+                recentJobs: [],
+                allJobs: [],
+                configs: [],
+                
+                // Filters
+                jobFilter: '',
+                statusFilter: '',
+                
+                // Modal
+                showNewJobModal: false,
+                newJobConfigId: '',
+                creatingJob: false,
+                showNewConfigModal: false,
+                creatingConfig: false,
+                newConfig: {
+                    name: '',
+                    host: '',
+                    share: '',
+                    remote_path: '',
+                    username: '',
+                    password: '',
+                    domain: ''
+                },
+                showDeleteConfirmModal: false,
+                configToDelete: null,
+                deletingConfig: false,
+                deleteError: '',
+                showErrorModal: false,
+                errorMessage: '',
+                showEditConfigModal: false,
+                editingConfig: false,
+                editConfigData: {
+                    id: '',
+                    name: '',
+                    host: '',
+                    share: '',
+                    remote_path: '',
+                    username: '',
+                    password: '',
+                    domain: ''
+                },
+                
+                // Computed
+                get pageTitle() {
+                    const titles = {
+                        'dashboard': 'Tableau de bord',
+                        'jobs': 'Jobs d\'indexation',
+                        'configs': 'Sources',
+                        'archive': 'Archivage'
+                    };
+                    return titles[this.currentView] || 'Gestionnaire d\'Indexation';
+                },
+                
+                get filteredJobs() {
+                    return this.allJobs.filter(job => {
+                        const matchesFilter = !this.jobFilter || 
+                            (job.config_name && job.config_name.toLowerCase().includes(this.jobFilter.toLowerCase())) ||
+                            (job.path && job.path.toLowerCase().includes(this.jobFilter.toLowerCase()));
+                        const matchesStatus = !this.statusFilter || job.status === this.statusFilter;
+                        return matchesFilter && matchesStatus;
+                    });
+                },
+                
+                // Methods
+                async init() {
+                    await this.refreshData();
+                    // Rafraîchissement automatique toutes les 5 secondes
+                    setInterval(() => this.refreshData(), 5000);
+                },
+                
+                async refreshData() {
+                    if (this.loading) return;
+                    this.loading = true;
+                    
+                    try {
+                        // Récupérer les stats
+                        const statsRes = await fetch('/api/indexer/stats');
+                        if (statsRes.ok) {
+                            this.stats = await statsRes.json();
+                        }
+                        
+                        // Récupérer le job en cours
+                        const currentRes = await fetch('/api/indexer/current-job');
+                        if (currentRes.ok) {
+                            const data = await currentRes.json();
+                            this.currentJob = data.job;
+                            this.workerRunning = data.worker_running;
+                        }
+                        
+                        // Récupérer les jobs récents
+                        const jobsRes = await fetch('/api/indexer/jobs?limit=20');
+                        if (jobsRes.ok) {
+                            const data = await jobsRes.json();
+                            this.allJobs = data.jobs || [];
+                            this.recentJobs = this.allJobs.slice(0, 5);
+                            this.pendingCount = this.allJobs.filter(j => j.status === 'pending').length;
+                        }
+                        
+                        // Récupérer les configs
+                        const configsRes = await fetch('/api/crawl-configs');
+                        if (configsRes.ok) {
+                            this.configs = await configsRes.json();
+                        }
+                    } catch (err) {
+                        console.error('Erreur refresh:', err);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                
+                async toggleWorker() {
+                    try {
+                        const endpoint = this.workerRunning ? '/api/indexer/stop' : '/api/indexer/start';
+                        const res = await fetch(endpoint, { method: 'POST' });
+                        if (res.ok) {
+                            await this.refreshData();
+                        }
+                    } catch (err) {
+                        console.error('Erreur toggle worker:', err);
+                    }
+                },
+                
+                async createJob() {
+                    if (!this.newJobConfigId) return;
+                    
+                    this.creatingJob = true;
+                    try {
+                        const res = await fetch('/api/indexer/jobs', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ config_id: this.newJobConfigId })
+                        });
+                        
+                        if (res.ok) {
+                            this.showNewJobModal = false;
+                            this.newJobConfigId = '';
+                            await this.refreshData();
+                        }
+                    } catch (err) {
+                        console.error('Erreur création job:', err);
+                    } finally {
+                        this.creatingJob = false;
+                    }
+                },
+                
+                async createConfig() {
+                    console.log('Creating config with:', JSON.stringify(this.newConfig));
+                    
+                    if (!this.newConfig.name || !this.newConfig.host || !this.newConfig.share) {
+                        console.error('Missing required fields:', { 
+                            name: this.newConfig.name, 
+                            host: this.newConfig.host, 
+                            share: this.newConfig.share 
+                        });
+                        this.errorMessage = 'Veuillez remplir tous les champs obligatoires (Nom, Hôte, Partage)';
+                        this.showErrorModal = true;
+                        return;
+                    }
+                    
+                    this.creatingConfig = true;
+                    try {
+                        const startPath = `//${this.newConfig.host}/${this.newConfig.share}${this.newConfig.remote_path ? '/' + this.newConfig.remote_path : ''}`;
+                        console.log('Start path:', startPath);
+                        
+                        const payload = {
+                            name: this.newConfig.name,
+                            domain_zone: this.newConfig.domain || 'WORKGROUP',
+                            start_path: startPath,
+                            connection: {
+                                username: this.newConfig.username || '',
+                                password: this.newConfig.password || '',
+                                domain: this.newConfig.domain || ''
+                            },
+                            is_archive: false,
+                            include_paths: [],
+                            exclude_paths: []
+                        };
+                        console.log('Payload:', JSON.stringify(payload));
+                        
+                        const res = await fetch('/api/crawl-configs', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        
+                        if (res.ok) {
+                            this.showNewConfigModal = false;
+                            this.newConfig = { name: '', host: '', share: '', remote_path: '', username: '', password: '', domain: '' };
+                            await this.refreshData();
+                        } else {
+                            const err = await res.json();
+                            console.error('Erreur API:', err);
+                            this.errorMessage = JSON.stringify(err.detail || err, null, 2);
+                            this.showErrorModal = true;
+                        }
+                    } catch (err) {
+                        console.error('Erreur création config:', err);
+                        this.errorMessage = 'Erreur lors de la création de la source';
+                        this.showErrorModal = true;
+                    } finally {
+                        this.creatingConfig = false;
+                    }
+                },
+                
+                async deleteConfig(configId) {
+                    this.configToDelete = configId;
+                    this.showDeleteConfirmModal = true;
+                },
+                
+                async confirmDeleteConfig() {
+                    if (!this.configToDelete) return;
+                    
+                    this.deletingConfig = true;
+                    try {
+                        const res = await fetch(`/api/crawl-configs/${this.configToDelete}`, {
+                            method: 'DELETE'
+                        });
+                        
+                        const result = await res.json();
+                        
+                        if (res.ok) {
+                            this.showDeleteConfirmModal = false;
+                            this.configToDelete = null;
+                            await this.refreshData();
+                        } else {
+                            this.deleteError = result.detail || 'Échec de la suppression';
+                        }
+                    } catch (err) {
+                        console.error('Erreur suppression config:', err);
+                        this.deleteError = 'Erreur lors de la suppression';
+                    } finally {
+                        this.deletingConfig = false;
+                    }
+                },
+                
+                cancelDeleteConfig() {
+                    this.showDeleteConfirmModal = false;
+                    this.configToDelete = null;
+                    this.deleteError = '';
+                },
+                
+                resetNewConfig() {
+                    this.newConfig = {
+                        name: '',
+                        host: '',
+                        share: '',
+                        remote_path: '',
+                        username: '',
+                        password: '',
+                        domain: ''
+                    };
+                },
+                
+                editConfig(config) {
+                    // Parser le start_path pour extraire host, share et remote_path
+                    const pathMatch = config.start_path.match(/^\/\/([^/]+)\/([^/]+)(?:\/(.*))?$/);
+                    
+                    this.editConfigData = {
+                        id: config.id,
+                        name: config.name,
+                        host: pathMatch ? pathMatch[1] : '',
+                        share: pathMatch ? pathMatch[2] : '',
+                        remote_path: pathMatch && pathMatch[3] ? pathMatch[3] : '',
+                        username: config.connection_username || '',
+                        password: '', // Ne pas pré-remplir le mot de passe pour sécurité
+                        domain: config.connection_domain || config.domain_zone || ''
+                    };
+                    this.showEditConfigModal = true;
+                },
+                
+                async saveEditConfig() {
+                    if (!this.editConfigData.id) return;
+                    
+                    this.editingConfig = true;
+                    try {
+                        const payload = {
+                            name: this.editConfigData.name,
+                            domain_zone: this.editConfigData.domain || 'WORKGROUP',
+                            start_path: `//${this.editConfigData.host}/${this.editConfigData.share}${this.editConfigData.remote_path ? '/' + this.editConfigData.remote_path : ''}`,
+                            connection: {
+                                username: this.editConfigData.username,
+                                password: this.editConfigData.password,
+                                domain: this.editConfigData.domain || ''
+                            },
+                            is_archive: false,
+                            include_paths: [],
+                            exclude_paths: []
+                        };
+                        
+                        const res = await fetch(`/api/crawl-configs/${this.editConfigData.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        
+                        if (res.ok) {
+                            this.showEditConfigModal = false;
+                            this.editConfigData = { id: '', name: '', host: '', share: '', remote_path: '', username: '', password: '', domain: '' };
+                            await this.refreshData();
+                        } else {
+                            const err = await res.json();
+                            this.errorMessage = JSON.stringify(err.detail || err, null, 2);
+                            this.showErrorModal = true;
+                        }
+                    } catch (err) {
+                        console.error('Erreur modification config:', err);
+                        this.errorMessage = 'Erreur lors de la modification de la source';
+                        this.showErrorModal = true;
+                    } finally {
+                        this.editingConfig = false;
+                    }
+                },
+                
+                cancelEditConfig() {
+                    this.showEditConfigModal = false;
+                    this.editConfigData = { id: '', name: '', host: '', share: '', remote_path: '', username: '', password: '', domain: '' };
+                    this.editingConfig = false;
+                },
+                
+                async startIndexing(configId) {
+                    try {
+                        const res = await fetch('/api/indexer/jobs', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ config_id: configId })
+                        });
+                        
+                        if (res.ok) {
+                            await this.refreshData();
+                        }
+                    } catch (err) {
+                        console.error('Erreur démarrage indexation:', err);
+                    }
+                },
+                
+                // Helpers
+                formatNumber(num) {
+                    return new Intl.NumberFormat('fr-FR').format(num);
+                },
+                
+                formatBytes(bytes) {
+                    if (!bytes || bytes === 0) return '0 B';
+                    const k = 1024;
+                    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+                    const i = Math.floor(Math.log(bytes) / Math.log(k));
+                    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+                },
+                
+                formatDate(dateStr) {
+                    if (!dateStr) return '-';
+                    const date = new Date(dateStr);
+                    return new Intl.DateTimeFormat('fr-FR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    }).format(date);
+                },
+                
+                formatStatus(status) {
+                    const labels = {
+                        'pending': 'En attente',
+                        'running': 'En cours',
+                        'completed': 'Terminé',
+                        'failed': 'Échoué',
+                        'cancelled': 'Annulé'
+                    };
+                    return labels[status] || status;
+                }
+            }
+        }
+    </script>
+
+    <!-- Modal: Confirmation Suppression -->
+    <div x-show="showDeleteConfirmModal" 
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+         @click.self="cancelDeleteConfig()">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100">
+                <h3 class="text-lg font-semibold text-red-600"><i class="fas fa-exclamation-triangle mr-2"></i>Confirmer la suppression</h3>
+            </div>
+            <div class="p-6">
+                <p class="text-gray-700 mb-4">Êtes-vous sûr de vouloir supprimer cette source ? Cette action est irréversible.</p>
+                <div x-show="deleteError" class="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                    <p class="text-red-700 text-sm" x-text="deleteError"></p>
+                </div>
+            </div>
+            <div class="px-6 py-4 bg-gray-50 flex justify-end gap-3">
+                <button @click="cancelDeleteConfig()" class="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium">
+                    Annuler
+                </button>
+                <button @click="confirmDeleteConfig()" 
+                        :disabled="deletingConfig"
+                        class="bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white px-4 py-2 rounded-lg font-medium">
+                    <span x-show="!deletingConfig"><i class="fas fa-trash mr-1"></i>Supprimer</span>
+                    <span x-show="deletingConfig"><i class="fas fa-spinner fa-spin mr-1"></i>Suppression...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Erreur -->
+    <div x-show="showErrorModal" 
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+         @click.self="showErrorModal = false">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-red-600"><i class="fas fa-exclamation-circle mr-2"></i>Erreur</h3>
+                <button @click="showErrorModal = false" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-6">
+                <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <pre class="text-red-700 text-sm whitespace-pre-wrap font-mono" x-text="errorMessage"></pre>
+                </div>
+            </div>
+            <div class="px-6 py-4 bg-gray-50 flex justify-end">
+                <button @click="showErrorModal = false" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-medium">
+                    Fermer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Modifier Source -->
+    <div x-show="showEditConfigModal" 
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+         @click.self="cancelEditConfig()">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-blue-600"><i class="fas fa-edit mr-2"></i>Modifier la source</h3>
+                <button @click="cancelEditConfig()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Nom de la source</label>
+                    <input type="text" x-model="editConfigData.name" placeholder="ex: Serveur Production"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Hôte SMB</label>
+                        <input type="text" x-model="editConfigData.host" placeholder="ex: 192.168.1.100"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Partage</label>
+                        <input type="text" x-model="editConfigData.share" placeholder="ex: Data"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Chemin distant (optionnel)</label>
+                    <input type="text" x-model="editConfigData.remote_path" placeholder="ex: /dossier/sous-dossier"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Utilisateur</label>
+                        <input type="text" x-model="editConfigData.username" placeholder="ex: admin"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Mot de passe (laisser vide pour ne pas changer)</label>
+                        <input type="password" x-model="editConfigData.password" placeholder="Nouveau mot de passe (optionnel)"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Domaine Windows</label>
+                    <input type="text" x-model="editConfigData.domain" placeholder="ex: WORKGROUP ou MONDOMAINE"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+            </div>
+            <div class="px-6 py-4 bg-gray-50 flex justify-end gap-3">
+                <button @click="cancelEditConfig()" class="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium">
+                    Annuler
+                </button>
+                <button @click="saveEditConfig()" 
+                        :disabled="!editConfigData.name || !editConfigData.host || !editConfigData.share || editingConfig"
+                        class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white px-4 py-2 rounded-lg font-medium">
+                    <span x-show="!editingConfig"><i class="fas fa-save mr-1"></i>Enregistrer</span>
+                    <span x-show="editingConfig"><i class="fas fa-spinner fa-spin mr-1"></i>Enregistrement...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Nouvelle Source -->
+    <div x-show="showNewConfigModal" 
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+         @click.self="showNewConfigModal = false">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h3 class="text-lg font-semibold">Nouvelle source SMB</h3>
+                <button @click="showNewConfigModal = false" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Nom de la source</label>
+                    <input type="text" x-model="newConfig.name" placeholder="ex: Serveur Production"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Hôte SMB</label>
+                        <input type="text" x-model="newConfig.host" placeholder="ex: 192.168.1.100"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Partage</label>
+                        <input type="text" x-model="newConfig.share" placeholder="ex: Data"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Chemin distant (optionnel)</label>
+                    <input type="text" x-model="newConfig.remote_path" placeholder="ex: /dossier/sous-dossier"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Utilisateur</label>
+                        <input type="text" x-model="newConfig.username" placeholder="ex: admin"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Mot de passe</label>
+                        <input type="password" x-model="newConfig.password" placeholder="••••••••"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Domaine Windows</label>
+                    <input type="text" x-model="newConfig.domain" placeholder="ex: WORKGROUP ou MONDOMAINE (optionnel)"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div class="bg-blue-50 rounded-lg p-3 text-sm">
+                    <p class="text-blue-800"><i class="fas fa-info-circle mr-1"></i> Cette source sera utilisée pour indexer les fichiers SMB.</p>
+                </div>
+            </div>
+            <div class="px-6 py-4 bg-gray-50 flex justify-end gap-3">
+                <button @click="showNewConfigModal = false" class="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium">
+                    Annuler
+                </button>
+                <button @click="createConfig()" 
+                        :disabled="!newConfig.name || !newConfig.host || !newConfig.share || creatingConfig"
+                        class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white px-4 py-2 rounded-lg font-medium">
+                    <span x-show="!creatingConfig">Créer la source</span>
+                    <span x-show="creatingConfig"><i class="fas fa-spinner fa-spin mr-1"></i> Création...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

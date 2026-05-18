@@ -1,6 +1,6 @@
 {
   "name": "openindex-frontend-build",
-  "version": "0.3.2",
+  "version": "0.6.8",
   "private": true,
   "scripts": {
     "build:frontend": "tailwindcss -i ./frontend/styles/tailwind-input.css -o ./frontend/assets/tailwind.css --minify"
@@ -9,5 +9,8 @@
     "@fortawesome/fontawesome-free": "6.4.0",
     "alpinejs": "3.12.3",
     "tailwindcss": "3.4.17"
+  },
+  "dependencies": {
+    "pocketbase": "^0.26.8"
   }
 }

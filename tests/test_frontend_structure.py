@@ -79,7 +79,7 @@ def test_configuration_access_and_sections_exist():
 def test_dashboard_has_active_crawl_block_and_log_toggle():
     html = read_frontend_html()
 
-    assert "Avancement de l'exploration" in html
+    assert "Progression actuelle" in html
     assert "Voir les logs" in html
     assert "showCrawlerLogs" in html
     assert "Journal de l'explorateur" in html
@@ -95,3 +95,11 @@ def test_notifications_and_operator_overlays_are_present():
     assert "Aucune notification en attente." in html
     assert "Inscription des utilisateurs" in html
     assert "Profil utilisateur" in html
+
+
+def test_office_preview_does_not_request_inline_file_content():
+    html = read_frontend_html()
+
+    assert "if (!['image', 'video', 'pdf'].includes(this.previewModal.kind)) return '';" in html
+    assert "if (this.previewModal.kind !== 'office') return '';" in html
+    assert "this.previewModal = {" in html

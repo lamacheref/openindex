@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connexion - OpenIndex</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/assets/auth.js" defer></script>
+</head>
+<body class="min-h-screen bg-gray-50">
+    <div class="flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+        <div class="sm:mx-auto sm:w-full sm:max-w-md">
+            <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
+                Connexion à OpenIndex
+            </h2>
+        </div>
+
+        <div class="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+            <div class="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+                <form class="space-y-6" id="loginForm">
+                    <div id="errorMessage" class="rounded-md bg-red-50 p-4 hidden">
+                        <div class="flex">
+                            <div class="ml-3">
+                                <h3 class="text-sm font-medium text-red-800">Erreur</h3>
+                                <div class="mt-2 text-sm text-red-700">
+                                    <p id="errorText"></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="email" class="block text-sm font-medium text-gray-700">
+                            Adresse email
+                        </label>
+                        <div class="mt-1">
+                            <input id="email" name="email" type="email" autocomplete="email" required
+                                   class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="password" class="block text-sm font-medium text-gray-700">
+                            Mot de passe
+                        </label>
+                        <div class="mt-1">
+                            <input id="password" name="password" type="password" autocomplete="current-password" required
+                                   class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                        </div>
+                    </div>
+
+                    <div>
+                        <button type="submit" id="loginButton"
+                                class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                            Se connecter
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Attendre que PocketBase soit initialisé
+        document.addEventListener('DOMContentLoaded', function() {
+            // Utiliser le système de callback pour s'assurer que PocketBase est prêt
+            onPbReady(function(pbInstance) {
+                if (!pbInstance) {
+                    const errorMessage = document.getElementById('errorMessage');
+                    const errorText = document.getElementById('errorText');
+                    errorText.textContent = 'Échec du chargement de PocketBase. Veuillez rafraîchir la page.';
+                    errorMessage.classList.remove('hidden');
+                    return;
+                }
+                
+                document.getElementById('loginForm').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    
+                    const email = document.getElementById('email').value;
+                    const password = document.getElementById('password').value;
+                    const loginButton = document.getElementById('loginButton');
+                    const errorMessage = document.getElementById('errorMessage');
+                    const errorText = document.getElementById('errorText');
+                    
+                    // Désactiver le bouton
+                    loginButton.disabled = true;
+                    loginButton.textContent = 'Connexion en cours...';
+                    errorMessage.classList.add('hidden');
+                    
+                    try {
+                        const result = await login(email, password);
+                        
+                        if (result.success) {
+                            // Rediriger vers la page d'accueil
+                            window.location.href = '/index.html';
+                        } else {
+                            // Afficher l'erreur
+                            errorText.textContent = result.error || 'Identifiants invalides';
+                            errorMessage.classList.remove('hidden');
+                        }
+                    } catch (error) {
+                        console.error('Login error:', error);
+                        errorText.textContent = error.message || 'Une erreur est survenue. Veuillez réessayer.';
+                        errorMessage.classList.remove('hidden');
+                    } finally {
+                        loginButton.disabled = false;
+                        loginButton.textContent = 'Se connecter';
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

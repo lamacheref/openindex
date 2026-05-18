@@ -25,3 +25,7 @@ requirements.txt
 
 # Ignorer les fichiers de credentials
 .smb-credential
+
+# Ignorer les fichiers d'environnement locaux
+.env
+.env.preprod

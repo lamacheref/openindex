@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestion des archivages</title>
+    <script src="/assets/auth.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        .archive-list {
+            margin-top: 20px;
+        }
+        .archive-item {
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .archive-actions button {
+            margin-left: 10px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Gestion des archivages</h1>
+        <p>Bienvenue dans l'espace de gestion des archivages. Tous les utilisateurs peuvent accéder à cette page.</p>
+        
+        <div id="archives-content" style="display: none;">
+            <div class="archive-list">
+                <h2>Vos archivages</h2>
+                <div id="archive-items">
+                    <div class="archive-item">
+                        <span>Archivage du 14/04/2026</span>
+                        <div class="archive-actions">
+                            <button class="view-btn">Voir</button>
+                            <button class="download-btn">Télécharger</button>
+                        </div>
+                    </div>
+                    <div class="archive-item">
+                        <span>Archivage du 13/04/2026</span>
+                        <div class="archive-actions">
+                            <button class="view-btn">Voir</button>
+                            <button class="download-btn">Télécharger</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 20px;">
+                <h3>Actions disponibles</h3>
+                <button id="new-archive" style="padding: 8px 15px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    Nouveau processus d'archivage
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // Protection pour les pages utilisateur - nécessite juste d'être connecté
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof pb !== 'undefined' && pbInitialized) {
+            if (!enforceUserAuth()) {
+                return;
+            }
+            initArchivesPage();
+        } else {
+            onPbReady(() => {
+                if (!enforceUserAuth()) {
+                    return;
+                }
+                initArchivesPage();
+            });
+        }
+    });
+
+    function initArchivesPage() {
+        console.log('Page archives chargée pour:', pb.authStore.model.email);
+        document.getElementById('archives-content').style.display = 'block';
+        
+        // Initialisation des boutons
+        document.getElementById('new-archive').addEventListener('click', function() {
+            alert('Nouveau processus d\'archivage démarré !');
+            console.log('Nouveau processus d\'archivage démarré');
+        });
+
+        // Gestion des boutons d'actions
+        document.querySelectorAll('.view-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                alert('Visualisation de l\'archivage');
+            });
+        });
+
+        document.querySelectorAll('.download-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                alert('Téléchargement de l\'archivage');
+            });
+        });
+    }
+    </script>
+</body>
+</html>

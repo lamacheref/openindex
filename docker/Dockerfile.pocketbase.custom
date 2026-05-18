@@ -1,0 +1,24 @@
+FROM adrianmusante/pocketbase:latest
+
+# Configurer le fuseau horaire
+ENV TZ=Europe/Paris
+ENV POCKETBASE_TIMEZONE=Europe/Paris
+
+# Configurer le système pour utiliser le bon fuseau horaire
+USER root
+RUN apk add --no-cache tzdata && \
+    ln -sf /usr/share/zoneinfo/Europe/Paris /etc/localtime && \
+    echo "Europe/Paris" > /etc/timezone
+
+# Créer le répertoire de données et donner les permissions
+RUN mkdir -p /pb_data && chown pocketbase:pocketbase /pb_data
+
+# Copier les hooks et migrations
+COPY pb_hooks/ /pb/pb_hooks/
+COPY pb_migrations/ /pb/pb_migrations/
+
+# Revenir à l'utilisateur par défaut
+USER pocketbase
+
+# Démarrer PocketBase avec les bons paramètres
+CMD ["pocketbase", "serve", "--dir", "/pb_data"]

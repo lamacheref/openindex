@@ -1,0 +1,8 @@
+FROM adrianmusante/pocketbase:latest
+
+# Copier le script d'entrée dans /tmp
+COPY scripts/pocketbase-entrypoint.sh /tmp/pocketbase-entrypoint.sh
+RUN chmod +x /tmp/pocketbase-entrypoint.sh
+
+# Utiliser le script d'entrée personnalisé
+ENTRYPOINT ["/tmp/pocketbase-entrypoint.sh"]

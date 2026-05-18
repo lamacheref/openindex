@@ -48,7 +48,7 @@ jobs:
     if: github.event_name == 'pull_request'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -71,7 +71,7 @@ jobs:
       build_commit: ${{ steps.version.outputs.build_commit }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Compute build metadata
         id: version
@@ -103,9 +103,10 @@ jobs:
       POSTGRES_DB: openindex
       POSTGRES_USER: openindex_user
       POSTGRES_PASSWORD: openindex_secure_password
+      CI_ARTIFACTS_DIR: ci-artifacts/postgresql
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -117,39 +118,125 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements/dev.txt
 
+      - name: Prepare diagnostics directory
+        run: mkdir -p "${CI_ARTIFACTS_DIR}"
+
       - name: Check PostgreSQL availability
-        id: postgres_check
         run: |
           python - <<'PYCODE'
+          import json
           import os
           import socket
+          from pathlib import Path
+
+          import psycopg2
 
           host = os.environ.get('POSTGRES_HOST', 'localhost')
           port = int(os.environ.get('POSTGRES_PORT', '5432'))
-          available = False
+          diagnostics_path = Path(os.environ['CI_ARTIFACTS_DIR']) / 'postgres-connectivity.json'
+          diagnostics = {
+              'host': host,
+              'port': port,
+              'database': os.environ.get('POSTGRES_DB'),
+              'user': os.environ.get('POSTGRES_USER'),
+              'socket_available': False,
+              'sql_available': False,
+          }
 
           with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
               sock.settimeout(3)
               try:
                   sock.connect((host, port))
-                  available = True
-              except OSError:
-                  available = False
+                  diagnostics['socket_available'] = True
+              except OSError as exc:
+                  diagnostics['socket_error'] = str(exc)
 
-          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
-              fh.write(f"available={'true' if available else 'false'}\n")
+          if diagnostics['socket_available']:
+              try:
+                  conn = psycopg2.connect(
+                      host=host,
+                      port=port,
+                      dbname=os.environ.get('POSTGRES_DB'),
+                      user=os.environ.get('POSTGRES_USER'),
+                      password=os.environ.get('POSTGRES_PASSWORD'),
+                      connect_timeout=5,
+                  )
+                  with conn:
+                      with conn.cursor() as cur:
+                          cur.execute('SELECT version(), current_database(), current_user')
+                          version, database, user = cur.fetchone()
+                  conn.close()
+                  diagnostics['sql_available'] = True
+                  diagnostics['server_version'] = version
+                  diagnostics['current_database'] = database
+                  diagnostics['current_user'] = user
+              except Exception as exc:
+                  diagnostics['sql_error'] = str(exc)
+
+          diagnostics_path.write_text(json.dumps(diagnostics, indent=2), encoding='utf-8')
+
+          if not diagnostics['socket_available'] or not diagnostics['sql_available']:
+              raise SystemExit('PostgreSQL service is required for api-tests-postgresql')
           PYCODE
 
       - name: Run API tests
-        if: steps.postgres_check.outputs.available == 'true'
         run: |
-          pytest -q tests/test_api_fastapi.py tests/test_api_smoke_critical.py tests/test_db_backend_feature_flag.py
+          set +e
+          ./scripts/run_release_gate.sh \
+            --junitxml="${CI_ARTIFACTS_DIR}/pytest-junit.xml" \
+            2>&1 | tee "${CI_ARTIFACTS_DIR}/pytest.log"
+          status=${PIPESTATUS[0]}
+          echo "${status}" > "${CI_ARTIFACTS_DIR}/pytest.exitcode"
+          exit "${status}"
 
-      - name: Skip API tests (PostgreSQL unavailable)
-        if: steps.postgres_check.outputs.available != 'true'
+      - name: Collect PostgreSQL diagnostics
+        if: always()
         run: |
-          echo "PostgreSQL indisponible sur ${POSTGRES_HOST}:${POSTGRES_PORT}."
-          echo "api-tests-postgresql est volontairement ignoré pour éviter un échec certain."
+          python - <<'PYCODE'
+          import json
+          import os
+          import platform
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          artifacts_dir = Path(os.environ['CI_ARTIFACTS_DIR'])
+          artifacts_dir.mkdir(parents=True, exist_ok=True)
+
+          summary = {
+              'python_version': sys.version,
+              'platform': platform.platform(),
+              'openindex_db_backend': os.environ.get('OPENINDEX_DB_BACKEND'),
+          }
+          (artifacts_dir / 'runner-summary.json').write_text(
+              json.dumps(summary, indent=2),
+              encoding='utf-8',
+          )
+
+          pip_freeze = subprocess.run(
+              [sys.executable, '-m', 'pip', 'freeze'],
+              capture_output=True,
+              text=True,
+              check=False,
+          )
+          (artifacts_dir / 'pip-freeze.txt').write_text(pip_freeze.stdout, encoding='utf-8')
+          PYCODE
+
+          container_id="$(docker ps --filter "ancestor=postgres:17-alpine" --format '{{.ID}}' | head -n 1)"
+          if [ -n "${container_id}" ]; then
+            docker logs "${container_id}" > "${CI_ARTIFACTS_DIR}/postgres-service.log" 2>&1 || true
+          else
+            echo "postgres service container not found" > "${CI_ARTIFACTS_DIR}/postgres-service.log"
+          fi
+
+      - name: Upload PostgreSQL diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-tests-postgresql-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.CI_ARTIFACTS_DIR }}
+          if-no-files-found: warn
+          retention-days: 14
 
   changes:
     runs-on: ubuntu-latest
@@ -159,42 +246,112 @@ jobs:
       ui: ${{ steps.filter.outputs.ui }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Detect changed paths
         id: filter
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
-            api:
-              - 'Dockerfile.api'
-              - 'src/api/**'
-              - 'src/postgres_adapter.py'
-              - 'src/config_manager.py'
-              - 'src/logging_config.py'
-              - 'config/**'
-              - 'requirements/dev.txt'
-            crawler:
-              - 'Dockerfile.crawler'
-              - 'Archives/legacy/requirements/requirements.crawler.txt'
-              - 'src/**'
-              - 'config/**'
-              - 'database/**'
-            ui:
-              - 'Dockerfile.frontend'
-              - 'frontend/**'
-              - 'nginx/**'
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          python - <<'PYCODE'
+          import fnmatch
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          event_name = os.environ["GITHUB_EVENT_NAME"]
+          event_path = Path(os.environ["GITHUB_EVENT_PATH"])
+          current_sha = os.environ["GITHUB_SHA"]
+          output_path = Path(os.environ["GITHUB_OUTPUT"])
+          event = json.loads(event_path.read_text(encoding="utf-8"))
+
+          base_sha = None
+          head_sha = None
+
+          if event_name == "pull_request":
+              pull_request = event["pull_request"]
+              base_sha = pull_request["base"]["sha"]
+              head_sha = pull_request["head"]["sha"]
+          elif event_name == "push":
+              base_sha = event.get("before")
+              head_sha = event.get("after") or current_sha
+          else:
+              head_sha = current_sha
+
+          changed_files = []
+          invalid_base = {None, "", "0000000000000000000000000000000000000000"}
+
+          if base_sha not in invalid_base and head_sha:
+              diff = subprocess.run(
+                  ["git", "diff", "--name-only", f"{base_sha}..{head_sha}"],
+                  check=True,
+                  capture_output=True,
+                  text=True,
+              )
+              changed_files = [line for line in diff.stdout.splitlines() if line]
+
+          filters = {
+              "api": [
+                  "Dockerfile.api",
+                  "src/api/**",
+                  "src/postgres_adapter.py",
+                  "src/config_manager.py",
+                  "src/logging_config.py",
+                  "config/**",
+                  "requirements/dev.txt",
+              ],
+              "crawler": [
+                  "Dockerfile.crawler",
+                  "Archives/legacy/requirements/requirements.crawler.txt",
+                  "src/**",
+                  "config/**",
+                  "database/**",
+              ],
+              "ui": [
+                  "Dockerfile.frontend",
+                  "frontend/**",
+                  "nginx/**",
+              ],
+          }
+
+          results = {}
+          for name, patterns in filters.items():
+              results[name] = any(
+                  fnmatch.fnmatch(path, pattern)
+                  for path in changed_files
+                  for pattern in patterns
+              )
+
+          with output_path.open("a", encoding="utf-8") as fh:
+              for name, matched in results.items():
+                  fh.write(f"{name}={'true' if matched else 'false'}\n")
+          PYCODE
 
   docker-build-api:
     runs-on: ubuntu-latest
     needs: [changes, build-metadata, versioning]
-    if: (needs.changes.outputs.api == 'true' || github.event_name == 'workflow_dispatch') && (github.event_name != 'pull_request' || needs.versioning.result == 'success')
+    if: >
+      always() &&
+      (needs.changes.outputs.api == 'true' || github.event_name == 'workflow_dispatch') &&
+      (
+        github.event_name != 'pull_request' ||
+        needs.versioning.result == 'success'
+      ) &&
+      (
+        needs.versioning.result == 'success' ||
+        needs.versioning.result == 'skipped'
+      )
     permissions:
       contents: read
       packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -237,13 +394,23 @@ jobs:
   docker-build-crawler:
     runs-on: ubuntu-latest
     needs: [changes, build-metadata, versioning]
-    if: (needs.changes.outputs.crawler == 'true' || github.event_name == 'workflow_dispatch') && (github.event_name != 'pull_request' || needs.versioning.result == 'success')
+    if: >
+      always() &&
+      (needs.changes.outputs.crawler == 'true' || github.event_name == 'workflow_dispatch') &&
+      (
+        github.event_name != 'pull_request' ||
+        needs.versioning.result == 'success'
+      ) &&
+      (
+        needs.versioning.result == 'success' ||
+        needs.versioning.result == 'skipped'
+      )
     permissions:
       contents: read
       packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -286,13 +453,23 @@ jobs:
   docker-build-ui:
     runs-on: ubuntu-latest
     needs: [changes, build-metadata, versioning]
-    if: (needs.changes.outputs.ui == 'true' || github.event_name == 'workflow_dispatch') && (github.event_name != 'pull_request' || needs.versioning.result == 'success')
+    if: >
+      always() &&
+      (needs.changes.outputs.ui == 'true' || github.event_name == 'workflow_dispatch') &&
+      (
+        github.event_name != 'pull_request' ||
+        needs.versioning.result == 'success'
+      ) &&
+      (
+        needs.versioning.result == 'success' ||
+        needs.versioning.result == 'skipped'
+      )
     permissions:
       contents: read
       packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

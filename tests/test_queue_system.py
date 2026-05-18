@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch, MagicMock
 # Ajouter le chemin du projet au path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from src.smb_crawler import SMBCrawler
+from backend.src.smb_crawler import SMBCrawler
 
 
 def test_queue_initialization():
@@ -24,9 +24,11 @@ def test_queue_initialization():
         domain='test_domain'
     )
     
-    # Vérifier que la queue est initialisée
-    assert hasattr(crawler, 'queue'), "La queue n'est pas initialisée dans le crawler."
-    print("✓ La queue est correctement initialisée dans le crawler.")
+    # Vérifier que les queues sont initialisées
+    assert hasattr(crawler, 'directory_queue'), "La directory_queue n'est pas initialisée dans le crawler."
+    assert hasattr(crawler, 'file_queue'), "La file_queue n'est pas initialisée dans le crawler."
+    assert hasattr(crawler, 'result_queue'), "La result_queue n'est pas initialisée dans le crawler."
+    print("✓ Les queues sont correctement initialisées dans le crawler.")
 
 
 def test_queue_usage_in_crawl():
@@ -68,7 +70,7 @@ def test_queue_usage_in_crawl():
         mock_open_file.return_value.__enter__.return_value = mock_file
         
         # Exécuter la méthode crawl
-        files = list(crawler.crawl(base_path='test_path', page_size=10))
+        files = list(crawler.crawl(base_path='test_path'))
         
         # Vérifier que la queue est utilisée
         assert len(files) == 2, "Le nombre de fichiers retournés est incorrect."
@@ -96,7 +98,7 @@ def test_error_handling():
         mock_scandir.side_effect = Exception("Erreur d'accès au répertoire")
         
         # Exécuter la méthode crawl
-        files = list(crawler.crawl(base_path='test_path', page_size=10))
+        files = list(crawler.crawl(base_path='test_path'))
         
         # Vérifier que l'erreur est gérée correctement
         assert len(files) == 0, "Aucun fichier ne devrait être retourné en cas d'erreur."
@@ -118,8 +120,8 @@ def test_database_integration():
     # Initialiser la base de données
     crawler.init_db()
     
-    # Vérifier que la table est créée
-    conn = sqlite3.connect(':memory:')
+    # Vérifier que la table est créée en utilisant la même connexion que le crawler
+    conn = sqlite3.connect(crawler.db_path)
     cursor = conn.cursor()
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='files'")
     table_exists = cursor.fetchone() is not None

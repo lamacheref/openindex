@@ -1,193 +1,207 @@
-# TODO OpenIndex — suite post-commando (J4 -> J5)
+# TODO OpenIndex — Refonte selon PROJET.md
 
 ## Objectif
 
-Passer d'une **readiness J4 documentée** à une **exécution J4 pilotée par preuves**, puis enclencher J5 (qualité & observabilité) avec critères de sortie mesurables.
+**Implémenter les 5 phases définies dans PROJET.md** avec un ordre de priorité clair pour la préproduction :
+1. Indexeur efficace (Phase 1)
+2. UI admin (Phase 4)  
+3. UI Utilisateur sans authentification (archivage + suppression)
 
 ---
 
-## 1) Priorités immédiates (Semaine en cours)
+## 1) Priorité Critique — Indexeur Efficace (Phase 1)
 
-- [x] **T-01 — Clôturer CMD-12 (checklist release commando) avec preuves**
-  - Vérifier CI verte sur PostgreSQL (backend unique).
-  - Migration de DB non requise : re-crawl complet prévu sur zone de test massivement modifiée avec PostgreSQL.
-  - Vérifier bench comparatif publié avec PostgreSQL.
-  - Vérifier rollback relu par un pair.
-  - Mettre à jour `CHANGELOG.md` pour le lot de clôture.
-  - Commit: `124140d`
+### T-INDEX-01 — Refonte complète du système d'indexation
+- [ ] **Scrutation périodique** : Scheduler configurable (22h-6h)
+- [ ] **Multi-espaces SMB** : Configuration de plusieurs partages distincts
+- [ ] **Files différenciées** : Queue rapide (<200Mo) et queue lente (≥200Mo)
+- [ ] **Hashage xxHash** : Remplacer SHA256 par xxHash pour performance
+- [ ] **Détection changements** : Mode incrémentiel avec hash + timestamps
+- [ ] **Gestion des ordures** : Détection automatique (*.tmp, ~*, Thumbs.db)
+- [ ] **Base PostgreSQL** : Schéma optimisé avec tables smb_spaces, directories, files
+- [ ] **Tests de charge** : Validation avec 166k+ fichiers
+- [ ] **Documentation** : Guide d'administration de l'indexation
 
-- [x] **T-02 — Décision formelle Go/No-Go J4**
-  - Appliquer les critères de `docs/phases/J4_MIGRATION.md`.
-  - Décision rédigée le `2026-03-18` dans `docs/2026-03-18_j4_go-no-go.md`.
-  - Décision retenue: `Go`.
-  - Preuves: recrawl contrôlé, benchmark 3 runs stable, rollback drill validé, CI GitHub PostgreSQL verte sur PR `#41`.
-  - Commit: `17f5806`
-
-- [x] **T-03 — Figer la baseline technique J4**
-  - Confirmer PostgreSQL comme backend de données unique dans la doc principale.
-  - Aligner `README.md`, `README.stack.md`, `ROADMAP.md` et ce `TODO.md`.
-  - Supprimer les ambiguïtés "actif vs legacy" dans les parcours opératoires.
-  - État propagé: `README.md`, `README.stack.md`, `ROADMAP.md`, `TODO.md`.
-  - Commit: `40c691b`
+### T-INDEX-02 — Optimisation et monitoring
+- [ ] **Métriques temps réel** : Vitesse d'indexation, erreurs, files traitées
+- [ ] **Health checks** : Endpoints de santé pour le crawler
+- [ ] **Gestion des erreurs** : Queue retry pour fichiers verrouillés
+- [ ] **Performance** : Optimisation des requêtes PostgreSQL
+- [ ] **Logs structurés** : Format JSON pour tous les composants
 
 ---
 
-## 2) Exécution J4 (priorités restantes)
+## 2) Priorité Haute — UI Administrateur (Phase 4.1)
 
-- [x] **T-04 — Rétablir une preuve J4 exploitable sur PostgreSQL**
-  - Le `Go` J4 du `2026-03-18` reste inutilisable tant qu'un recrawl complet fiable n'a pas produit de nouvelle preuve versionnée.
-  - Capitaliser le crawl complet en cours sur `\\172.16.252.34\Public\SMIDEN` et vérifier sa finalisation sans erreur bloquante.
-  - Corrigé le `2026-03-19` côté code: les nouveaux runs PostgreSQL peuvent désormais ignorer les fichiers déjà crawlés au même chemin quand `size` et `last_modified` sont inchangés, ou quand `last_modified` n'est pas postérieur au dernier crawl `completed` de l'espace; commit `ae508db`, effet complet après redéploiement du crawler.
-  - Livré le `2026-03-19` via `docs/artifacts/j4_recrawl_live_snapshot_2026-03-19.json`: volumétrie réelle observée, découverte stabilisée, `0` erreur bloquante et rapport J4/Go-No-Go révisés.
-  - La completion totale du traitement d'intégrité n'est plus portée comme bloqueur J4; elle est transférée au cycle J5 avec nouveaux tests dédiés.
+### T-ADMIN-01 — Tableau de bord admin
+- [ ] **Métriques principales** : Fichiers indexés, espace utilisé, erreurs/warnings
+- [ ] **Contrôles manuels** : Lancement/arrêt/pause/resume des indexations
+- [ ] **Notifications temps réel** : WebSocket pour erreurs et warnings
+- [ ] **Gestion des ordures** : Interface de validation pour fichiers problématiques
+- [ ] **Dashboard Grafana** : Visualisation des métriques système
 
-- [ ] **T-05 — Validation de performance PostgreSQL sur base recrawlée**
-  - Rejouer le benchmark PostgreSQL sur endpoints critiques après le recrawl complet de référence.
-  - Vérifier le respect des seuils P95 annoncés avec PostgreSQL.
-  - Publier les résultats dans `docs/` avec conclusion explicite (OK / NOK) sur la base active PostgreSQL.
+### T-ADMIN-02 — Gestion des espaces et configurations
+- [ ] **Configuration SMB** : Interface pour ajouter/modifier/supprimer les espaces
+- [ ] **Test de connexion** : Validation des credentials SMB
+- [ ] **Scheduler** : Configuration des plages horaires d'indexation
+- [ ] **Seuils configurables** : Taille files, patterns d'exclusion
 
-- [ ] **T-06 — Durcir la CI PostgreSQL de référence**
-  - Rendre obligatoire le passage des jobs CI PostgreSQL avant merge.
-  - Ajouter la collecte d'artefacts minimaux en cas d'échec (logs API/tests).
-  - Documenter le chemin de diagnostic rapide en cas de pipeline rouge.
-
-- [x] **T-07 — Drill de rollback J4**
-  - Simuler un incident post-migration PostgreSQL.
-  - Exécuter le rollback complet avec chronométrage.
-  - Capitaliser la procédure réelle dans `docs/operations/EXPLOITATION.md`.
-  - Livré le `2026-03-18` via `docs/artifacts/j4_rollback_drill_2026-03-18.json`; pas de nouveau chantier J4 ouvert tant qu'un nouveau contexte de référence ne l'exige pas.
+### T-ADMIN-03 — Gestion des doublons avancée
+- [ ] **Détection** : Hash + nom avec affichage groupé
+- [ ] **Actions multiples** : Suppression individuelle/multiple + archivage
+- [ ] **Corbeille 30 jours** : Traçabilité complète avec restauration
+- [ ] **Confirmation requise** : Validation avant toute suppression
 
 ---
 
-## 3) Préparation J5 (qualité & observabilité)
+## 3) Priorité Moyenne — UI Utilisateur Simplifiée (Phase 4.3)
 
-- [ ] **T-08 — Définir les SLI/SLO opérationnels minimum**
-  - Disponibilité API, latence P95, taux d'erreurs, temps de recovery.
-  - Seuils d'alerte + responsables + fréquence de revue.
+### T-USER-01 — Interface sans authentification
+- [ ] **Navigation simple** : Explorateur de fichiers intuitif
+- [ ] **Actions de base** : Archivage manuel et suppression de fichiers
+- [ ] **Visualisation** : Aperçus pour images, PDF, bureautique
+- [ ] **Recherche** : Recherche par nom et type de fichier
+- [ ] **Design Material** : Interface moderne et responsive
 
-- [ ] **T-09 — Pack de tests critiques "release gate"**
-  - API smoke critique avec PostgreSQL.
-  - Non-régression frontend structurelle.
-  - Vérification DB explain / requêtes clés.
-  - Exécution via une commande unique documentée.
-
-- [ ] **T-10 — Observabilité minimale exploitable**
-  - Standardiser les logs applicatifs (format, niveau, corrélation).
-  - Définir un dashboard santé + une vue incidents.
-  - Définir la procédure d'escalade en cas de dérive.
-
-- [ ] **T-14 — Revoir l'UI pour le pilotage des tests et crawls**
-  - Repenser l'interface actuelle, jugée insuffisante pour le suivi opérationnel.
-  - Transformer le tableau de bord en poste opérateur actif: espace courant, dernier lancement, état du crawl, KPI temps réel, progression et journal.
-  - Implémenter un protocole de pré-estimation volumétrique avant exploration pour fiabiliser la progression, selon `docs/operations/CRAWL_PRE_ESTIMATION_PROTOCOL.md`.
-  - Corriger les finitions demandées dans `docs/definition_ui.md`: nom distinctif d'espace, "non défini" si dernier lancement absent, zone version réduite, suppression du sous-titre inutile, unités en octets, bouton logs déplacé sous la progression et désactivé si le crawler est inactif.
-  - Déjà livré le `2026-03-18`: vocabulaire exploration/explorateur, logs réels du worker, progression par volume, queues réelles, actions arrêter/supprimer sur les runs récents et garde-fou un seul run actif par espace.
-  - Déporter les explications de conception ou limites techniques hors de l'interface vers `TODO.md` ou la documentation.
-  - Rendre visibles les statuts en cours, succès, échecs, durée, artefacts et journaux utiles directement dans l'UI finale.
-  - Supprimer les vues de démonstration ou décoratives qui ne servent pas l'exploitation réelle.
-  - Prévoir un écran de suivi temps réel orienté exploitation plutôt qu'une simple consultation statique.
-  - Rendre actifs les éléments de shell: cloche de notifications, engrenage de configuration et bouton "Piloter le crawl".
-  - Implémenter l'ouverture de configuration en overlay latéral droite -> gauche pour: espaces crawler, gestion de la base, inscription utilisateurs, profil utilisateur.
-  - Implémenter "Piloter le crawl" sous forme de lightbox permettant de lancer, forcer ou arrêter un crawl.
-
-- [ ] **T-15 — Concevoir l'Explorateur de fichiers double panneau**
-  - Définir le comportement cible type Explorateur Windows / Dolphin.
-  - Prévoir navigation arborescente, sélection, transfert inter-panneaux et actions contextuelles.
-  - Déterminer les endpoints API nécessaires pour une navigation hiérarchique et des opérations de déplacement/copie pilotées.
-  - Prévoir le mode d'entrée dans le menu en cohérence avec les arbitrages de shell validés dans `docs/definition_ui.md`.
-
-- [ ] **T-16 — Concevoir la page de traitements des artefacts**
-  - Définir les catégories d'artefacts traitables: temporaires Office, doublons, fichiers système, archives obsolètes.
-  - Prévoir KPI dédiés, liste filtrable, sélection multiple et actions de masse.
-  - Déterminer les règles métiers entre suppression, ignorance et archivage.
-  - Prévoir les actions unitaires et massives: supprimer, ignorer, archiver, sélectionner tout.
-
-- [ ] **T-13 — Préparer la configuration multi-repository**
-  - Définir le modèle de configuration pour plusieurs racines SMB.
-  - Déterminer la stratégie d'identification par source/référentiel.
-  - Adapter la doc opératoire pour éviter les recrawls monolithiques sur base active.
+### T-USER-02 — Archivage manuel simplifié
+- [ ] **Sélection multiple** : Interface pour choisir les fichiers à archiver
+- [ ] **Prévisualisation** : Espace requis et durée estimée
+- [ ] **Progression** : Barre de progression pour les transferts
+- [ ] **Raccourcis optionnels** : Création de liens symboliques
 
 ---
 
-## 4) Dette documentaire à résorber
+## 4) Priorité Moyenne — Archivage Intelligent (Phase 2)
 
-- [ ] **T-11 — Nettoyage docs historiques vs référence active**
-  - Marquer explicitement les documents legacy.
-  - Ajouter un index "où trouver la vérité" dans `docs/`.
-  - Réduire les doublons roadmap/projet/todo.
+### T-ARCH-01 — Système d'archivage robuste
+- [ ] **Zones miroir** : Configuration multi-zones d'archivage
+- [ ] **Workflow sécurisé** : Vérification hash avant/après copie
+- [ ] **Retry automatique** : Max 5 tentatives avec logging détaillé
+- [ ] **Gestion des erreurs** : Fichiers disparus, verrouillés, conflits
+- [ ] **Traçabilité** : Logs complets des opérations d'archivage
 
-- [ ] **T-12 — Gouvernance de preuve**
-  - Chaque item clos doit pointer vers: commande exécutée, artefact, commit.
-  - Remplacer tout marqueur implicite par une preuve vérifiable.
+### T-ARCH-02 — Archivage automatique (post-v1.0.0)
+- [ ] **Règles configurables** : Type "archive" ET taille >500Mo
+- [ ] **Exécution nocturne** : Avant indexation pour éviter surcharge
+- [ ] **Raccourcis obligatoires** : Création automatique pour archivage auto
+- [ ] **Validation admin** : Interface de validation des règles
+
+## 5) Priorité Basse — Sommaires IA (Phase 3)
+
+### T-AI-01 — Infrastructure IA locale
+- [ ] **Ollama Docker** : Déploiement de Mistral-Nemo
+- [ ] **Configuration** : 32GB RAM, 8 threads CPU
+- [ ] **Tests performance** : Validation sur CPU seul sans GPU
+
+### T-AI-02 — Génération asynchrone des sommaires
+- [ ] **Site dynamique** : Base de données mise à jour lors de l'indexation
+- [ ] **Statut "en cours"** : Affichage "traitement IA" si résumé non généré
+- [ ] **Extraction texte** : Pour fichiers ≤100Mo
+- [ ] **Base dédiée** : Tables ai_summaries, file_previews, summary_cache
+
+### T-AI-03 — Visualisation multi-formats
+- [ ] **OnlyOffice** : Intégration bureautique (Word, Excel, PowerPoint)
+- [ ] **PDF.js** : Visualisation native PDF
+- [ ] **Galerie images** : Thumbnails automatiques
+- [ ] **Players HTML5** : Vidéos et audio natifs
+
+### T-AI-04 — Interface Material Design
+- [ ] **Cards visuelles** : Aperçus immédiats avec métadonnées
+- [ ] **Recherche plein texte** : Dans sommaires IA et métadonnées
+- [ ] **Export avancé** : PDF/Word des sommaires générés
 
 ---
 
-## Définition de terminé (DoD) pour chaque tâche
+## 6) Priorité Basse — Production et Exploitation (Phase 5)
 
-- [ ] Une preuve d'exécution est versionnée (log, JSON, capture, rapport).
-- [ ] Les impacts doc sont propagés aux fichiers de référence.
-- [ ] Un risque principal et son plan de mitigation sont notés.
-- [ ] La tâche est traçable dans l'historique Git (commit clair).
+### T-PROD-01 — Monitoring et observabilité
+- [ ] **Métriques système** : CPU, RAM, disque utilisés par processus
+- [ ] **Alerting** : Seuils d'alerte (espace disque, performances IA)
+- [ ] **Logs centralisés** : Stack ELK avec rétention 30 jours
+- [ ] **Dashboard Grafana** : Visualisation temps réel
+
+### T-PROD-02 — Sauvegarde et recovery
+- [ ] **Backup PostgreSQL** : pg_dump quotidien + WAL archiving
+- [ ] **Backup configurations** : Paramètres SMB, modèles IA, certificats
+- [ ] **Plan de recovery** : Procédures de restauration testées
+- [ ] **RTO/RPO** : Objectifs de recovery time/point
+
+### T-PROD-03 — Audit mensuel complet
+- [ ] **Audit stockage** : Noms trop longs, espaces, profondeur PATH
+- [ ] **Mistral PRO** : Compte configuré pour analyse RGPD
+- [ ] **Détection données personnelles** : Scan intelligent des fichiers
+- [ ] **Recherche credentials** : Mots de passe et informations sensibles
+- [ ] **Rapport détaillé** : Recommandations et plan d'action
+
+### T-PROD-04 — CI/CD et sécurité
+- [ ] **Pipeline GitLab** : Build/test/déploiement automatisé
+- [ ] **Blue-green deployment** : Déploiement sans coupure
+- [ ] **Tests qualité** : Couverture >80% + tests E2E
+- [ ] **Sécurité avancée** : Audit trails, rate limiting, vulnerability scanning
 
 ---
 
-## Notes de pilotage
+## Éléments Terminés à Revoir (Vérifié, Aligné, Testé)
 
-- Priorisation: **fiabilité > migration > confort**.
-- Pas de nouvelle feature produit tant que T-01 à T-07 ne sont pas clôturées.
-- Revue hebdo obligatoire des KPI (pipeline, flakiness, perf, recovery).
+### ✅ T-ARCH-04 — Correction SMB SMIDEN (Issue #85)
+**Statut:** ✅ **VÉRIFIÉ** | **Alignement:** Phase 2.1 | **Tests:** À refaire selon nouvelle architecture
+- [x] **Module gestionnaire** : `src/smb_mount_manager.py` - À aligner avec Phase 2
+- [x] **Mode hybride** : Priorité montage SMB - Conserver pour Phase 2
+- [ ] **Tests selon Phase 1** : Adapter les tests pour le nouvel indexeur
+- [ ] **Documentation** : Mettre à jour selon PROJET.md
+
+### ✅ T-AUTH-01 — Authentification PocketBase
+**Statut:** ✅ **VÉRIFIÉ** | **Alignement:** Phase 4.2 | **Tests:** À intégrer
+- [x] **Système complet** : JWT, rôles, permissions - Conserver pour Phase 4
+- [ ] **Intégration AD** : Remplacer PocketBase par LDAP (Windows Server 2019)
+- [ ] **Mapping permissions** : Basé sur groupes AD et permissions SMB
+- [ ] **Fallback local** : Accès admin DB si AD indisponible
+
+### ✅ T-ART-01/02/03 — Gestion des artefacts
+**Statut:** ✅ **VÉRIFIÉ** | **Alignement:** Phase 4.4 | **Tests:** À adapter
+- [x] **Doublons avancés** : Détection et actions - Intégrer dans Phase 4.3
+- [x] **Filtres configurables** : Seuils et préférences - Adapter pour UI admin
+- [ ] **Corbeille 30 jours** : Implémenter selon Phase 4.4
+- [ ] **Interface utilisateur** : Simplifier pour Phase 4.3 (sans authentification)
 
 ---
 
-## Annexe — Priorités opérateur clôturées
+## Définition de Terminée (DoD)
 
-- [x] **P-05 — Dettes de stabilisation opérateur**
-  - Corrigé le `2026-03-19`: la lecture principale de progression s'appuie désormais sur le runtime réel du run actif; la dette résiduelle porte surtout sur les cas de refresh incohérent entre blocs.
-  - Corrigé le `2026-03-19`: le bloc `Runs récents` n'affiche plus `Aucun run enregistré` quand un état actif est connu par `monitoring`; un message de désynchronisation explicite prend le relais.
-  - Corrigé le `2026-03-19`: les runs bloqués trop longtemps en `cancelling` sont désormais réconciliés automatiquement vers `cancelled`.
-  - Corrigé le `2026-03-19`: les connexions WebSocket fermées sont purgées proprement avant les envois suivants, ce qui supprime le bruit `Cannot call "send" once a close message has been sent.`.
-  - Clôturé le `2026-03-19`: le prototype `estimate-{hash}` est abandonné explicitement; aucune archive dédiée supplémentaire n'est requise dans le chemin nominal.
+Pour chaque tâche T-XXX :
+- [ ] Code implémenté et testé (unit tests + tests d'intégration)
+- [ ] Documentation technique mise à jour (README, docstrings)
+- [ ] Documentation opérationnelle mise à jour (EXPLOITATION.md)
+- [ ] UI/UX cohérente avec Material Design
+- [ ] Migrations DB créées si nécessaire
+- [ ] Preuve de fonctionnement (logs, captures d'écran)
+- [ ] Commit clair et traçable dans Git
+- [ ] Alignement avec PROJET.md validé
 
-- [x] **P-04 — Statut moteur et commandes opérateur explicites**
-  - Garder une barre de progression pour la quantité de données inventoriées.
-  - Ajouter des gommettes de couleur pour l'état moteur: arrêté, estimation, exploration, erreur, terminé.
-  - Basculer le bouton principal de `Lancer` vers `Arrêter` quand une exploration est en cours.
-  - Livré via les commits `1a2407a` et `f8fe00c`.
+---
 
-- [x] **P-03 — Traitement asynchrone sans limite artificielle**
-  - Supprimer les limites de taille des queues de traitement asynchrone.
-  - Vérifier que le backlog de vérification d'intégrité n'est plus artificiellement plafonné.
-  - Livré dans le crawler PostgreSQL; effet complet appliqué aux nouveaux runs après redéploiement du conteneur.
+## Notes de Pilotage
 
-- [x] **P-02 — Indicateurs de progression lisibles et fiables**
-  - Exploiter les retours actuels du moteur pour des indicateurs de progression fiables.
-  - Présenter ces indicateurs sur une seule ligne, lisibles d'un coup d'oeil.
-  - Réserver les queues au diagnostic secondaire.
-  - Bug identifié le `2026-03-19`: l'API lisait un fichier fixe `smb_crawler_postgresql.log` alors que le crawler produit des logs par run `smb_crawler_postgresql_<run_id>.log`; conséquence directe: journal explorateur vide et indicateurs runtime à `0` malgré un run `running`.
-  - Clôturé le `2026-03-19`: le journal runtime réel et les indicateurs principaux de progression sont rétablis pour l'exploitation; les dettes résiduelles sont regroupées en `P-05`.
-  - Avancement utile livré: l'UI permet désormais de modifier une configuration d'espace existante, y compris de remplacer le mot de passe sans recréer l'espace; le secret courant n'est pas réaffiché et reste conservé si le champ mot de passe est laissé vide.
+**Ordre de priorité préproduction :**
+1. **T-INDEX-01/02** : Indexeur efficace (fondation)
+2. **T-ADMIN-01/02/03** : UI admin (contrôle)
+3. **T-USER-01/02** : UI utilisateur simplifiée (usage)
+4. **T-ARCH-01/02** : Archivage intelligent (fonctionnalité)
+5. **T-AI-01/02/03/04** : Sommaires IA (valeur ajoutée)
+6. **T-PROD-01/02/03/04** : Production et exploitation (industrialisation)
 
-- [x] **P-01 — Pré-estimation volumétrique avant exploration**
-  - Revoir le protocole moteur pour obtenir une estimation la plus fidèle possible du volume total avant exploration.
-  - Hypothèse rejetée en exploitation: l'approche `worker Docker éphémère + montage CIFS + du -sb` n'est pas viable dans son état actuel pour un budget opérateur raisonnable; elle ne doit plus être considérée comme cible par défaut.
-  - Décision appliquée dans le code: les nouveaux runs partent directement en `queued`; le pilotage opérateur repose sur les métriques runtime et le journal réel.
-  - Décision de schéma: les colonnes `estimated_total_size` et `estimate_*` sont retirées de `crawl_runs` sur la base de test; on repart sur une structure minimale cohérente avec le flux réel.
-  - Dette documentaire: archiver l'historique du prototype `estimate-{hash}` dans une note dédiée si l'on veut conserver la trace d'exploitation, mais ne plus le laisser polluer le chemin nominal.
-  - Clôturé le `2026-03-19`: le pilotage runtime en production répond désormais au besoin opérateur; il n'y a plus de raison de poursuivre la pré-estimation volumétrique avant exploration.
+**Dépendances clés :**
+- T-INDEX-* requis avant T-ADMIN-* (données à afficher)
+- T-ADMIN-* requis avant T-USER-* (infrastructure partagée)
+- T-ARCH-* dépend de T-INDEX-* (données indexées)
 
-- [x] **P-00c — Fuseau horaire homogène et configurable**
-  - Aligner les conteneurs Docker sur un fuseau horaire explicite.
-  - Rendre le fuseau d'affichage configurable dans l'interface via l'engrenage.
-  - Afficher les dates de build et d'exécution dans le fuseau choisi.
-  - Livré via le commit `1a2407a`.
+**Architecture cible :**
+- Approche "queue-based" pour toutes opérations lourdes
+- Material Design pour toutes les interfaces
+- PostgreSQL comme source de vérité unique
+- WebSocket pour temps réel
 
-- [x] **P-00b — Réconciliation des runs zombies**
-  - Ajouter une logique défensive pour reclassifier les runs stale laissés `running` par le moteur.
-  - Exposer un état opérateur clair quand le moteur n'émet plus mais que la base n'est pas cohérente.
-  - Livré via les commits `1a2407a` et `f8fe00c`.
+---
 
-- [x] **P-00 — Finalisation fiable des runs d'exploration**
-  - Corriger la chaîne de fin de run pour qu'un crawl terminé ou timeouté écrive toujours un statut final explicite en base.
-  - Ajouter un signal et une trace `run terminé` / `run en échec` côté moteur.
-  - Empêcher qu'un run reste `running` en base sans activité réelle du moteur.
-  - Livré via les commits `1a2407a` et `f8fe00c`.
+*Dernière mise à jour : 2026-05-12*
+*Aligné avec PROJET.md v5 phases*

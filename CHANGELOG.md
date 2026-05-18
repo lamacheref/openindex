@@ -1,5 +1,122 @@
 # Changelog OpenIndex avec PostgreSQL
 
+## 2026-04-08 — T-ARCH-02 Archive Scheduling & Monitoring (v0.6.0)
+
+### Nouvelles fonctionnalités majeures
+- **Scheduling par Cron** : Configuration de tâches planifiées avec expressions cron
+  - Table `archive_schedules` avec support timezone, filtres (âge, taille, extensions)
+  - Scheduler automatique détecte et crée les jobs aux heures planifiées
+  - API complète CRUD pour les schedules (`/api/archive/schedules/*`)
+- **UI de Monitoring** : Interface temps réel pour la file d'attente
+  - Dashboard avec métriques (jobs pending/running, taux de succès, volume)
+  - Vue temps réel de la queue avec progression visuelle
+  - Gestion des schedules (activer/désactiver, historique d'exécution)
+  - Actions rapides: annuler, retry
+- **Configuration en DB** : Paramètres d'archivage stockés en base
+  - Table `archive_settings` pour configuration globale
+  - Paramètres: priorité par défaut, retries, intervalles worker/scheduler
+- **Views PostgreSQL** pour monitoring
+  - `archive_queue_monitoring` : Vue temps réel avec durée, progression
+  - `archive_daily_stats` : Statistiques agrégées par jour
+
+### Corrections critiques (Issue #75)
+- **31/31 tests API passent** : Refactoring complet avec fixtures pytest
+- **22/22 tests worker passent** : Mock isolation via `client_with_mock`
+- **Side_effect mocks** : Correction de la configuration des mocks complexes
+- **Ordre des routes API** : Déplacement de `/api/archive/queue/stats` avant `/{job_id}`
+
+### Documentation
+- **Architecture Queue** : `docs/ARCHIVE_QUEUE_ARCHITECTURE.md` complète
+- **Migration 002** : `database/migrations/002_add_archive_scheduling.sql`
+- **Tests** : Suite complète 53/53 tests passants
+
+### Fichiers ajoutés/modifiés
+- `src/archive_scheduler.py` : Gestionnaire de tâches planifiées
+- `frontend/archive-monitoring.html` : UI temps réel
+- `database/migrations/002_add_archive_scheduling.sql` : Schema scheduling
+- `requirements/dev.txt` : Ajout `croniter>=2.0,<3.0`
+- `src/api/main.py` : Endpoints scheduling + monitoring + settings
+
+### Infrastructure
+- **Version bump** : 0.4.24 → 0.6.0
+- **Dépendances** : croniter pour parsing expressions cron
+- **Base de données** : Nouvelles tables schedules, runs, settings
+
+---
+
+## 2026-04-02 — T-ARCH-01 Archive Queue System (v0.4.18)
+
+### Nouvelles fonctionnalités majeures
+- **Archive Queue System** : Implémentation complète d'une queue de jobs persistants en PostgreSQL
+- **Transfer Worker** : Worker dédié avec retry exponentiel (+ jitter) pour opérations de transfert SMB
+- **API REST Archive** : 7 endpoints pour gestion des jobs (`/api/archive/queue/*`)
+  - `POST /api/archive/queue` : Créer un job d'archivage
+  - `GET /api/archive/queue` : Lister les jobs avec filtres
+  - `GET /api/archive/queue/{id}` : Détails d'un job
+  - `DELETE /api/archive/queue/{id}` : Annuler un job
+  - `POST /api/archive/queue/{id}/retry` : Relancer un job échoué
+  - `GET /api/archive/queue/stats` : Statistiques des jobs
+  - `GET /api/transfer/worker/health` : Health du worker
+- **Monitoring temps réel** : Stats en temps réel et health checks
+- **Suite de tests complète** : 22 tests unitaires worker + 31 tests API + 4 tests intégration + 4 tests charge
+
+### Corrections critiques
+- **PoolError PostgreSQL** : Correction double putconn dans postgres_adapter.py
+- **SMBConnectionError** : Remplacement par SMBConnectionClosed (smbprotocol)
+- **CREATE TYPE idempotent** : Blocs DO $$ avec IF NOT EXISTS dans init.sql
+- **IndexError retry decorator** : Ajout vérification args vide
+- **Import Enum manquant** : Ajout dans api/main.py
+- **migrate.py paramètre fetch** : Suppression paramètre inexistant
+
+### Documentation
+- **7 fichiers docs créés** : Architecture complète, API, monitoring, migrations
+- **Rapport d'audit** : `docs/audit/T-ARCH-01-audit-2026-04-02.md`
+- **Issues GitHub** : #68-#72 créées pour tests failed
+
+### Fichiers ajoutés/modifiés
+- `src/archive_transfer_worker.py` : Worker avec retry et backoff
+- `src/smb_health_monitor.py` : Monitoring santé serveurs SMB
+- `src/postgres_adapter.py` : Corrections pool et migrations
+- `src/api/main.py` : Endpoints archive queue + import Enum
+- `database/init.sql` : Types idempotents et tables archive_jobs
+- `scripts/migrate.py` : Corrections paramètres
+- `tests/` : Suite complète de tests T-ARCH-01
+- `docs/` : Documentation technique complète
+- `scripts/load_test_archive.py` : Tests de charge
+
+### Infrastructure
+- **Docker** : Images mises à jour avec corrections
+- **Base de données** : Schéma étendu avec archive_jobs
+- **API** : 7 nouveaux endpoints opérationnels
+
+---
+
+## 2026-04-01 — Mise à jour des informations de build Docker
+
+- **Dockerfiles mis à jour** : `Dockerfile.api`, `Dockerfile.crawler`, `Dockerfile.frontend`.
+- Version applicative synchronisée sur `0.4.12` (depuis `VERSION`).
+- Build commit fixé à `dev` pour les builds de développement.
+- Build date mise à jour au `20260401_173742`.
+
+## 2026-04-01 — Correction des statuts de runs et améliorations interface
+
+- **Nettoyage automatique des runs bloqués** : Ajout de `cleanup_stale_runs()` dans le crawler pour détecter et corriger périodiquement les runs qui restent dans un état "running" alors qu'ils sont terminés côté serveur.
+- **Synchronisation manuelle des statuts** : Ajout d'un bouton "Synchroniser" dans l'interface pour forcer le rafraîchissement de l'état des runs.
+- **Notifications améliorées** : Meilleure visibilité des changements de statut des runs avec notifications contextuelles.
+- **Amélioration de la logique de revival** : Correction des problèmes d'effacement intempestif de l'espace choisi.
+- **Documentation mise à jour** : README.md et CHANGELOG.md reflètent les nouvelles fonctionnalités.
+- Version mise à jour en `0.4.12` pour ces corrections et améliorations.
+
+## 2026-03-26 — Durcissement de la gate PostgreSQL et lancement du socle J5
+
+- Durcissement du job `api-tests-postgresql` dans `.github/workflows/docker-stack.yml` : échec explicite si PostgreSQL n'est pas disponible, plus de voie de contournement "skip".
+- Ajout d'une collecte systématique des diagnostics CI PostgreSQL (`postgres-connectivity.json`, `pytest.log`, `pytest-junit.xml`, logs service PostgreSQL, contexte runner).
+- Mutualisation du parcours de référence via `scripts/run_release_gate.sh` pour exécuter les tests API, smoke, feature-flag DB et non-régression frontend.
+- Documentation du check de merge et du diagnostic rapide dans `docs/operations/CI_POSTGRESQL_GATE.md`.
+- Ouverture du chantier J5 avec les documents `docs/operations/J5_SLI_SLO.md`, `docs/operations/J5_RELEASE_GATE.md` et `docs/operations/J5_OBSERVABILITY_BASELINE.md`.
+- Ajout d'une vue opératoire consolidée `GET /api/operations/status` pour exposer l'état santé, les checks et les incidents minimaux.
+- Standardisation minimale des logs API via format horodaté et variable `OPENINDEX_LOG_LEVEL`.
+
 ## 2026-03-19 — Clôture du lot correctif opérateur et reprise du backlog principal
 
 - Clôture documentaire du lot `P-00` à `P-05` dans `TODO.md` et déplacement en annexe pour remettre le backlog principal J4/J5 en tête.
