@@ -235,10 +235,10 @@ class IndexerWorker:
         return 'slow' if file_size >= self.SLOW_THRESHOLD_BYTES else 'fast'
 
     def _index_path(self, job: IndexerJob):
-        """Indexe récursivement un chemin"""
+        """Indexe récursivement un chemin avec détection de changements"""
         from backend.src.crawl_utils import SMBClient, normalize_smb_path, get_file_info
         
-        logger.info(f"Indexation de {job.path}")
+        logger.info(f"Indexation de {job.path} (mode incrémentiel)")
         
         # Obtenir la config SMB pour ce chemin
         config = self._get_smb_config(job.config_id)
@@ -260,11 +260,14 @@ class IndexerWorker:
             remote_path = config.get('remote_path', '')
             self._crawl_recursive(client, remote_path, job, config)
             
+            # Après le crawl, marquer les fichiers supprimés
+            self._mark_deleted_files(job)
+            
         finally:
             client.disconnect()
     
     def _crawl_recursive(self, client, remote_path: str, job: IndexerJob, config: Dict):
-        """Parcourt récursivement et indexe les fichiers"""
+        """Parcourt récursivement et indexe les fichiers avec détection de changements"""
         from backend.src.crawl_utils import get_file_info
         
         try:
@@ -411,7 +414,7 @@ class IndexerWorker:
             return None
     
     def _insert_file(self, file_info: Dict, config_id: str):
-        """Insère un fichier dans la base de données"""
+        """Insère un fichier dans la base de données avec détection de changements"""
         try:
             from backend.src.database.postgres_adapter import PostgreSQLAdapter
             import os
@@ -425,10 +428,101 @@ class IndexerWorker:
             }
             
             db = PostgreSQLAdapter(db_config)
-            db.insert_file(file_info, config_id)
+            
+            # Vérifier si le fichier a changé depuis la dernière indexation
+            file_path = file_info.get('path', '')
+            file_hash = file_info.get('checksum', '')
+            file_size = file_info.get('size', 0)
+            file_mtime = file_info.get('modified_at', datetime.now(timezone.utc))
+            
+            # Appeler la fonction check_file_changed
+            changed = db.execute_query(
+                """
+                SELECT check_file_changed(%s, %s, %s, %s)
+                """,
+                [file_path, file_hash, file_size, file_mtime]
+            )
+            
+            has_changed = changed[0][0] if changed and changed[0] else True
+            
+            if has_changed:
+                # Fichier nouveau ou modifié → insérer/mettre à jour
+                db.insert_file(file_info, config_id)
+                logger.info(f"Fichier indexé (changé): {file_path}")
+                
+                # Mettre à jour la table indexed_files
+                db.execute_query(
+                    """
+                    INSERT INTO indexed_files (path, config_id, last_hash, last_size, last_modified)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (path)
+                    DO UPDATE SET
+                        last_hash = EXCLUDED.last_hash,
+                        last_size = EXCLUDED.last_size,
+                        last_modified = EXCLUDED.last_modified,
+                        last_seen_at = CURRENT_TIMESTAMP,
+                        is_deleted = false,
+                        deleted_at = NULL
+                    """,
+                    [file_path, config_id, file_hash, file_size, file_mtime],
+                    fetch=False
+                )
+            else:
+                # Fichier inchangé → juste mettre à jour last_seen_at
+                db.execute_query(
+                    """
+                    UPDATE indexed_files
+                    SET last_seen_at = CURRENT_TIMESTAMP
+                    WHERE path = %s
+                    """,
+                    [file_path],
+                    fetch=False
+                )
+                logger.debug(f"Fichier inchangé (ignoré): {file_path}")
             
         except Exception as e:
             logger.warning(f"Erreur insertion fichier: {e}")
+    
+    def _mark_deleted_files(self, job: IndexerJob):
+        """Marque les fichiers supprimés depuis la dernière indexation"""
+        try:
+            from backend.src.database.postgres_adapter import PostgreSQLAdapter
+            import os
+            
+            db_config = {
+                'host': os.getenv('POSTGRES_HOST', 'postgres'),
+                'port': int(os.getenv('POSTGRES_PORT', 5432)),
+                'database': os.getenv('POSTGRES_DB', 'openindex'),
+                'user': os.getenv('POSTGRES_USER', 'openindex_user'),
+                'password': os.getenv('POSTGRES_PASSWORD', 'openindex_secure_password')
+            }
+            
+            db = PostgreSQLAdapter(db_config)
+            
+            # Marquer comme supprimés les fichiers qui étaient indexés mais plus trouvés
+            db.execute_query(
+                """
+                UPDATE indexed_files
+                SET is_deleted = true,
+                    deleted_at = CURRENT_TIMESTAMP
+                WHERE config_id = %s
+                  AND path LIKE %s
+                  AND is_deleted = false
+                  AND last_seen_at < CURRENT_TIMESTAMP - INTERVAL '1 hour'
+                """,
+                [job.config_id, f"{job.path}%"],
+                fetch=False
+            )
+            
+            deleted_count = db.execute_query(
+                "SELECT COUNT(*) FROM indexed_files WHERE config_id = %s AND is_deleted = true",
+                [job.config_id]
+            )[0][0] if db.execute_query("SELECT COUNT(*) FROM indexed_files WHERE config_id = %s AND is_deleted = true", [job.config_id]) else 0
+            
+            logger.info(f"Fichiers marqués comme supprimés: {deleted_count}")
+            
+        except Exception as e:
+            logger.warning(f"Erreur marquage fichiers supprimés: {e}")
     
     def _update_job_status(self, job: IndexerJob):
         """Met à jour le statut du job dans la DB"""
