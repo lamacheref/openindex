@@ -30,3 +30,7 @@ requirements.txt
 .env
 .env.preprod
 .venv/
+
+# Ignorer les dépendances Node.js
+node_modules/
+frontend/node_modules/

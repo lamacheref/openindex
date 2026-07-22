@@ -1,11 +1,20 @@
 #!/usr/bin/env python3
 """
-Script de test de charge pour l'indexeur OpenIndex
+Script de test de charge pour l'indexeur OpenIndex (protocole Phase A/B)
 Génère une structure de fichiers de test et mesure les performances d'indexation
+via l'API REST.
+
+Prérequis :
+  - Une crawl_config SMB pointant sur un partage accessible depuis le LXC
+  - Le chemin de génération des fichiers doit correspondre au start_path de la config
+  - Les services openindex-api et indexer-worker doivent tourner
+
+Usage :
+  python scripts/load_test_indexer.py --config <config_id> --path /mnt/share/test --files 10000
 
 Auteur: Cline
-Date: 18 mai 2026
-Version: 1.0
+Date: 22 juillet 2026
+Version: 2.0 (Phase A/B)
 """
 
 import os
@@ -102,19 +111,12 @@ class LoadTestIndexer:
         }
 
     def run_indexing_job(self, config_id, api_url="http://localhost:8000"):
-        """Lance un job d'indexation via l'API"""
+        """Lance un job d'indexation via l'API (protocole Phase A/B)"""
         print("Lancement du job d'indexation...")
 
-        # Préparer la payload
-        payload = {
-            "config_id": config_id,
-            "path": str(self.base_path),
-            "recursive": True,
-            "max_depth": self.max_depth,
-            "incremental": False
-        }
+        # Phase A/B accepte uniquement config_id
+        payload = {"config_id": config_id}
 
-        # Appeler l'API pour créer le job
         try:
             result = subprocess.run([
                 'curl', '-X', 'POST',
@@ -124,7 +126,7 @@ class LoadTestIndexer:
             ], capture_output=True, text=True, check=True)
 
             job_data = json.loads(result.stdout)
-            job_id = job_data['job_id']
+            job_id = job_data['id']
             print(f"Job créé avec succès: {job_id}")
 
             return job_id
@@ -134,7 +136,7 @@ class LoadTestIndexer:
             return None
 
     def monitor_job_progress(self, job_id, api_url="http://localhost:8000"):
-        """Surveille la progression du job d'indexation"""
+        """Surveille la progression du job via GET /api/indexer/jobs/{job_id}"""
         print(f"Surveillance du job {job_id}...")
 
         start_time = time.time()
@@ -154,10 +156,10 @@ class LoadTestIndexer:
                     print(f"Job terminé avec statut: {job_data['status']} ({elapsed:.2f}s)")
                     return job_data
 
-                # Afficher la progression toutes les 5 secondes
                 if time.time() - last_update > 5:
-                    files_processed = job_data.get('files_processed', 0)
-                    print(f"Progression: {files_processed}/{self.file_count} fichiers ({files_processed/self.file_count*100:.1f}%)")
+                    files_found = job_data.get('files_found', 0)
+                    files_indexed = job_data.get('files_indexed', 0)
+                    print(f"Progression: {files_indexed}/{files_found} fichiers indexés")
                     last_update = time.time()
 
                 time.sleep(1)
@@ -246,12 +248,13 @@ def main():
     parser.add_argument('--config', required=True, help='ID de la configuration SMB')
     parser.add_argument('--api-url', default='http://localhost:8000', help='URL de l\'API OpenIndex')
     parser.add_argument('--output', default='docs/benchmarks/indexer_load_test.json', help='Fichier de sortie du rapport')
+    parser.add_argument('--path', default='/tmp/openindex_load_test',
+                        help='Chemin où générer les fichiers de test (doit correspondre au start_path de la crawl_config)')
 
     args = parser.parse_args()
 
-    # Créer le test de charge
     load_test = LoadTestIndexer(
-        base_path="/tmp/openindex_load_test",
+        base_path=args.path,
         file_count=args.files,
         max_depth=args.depth
     )

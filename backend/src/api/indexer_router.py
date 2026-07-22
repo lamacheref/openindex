@@ -366,6 +366,47 @@ async def stop_worker():
         logger.error(f"Erreur arrêt: {e}")
         raise HTTPException(status_code=500, detail=f"Erreur: {e}")
 
+@router.get("/jobs/{job_id}", response_model=IndexerJobResponse)
+async def get_indexer_job(job_id: str):
+    """Récupère un job d'indexation par son ID"""
+    try:
+        db = get_db_adapter()
+
+        query = """
+            SELECT id, path, config_id, config_name, status, created_at,
+                   started_at, completed_at, files_found, files_indexed,
+                   bytes_total, error_message
+            FROM indexer_jobs
+            WHERE id = %s
+        """
+
+        results = db.execute_query(query, [job_id])
+
+        if not results:
+            raise HTTPException(status_code=404, detail="Job introuvable")
+
+        row = results[0]
+        return IndexerJobResponse(
+            id=str(row[0]),
+            path=row[1],
+            config_id=str(row[2]),
+            config_name=row[3],
+            status=row[4],
+            created_at=row[5],
+            started_at=row[6],
+            completed_at=row[7],
+            files_found=row[8] or 0,
+            files_indexed=row[9] or 0,
+            bytes_total=row[10] or 0,
+            error_message=row[11]
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur récupération job: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {e}")
+
 @router.delete("/jobs/{job_id}")
 async def cancel_job(job_id: str):
     """Annule un job en attente"""
