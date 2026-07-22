@@ -74,7 +74,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `e475b9d1` | 2026-07-22 | non | non | fix tests Priority 4 + docs T-LXC-03 + update TODO |
+| `84896d48` | 2026-07-22 | non | non | add integration DB tests (real PG) |
+| `8f1300fc` | 2026-07-22 | oui | oui | fix tests Priority 4 + docs T-LXC-03 + update TODO |
 | `fe209a30` | 2026-07-22 | oui | oui | fix install: embed inner script, pass env vars, idempotent PG |
 | `59986ec0` | 2026-07-22 | oui | oui | fix install 404: inner script + tests Phase A/B |
 | `c49e443d` | 2026-07-22 | oui | oui | feat: ajout historique des commits dans README + post-commit hook |
@@ -123,4 +124,3 @@ pytest -q tests/
 | `f94b882f` | 2026-04-08 | oui | oui | Fix archive explorer flow and document SMB config follow-up |
 | `9f2f3662` | 2026-04-08 | oui | oui | Update: Mise à jour du TODO.md avec les corrections apportées |
 | `1c790ac3` | 2026-04-08 | oui | oui | Remove: Suppression du test de versioning instable |
-| `af60e31e` | 2026-04-08 | oui | oui | Fix: Synchronisation finale de package.json avec VERSION 0.6.8 |
