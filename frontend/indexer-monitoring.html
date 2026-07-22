@@ -738,11 +738,11 @@
                         const res = await fetch(`/api/indexer/logs?service=${encodeURIComponent(this.logService)}&lines=200`);
                         if (res.ok) {
                             const data = await res.json();
-                            this.logs = data.lines || [];
+                            this.logs = (data.lines || []).reverse();
                             setTimeout(() => {
                                 if (this.logAutoScroll) {
                                     const el = document.querySelector('.log-container');
-                                    if (el) el.scrollTop = el.scrollHeight;
+                                    if (el) el.scrollTop = 0;
                                 }
                             }, 50);
                         }

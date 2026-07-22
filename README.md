@@ -74,7 +74,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `e67da829` | 2026-07-22 | non | non | fix: default logService value |
+| `fd873909` | 2026-07-22 | non | non | fix: reverse log order (newest first), auto-scroll to top |
+| `a02a6714` | 2026-07-22 | oui | oui | fix: default logService value |
 | `96b86be6` | 2026-07-22 | oui | oui | feat: dedicated log file /var/log/openindex/indexer-worker.log, logs tab reads from file |
 | `4768de08` | 2026-07-22 | oui | oui | feat: add logs tab with real-time journalctl view + deploy script |
 | `f95821b4` | 2026-07-22 | oui | oui | fix: escape apostrophe in SQL |
@@ -123,4 +124,3 @@ pytest -q tests/
 | `4b5327e6` | 2026-05-12 | oui | oui | Refonte complète TODO.md selon PROJET.md v5 phases |
 | `7d24e483` | 2026-05-05 | oui | oui | Fix: crawl_utils avec smbclient pour indexer worker |
 | `18a5b60f` | 2026-05-05 | oui | oui | Add crawl_utils.py module for SMB operations in indexer worker |
-| `598b8b85` | 2026-05-05 | oui | oui | Fix: Interface indexer et création de jobs |
