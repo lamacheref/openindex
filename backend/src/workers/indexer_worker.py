@@ -329,7 +329,7 @@ class IndexerWorker:
 
     def _index_path(self, job: IndexerJob):
         """Indexe un chemin via le protocole 2 phases : BFS répertoires → bottom-up fichiers"""
-        from backend.src.crawl_utils import SMBClient, get_file_info
+        from backend.src.utils.crawl_utils import SMBClient, get_file_info
         
         logger.info(f"Indexation de {job.path} (protocole 2 phases)")
         
@@ -427,7 +427,7 @@ class IndexerWorker:
 
     def _phase_b_bottom_up_files(self, client, space_id: str, job: IndexerJob, config: Dict) -> int:
         from backend.src.database.postgres_adapter import PostgreSQLAdapter
-        from backend.src.crawl_utils import get_file_info
+        from backend.src.utils.crawl_utils import get_file_info
         import os
 
         db_config = {
