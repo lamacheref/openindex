@@ -74,7 +74,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `9ab916c8` | 2026-07-22 | non | non | fix: smbclient connect pass password via stdin, connect to share not -L |
+| `8fcc20b7` | 2026-07-22 | non | non | chore: debug connect method |
+| `708d04d3` | 2026-07-22 | oui | oui | fix: smbclient connect pass password via stdin, connect to share not -L |
 | `c2b4af4a` | 2026-07-22 | oui | oui | fix: smbclient cannot connect to subdirectory, use cd before ls |
 | `cf310d30` | 2026-07-22 | oui | oui | fix: correct import path crawl_utils (utils.crawl_utils) |
 | `03df7049` | 2026-07-22 | oui | oui | fix: normalize UNC start_path in backend (strip duplicate slashes) |
@@ -123,4 +124,3 @@ pytest -q tests/
 | `d1fc8417` | 2026-04-14 | oui | oui | Auto-commit: changes staged by Mistral Vibe |
 | `4adc8151` | 2026-04-14 | oui | oui | T-AUTH-02: Implémentation complète de l'authentification PocketBase |
 | `523d3865` | 2026-04-14 | oui | oui | T-AUTH-01: PocketBase authentication integration completed |
-| `a83ab069` | 2026-04-14 | oui | oui | Merge remote-tracking branch 'github/Devel' into Devel |
