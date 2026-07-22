@@ -5,7 +5,7 @@ Solution d'indexation de partages SMB avec **crawler Python**, **API FastAPI**, 
 ## Installation (ProxmoxVE — test)
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/lamacheref/OpenIndex/Devel/scripts/install_lxc.sh)"
+bash -c "$(curl -fsSL https://gitea.smiden.eu/flamachere/OpenIndexV1/raw/branch/Devel/scripts/install_lxc.sh)"
 ```
 
 Crée un conteneur LXC Ubuntu 24.04 (2 CPU, 2 Go RAM, 16 Go disque) avec :
@@ -75,7 +75,6 @@ pytest -q tests/
 | `ROADMAP.md` | Planification et jalons |
 | `TODO.md` | Suivi d'exécution courant |
 | `README.stack.md` | Architecture technique |
-| `CI-CD.md` | Pipeline et release gate |
 | `CHANGELOG.md` | Historique des versions |
 | `docs/operations/INDEXATION.md` | Administration de l'indexation |
 | `docs/operations/EXPLOITATION.md` | Runbook PostgreSQL |
