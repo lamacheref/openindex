@@ -17,9 +17,15 @@ from enum import Enum
 import logging
 import logging.config
 
-# Configuration du logging JSON
-def setup_json_logging():
-    """Configure le logging en format JSON structuré"""
+# Fichier de log dédié
+LOG_DIR = "/var/log/openindex"
+LOG_FILE = os.path.join(LOG_DIR, "indexer-worker.log")
+
+# Configuration du logging JSON + fichier dédié
+def setup_logging():
+    """Configure le logging : JSON vers stdout + fichier lisible"""
+    os.makedirs(LOG_DIR, exist_ok=True)
+
     logging_config = {
         'version': 1,
         'disable_existing_loggers': False,
@@ -27,6 +33,10 @@ def setup_json_logging():
             'json': {
                 '()': 'pythonjsonlogger.jsonlogger.JsonFormatter',
                 'format': '%(asctime)s %(name)s %(levelname)s %(message)s %(job_id)s %(config_id)s %(files_processed)s %(duration)s'
+            },
+            'simple': {
+                'format': '[%(asctime)s] %(levelname)s - %(message)s',
+                'datefmt': '%Y-%m-%d %H:%M:%S'
             }
         },
         'handlers': {
@@ -34,10 +44,18 @@ def setup_json_logging():
                 'class': 'logging.StreamHandler',
                 'formatter': 'json',
                 'stream': 'ext://sys.stdout'
+            },
+            'file': {
+                'class': 'logging.handlers.RotatingFileHandler',
+                'formatter': 'simple',
+                'filename': LOG_FILE,
+                'maxBytes': 10 * 1024 * 1024,  # 10 Mo
+                'backupCount': 3,
+                'encoding': 'utf-8'
             }
         },
         'root': {
-            'handlers': ['console'],
+            'handlers': ['console', 'file'],
             'level': 'INFO'
         }
     }
@@ -45,16 +63,15 @@ def setup_json_logging():
     try:
         logging.config.dictConfig(logging_config)
     except Exception as e:
-        # Fallback au format basique si JSON échoue
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
             handlers=[logging.StreamHandler(sys.stdout)]
         )
-        logger.warning(f"JSON logging non disponible: {e}")
+        logger.warning(f"Logging avancé non disponible: {e}")
 
 logger = logging.getLogger("indexer.worker")
-setup_json_logging()
+setup_logging()
 
 
 class IndexerStatus(str, Enum):
@@ -419,6 +436,7 @@ class IndexerWorker:
                     fetch=False
                 )
                 dir_count += 1
+                logger.info(f"Dossier: {current_path} (profondeur {depth})")
 
                 if dir_count % 100 == 0:
                     logger.info(f"Phase A progression: {dir_count} répertoires découverts (profondeur {depth})")
@@ -528,6 +546,9 @@ class IndexerWorker:
                         job.files_indexed += 1
                         job.bytes_total += entry_size
                         self._increment_files_processed()
+
+                        if job.files_indexed % 10 == 0:
+                            logger.info(f"Fichier: {full_path} ({entry_size} octets)")
                 except Exception as e:
                     logger.warning(f"Erreur indexation fichier {full_path}: {e}")
                     self._increment_error_count()

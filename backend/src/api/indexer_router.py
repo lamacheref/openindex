@@ -7,10 +7,9 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+import os
 import uuid
 import logging
-import subprocess
-import shlex
 
 logger = logging.getLogger("openindex.api.indexer")
 
@@ -591,34 +590,44 @@ async def list_indexer_retries():
         logger.error(f"Erreur list retries: {e}")
         raise HTTPException(status_code=500, detail=f"Erreur: {e}")
 
+LOG_FILES = {
+    "worker": "/var/log/openindex/indexer-worker.log",
+    "api": "/var/log/openindex/indexer-api.log",
+    "scheduler": "/var/log/openindex/indexer-scheduler.log"
+}
+
 @router.get("/logs", response_model=LogsResponse)
-async def get_logs(service: str = Query("openindex-indexer-worker", description="Service systemd"), lines: int = Query(200, ge=10, le=2000)):
-    """Récupère les logs récents d'un service systemd"""
+async def get_logs(service: str = Query("worker", description="Service: worker, api, scheduler"), lines: int = Query(200, ge=10, le=2000)):
+    """Récupère les dernières lignes du fichier de log d'un service"""
+    log_path = LOG_FILES.get(service)
+    if not log_path:
+        raise HTTPException(status_code=400, detail=f"Service inconnu: {service}. Choisir: worker, api, scheduler")
+
     try:
-        cmd = ["journalctl", "-u", service, "--no-pager", "-n", str(lines), "-o", "short-iso"]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-        if result.returncode != 0:
-            raise HTTPException(status_code=500, detail=f"journalctl error: {result.stderr.strip()}")
+        if not os.path.exists(log_path):
+            return LogsResponse(service=service, lines=[])
+
+        with open(log_path, 'r', encoding='utf-8') as f:
+            all_lines = f.readlines()
+
+        # Prendre les N dernières lignes non vides
+        last_lines = [l.rstrip('\n') for l in all_lines if l.strip()]
+        last_lines = last_lines[-lines:]
 
         entries = []
-        for line in result.stdout.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            parts = line.split(None, 1)
-            if len(parts) >= 2:
-                entries.append(LogEntry(timestamp=parts[0], message=parts[1]))
+        for line in last_lines:
+            # Format: [2026-07-22 17:05:00] LEVEL - message
+            if line.startswith('[') and '] ' in line:
+                bracket_end = line.index('] ')
+                timestamp = line[1:bracket_end]
+                message = line[bracket_end + 2:]
             else:
-                entries.append(LogEntry(timestamp="", message=line))
+                timestamp = ''
+                message = line
+            entries.append(LogEntry(timestamp=timestamp, message=message))
 
         return LogsResponse(service=service, lines=entries)
 
-    except HTTPException:
-        raise
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=504, detail="Timeout lecture des logs")
-    except FileNotFoundError:
-        raise HTTPException(status_code=500, detail="journalctl non trouvé")
     except Exception as e:
         logger.error(f"Erreur lecture logs: {e}")
         raise HTTPException(status_code=500, detail=f"Erreur: {e}")

@@ -7,6 +7,9 @@ git pull
 
 find . -name __pycache__ -exec rm -rf {} + 2>/dev/null
 
+# Créer le dossier de logs
+mkdir -p /var/log/openindex
+
 # Copier les fichiers frontend vers le dossier servi par nginx
 cp frontend/index.html /var/www/html/index.html
 cp frontend/indexer-monitoring.html /var/www/html/indexer-monitoring.html

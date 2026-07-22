@@ -500,9 +500,9 @@
                         <div class="flex items-center gap-3">
                             <select x-model="logService" @change="fetchLogs()" 
                                     class="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
-                                <option value="openindex-indexer-worker">Worker</option>
-                                <option value="openindex-api">API</option>
-                                <option value="openindex-indexer-scheduler">Scheduler</option>
+                                <option value="worker">Worker</option>
+                                <option value="api">API</option>
+                                <option value="scheduler">Scheduler</option>
                             </select>
                             <label class="flex items-center gap-1.5 text-sm text-gray-600">
                                 <input type="checkbox" x-model="logAutoScroll" class="rounded">
