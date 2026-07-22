@@ -76,14 +76,15 @@ class SMBClient:
         try:
             path = normalize_smb_path(remote_path)
             
-            # Construire la commande smbclient
-            full_path = f"{self._share_url}/{path}" if path else self._share_url
+            # smbclient ne peut se connecter qu'à //host/share, pas à un sous-chemin
+            # On utilise 'cd <path>; ls' pour lister un sous-répertoire
+            smb_cmd = f'cd {path}; ls' if path else 'ls'
             
             cmd = [
-                'smbclient', full_path,
+                'smbclient', self._share_url,
                 '-U', f"{self.username}",
                 '-W', self.domain,
-                '-c', 'ls'
+                '-c', smb_cmd
             ]
             
             # Passer le mot de passe via stdin
