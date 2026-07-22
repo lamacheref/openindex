@@ -53,8 +53,8 @@ def setup_json_logging():
         )
         logger.warning(f"JSON logging non disponible: {e}")
 
-setup_json_logging()
 logger = logging.getLogger("indexer.worker")
+setup_json_logging()
 
 
 class IndexerStatus(str, Enum):
@@ -295,18 +295,50 @@ class IndexerWorker:
         """Détermine le type de queue en fonction de la taille du fichier"""
         return 'slow' if file_size >= self.SLOW_THRESHOLD_BYTES else 'fast'
 
+    def _resolve_space_id(self, config: Dict) -> str:
+        from backend.src.database.postgres_adapter import PostgreSQLAdapter
+        import os
+
+        db_config = {
+            'host': os.getenv('POSTGRES_HOST', 'postgres'),
+            'port': int(os.getenv('POSTGRES_PORT', 5432)),
+            'database': os.getenv('POSTGRES_DB', 'openindex'),
+            'user': os.getenv('POSTGRES_USER', 'openindex_user'),
+            'password': os.getenv('POSTGRES_PASSWORD', 'openindex_secure_password')
+        }
+        db = PostgreSQLAdapter(db_config)
+
+        result = db.execute_query(
+            """
+            INSERT INTO smb_spaces (name, host, share, domain_zone, connection_username, connection_password, connection_domain)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (host, share) DO UPDATE SET name = EXCLUDED.name
+            RETURNING id
+            """,
+            [
+                config.get('name', 'Unnamed'),
+                config['host'],
+                config['share'],
+                config.get('domain', 'WORKGROUP'),
+                config.get('username', ''),
+                config.get('password', ''),
+                config.get('domain', '')
+            ]
+        )
+        return result[0][0] if result else ''
+
     def _index_path(self, job: IndexerJob):
-        """Indexe récursivement un chemin avec détection de changements"""
+        """Indexe un chemin via le protocole 2 phases : BFS répertoires → bottom-up fichiers"""
         from backend.src.crawl_utils import SMBClient, normalize_smb_path, get_file_info
         
-        logger.info(f"Indexation de {job.path} (mode incrémentiel)")
+        logger.info(f"Indexation de {job.path} (protocole 2 phases)")
         
-        # Obtenir la config SMB pour ce chemin
         config = self._get_smb_config(job.config_id)
         if not config:
             raise ValueError(f"Configuration SMB introuvable pour {job.config_id}")
         
-        # Créer le client SMB
+        space_id = self._resolve_space_id(config)
+        
         client = SMBClient(
             host=config['host'],
             share=config['share'],
@@ -316,92 +348,168 @@ class IndexerWorker:
         
         try:
             client.connect()
-            
-            # Parcourir récursivement
             remote_path = config.get('remote_path', '')
-            self._crawl_recursive(client, remote_path, job, config)
             
-            # Après le crawl, marquer les fichiers supprimés
-            self._mark_deleted_files(job)
+            dir_count = self._phase_a_bfs_directories(client, remote_path, space_id, job)
+            logger.info(f"Phase A terminée: {dir_count} répertoires découverts", extra={
+                'job_id': job.id, 'config_id': job.config_id
+            })
             
+            file_count = self._phase_b_bottom_up_files(client, space_id, job, config)
+            logger.info(f"Phase B terminée: {file_count} fichiers traités", extra={
+                'job_id': job.id, 'config_id': job.config_id
+            })
+            
+            self._mark_deleted_files(job, space_id)
         finally:
             client.disconnect()
     
-    def _crawl_recursive(self, client, remote_path: str, job: IndexerJob, config: Dict):
-        """Parcourt récursivement et indexe les fichiers avec détection de changements"""
+    def _phase_a_bfs_directories(self, client, root_path: str, space_id: str, job: IndexerJob) -> int:
+        from collections import deque
+        from backend.src.database.postgres_adapter import PostgreSQLAdapter
+        import os
+
+        db_config = {
+            'host': os.getenv('POSTGRES_HOST', 'postgres'),
+            'port': int(os.getenv('POSTGRES_PORT', 5432)),
+            'database': os.getenv('POSTGRES_DB', 'openindex'),
+            'user': os.getenv('POSTGRES_USER', 'openindex_user'),
+            'password': os.getenv('POSTGRES_PASSWORD', 'openindex_secure_password')
+        }
+        db = PostgreSQLAdapter(db_config)
+
+        queue = deque()
+        queue.append((root_path, 0, ''))
+        dir_count = 0
+
+        while queue:
+            if self._stop_event.is_set():
+                raise InterruptedError("Indexation interrompue")
+
+            current_path, depth, parent_path = queue.popleft()
+            dir_name = os.path.basename(current_path) if current_path else '/'
+
+            try:
+                db.execute_query(
+                    """
+                    INSERT INTO directories (space_id, path, name, parent_path, depth)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (space_id, path) DO UPDATE SET
+                        name = EXCLUDED.name,
+                        depth = EXCLUDED.depth
+                    """,
+                    [space_id, current_path, dir_name, parent_path, depth],
+                    fetch=False
+                )
+                dir_count += 1
+
+                entries = client.list_dir(current_path)
+                for entry in entries:
+                    if isinstance(entry, dict):
+                        entry_name = entry.get('name', '')
+                        is_dir = entry.get('is_directory', False)
+                    else:
+                        entry_name = getattr(entry, 'filename', '')
+                        is_dir = getattr(entry, 'isDirectory', False)
+
+                    if is_dir:
+                        full_path = f"{current_path}/{entry_name}" if current_path else entry_name
+                        queue.append((full_path, depth + 1, current_path))
+
+            except Exception as e:
+                logger.warning(f"Erreur BFS répertoire {current_path}: {e}")
+                self._increment_error_count()
+
+        return dir_count
+
+    def _phase_b_bottom_up_files(self, client, space_id: str, job: IndexerJob, config: Dict) -> int:
+        from backend.src.database.postgres_adapter import PostgreSQLAdapter
         from backend.src.crawl_utils import get_file_info
-        
-        try:
-            entries = client.list_dir(remote_path)
-            
+        import os
+
+        db_config = {
+            'host': os.getenv('POSTGRES_HOST', 'postgres'),
+            'port': int(os.getenv('POSTGRES_PORT', 5432)),
+            'database': os.getenv('POSTGRES_DB', 'openindex'),
+            'user': os.getenv('POSTGRES_USER', 'openindex_user'),
+            'password': os.getenv('POSTGRES_PASSWORD', 'openindex_secure_password')
+        }
+        db = PostgreSQLAdapter(db_config)
+
+        dirs = db.execute_query(
+            "SELECT id, path, name FROM directories WHERE space_id = %s ORDER BY depth DESC",
+            [space_id]
+        )
+        if not dirs:
+            logger.warning("Aucun répertoire trouvé pour Phase B")
+            return 0
+
+        file_count = 0
+        for dir_id, dir_path, dir_name in dirs:
+            if self._stop_event.is_set():
+                raise InterruptedError("Indexation interrompue")
+
+            try:
+                entries = client.list_dir(dir_path)
+            except Exception as e:
+                logger.warning(f"Erreur liste répertoire {dir_path}: {e}")
+                continue
+
             for entry in entries:
-                if self._stop_event.is_set():
-                    raise InterruptedError("Indexation interrompue")
-                
-                # Support les deux formats : dict (crawl_utils) et objets (smbprotocol)
                 if isinstance(entry, dict):
                     entry_name = entry.get('name', '')
-                    is_directory = entry.get('is_directory', False)
+                    is_dir = entry.get('is_directory', False)
+                    entry_size = entry.get('size', 0)
                 else:
                     entry_name = getattr(entry, 'filename', '')
-                    is_directory = getattr(entry, 'isDirectory', False)
-                
-                full_remote = f"{remote_path}/{entry_name}" if remote_path else entry_name
-                
-                if is_directory:
-                    # Récursion dans les sous-dossiers
-                    self._crawl_recursive(client, full_remote, job, config)
-                else:
-                    # Indexer le fichier
-                    job.files_found += 1
-                    
-                    try:
-                        file_info = get_file_info(client, full_remote)
+                    is_dir = getattr(entry, 'isDirectory', False)
+                    entry_size = getattr(entry, 'size', 0)
 
-                        if not file_info:
-                            continue
+                if is_dir:
+                    continue
 
-                        file_size = file_info.get('size', 0)
+                full_path = f"{dir_path}/{entry_name}" if dir_path else entry_name
+                job.files_found += 1
 
-                        # Files différenciées : si le job est en mode slow et fichier fast,
-                        # on l'indexe normalement. Si le fichier est slow et le job fast,
-                        # on crée un sous-job dédié pour la queue lente.
-                        file_queue_type = self._get_queue_type(file_size)
+                existing = db.execute_query(
+                    """
+                    SELECT id FROM indexed_files_optimized
+                    WHERE path = %s AND name = %s AND size = %s
+                      AND created_at = %s AND last_modified = %s
+                    """,
+                    [full_path, entry_name, entry_size, entry.get('mtime'), entry.get('mtime')]
+                )
 
-                        if file_queue_type == 'slow' and self.slow_queue_enabled:
-                            # Créer un job dédié pour les gros fichiers
-                            self._create_slow_file_job(file_info, job)
+                if existing:
+                    continue
+
+                try:
+                    file_info = get_file_info(client, full_path)
+                    if not file_info:
+                        continue
+
+                    file_info['is_garbage'] = self._is_garbage_file(entry_name)
+                    file_queue_type = self._get_queue_type(entry_size)
+
+                    if file_queue_type == 'slow' and self.slow_queue_enabled:
+                        self._create_slow_file_job(file_info, job)
+                    else:
+                        if self._batch_insert_enabled:
+                            self._add_to_batch({**file_info, 'space_id': space_id, 'directory_id': dir_id}, job.config_id)
                         else:
-                            # Insérer directement pour les petits fichiers
-                            if self._batch_insert_enabled:
-                                self._add_to_batch(file_info, job.config_id)
-                            else:
-                                self._insert_file(file_info, job.config_id)
-                            job.files_indexed += 1
-                            job.bytes_total += file_size
-                            self._increment_files_processed()
+                            db.insert_file_optimized(file_info, space_id, dir_id)
+                        job.files_indexed += 1
+                        job.bytes_total += entry_size
+                        self._increment_files_processed()
+                except Exception as e:
+                    logger.warning(f"Erreur indexation fichier {full_path}: {e}")
+                    self._increment_error_count()
 
-                        # Mettre à jour les stats toutes les 100 fichiers
-                        if job.files_found % 100 == 0:
-                            self._update_job_progress(job)
-                            logger.info(f"Progression job {job.id}: {job.files_found} fichiers trouvés", extra={
-                                'job_id': job.id,
-                                'config_id': job.config_id,
-                                'files_processed': job.files_found
-                            })
+                if job.files_found % 100 == 0:
+                    self._update_job_progress(job)
+                    file_count = job.files_indexed
 
-                    except Exception as e:
-                        logger.warning(f"Erreur indexation fichier {full_remote}: {e}", extra={
-                            'job_id': job.id,
-                            'config_id': job.config_id,
-                            'file_path': full_remote,
-                            'error': str(e)
-                        })
-                        self._increment_error_count()
-                        
-        except Exception as e:
-            logger.error(f"Erreur crawl {remote_path}: {e}")
-            raise
+        return job.files_indexed
     
     def _create_slow_file_job(self, file_info: Dict, parent_job: IndexerJob):
         """Crée un job séparé pour un fichier >= 200Mo dans la queue lente"""
@@ -493,12 +601,11 @@ class IndexerWorker:
         garbage_patterns = ['.tmp', '~', 'Thumbs.db', '.DS_Store', '.bak', '.swp']
         return any(file_name.endswith(pattern) or file_name.startswith(pattern) for pattern in garbage_patterns)
 
-    def _insert_file(self, file_info: Dict, config_id: str):
-        """Insère un fichier dans la base de données avec détection de changements et gestion des ordures"""
+    def _insert_file(self, file_info: Dict, config_id: str, space_id: str = '', directory_id: str = ''):
         try:
             from backend.src.database.postgres_adapter import PostgreSQLAdapter
             import os
-            
+
             db_config = {
                 'host': os.getenv('POSTGRES_HOST', 'postgres'),
                 'port': int(os.getenv('POSTGRES_PORT', 5432)),
@@ -506,82 +613,30 @@ class IndexerWorker:
                 'user': os.getenv('POSTGRES_USER', 'openindex_user'),
                 'password': os.getenv('POSTGRES_PASSWORD', 'openindex_secure_password')
             }
-            
             db = PostgreSQLAdapter(db_config)
-            
-            # Vérifier si le fichier a changé depuis la dernière indexation
+
             file_path = file_info.get('path', '')
             file_name = file_info.get('name', '')
-            file_hash = file_info.get('checksum', '')
-            file_size = file_info.get('size', 0)
-            file_mtime = file_info.get('modified_at', datetime.now(timezone.utc))
-            
-            # Détecter si c'est un fichier indésirable (garbage)
             is_garbage = self._is_garbage_file(file_name)
-            
-            # Appeler la fonction check_file_changed
-            changed = db.execute_query(
-                """
-                SELECT check_file_changed(%s, %s, %s, %s)
-                """,
-                [file_path, file_hash, file_size, file_mtime]
-            )
-            
-            has_changed = changed[0][0] if changed and changed[0] else True
-            
-            if has_changed:
-                # Fichier nouveau ou modifié → insérer/mettre à jour
-                db.insert_file(file_info, config_id)
-                
-                if is_garbage:
-                    logger.info(f"Fichier indexé (garbage): {file_path}")
-                    # Marquer comme garbage dans la base
-                    db.execute_query(
-                        """
-                        INSERT INTO garbage_files (file_id, pattern, detected_at)
-                        VALUES (
-                            (SELECT id FROM indexed_files_optimized WHERE path = %s),
-                            %s,
-                            CURRENT_TIMESTAMP
-                        )
-                        ON CONFLICT (file_id) DO NOTHING
-                        """,
-                        [file_path, self._get_garbage_pattern(file_name)],
-                        fetch=False
+            file_info['is_garbage'] = is_garbage
+
+            db.insert_file_optimized(file_info, space_id, directory_id)
+
+            if is_garbage:
+                db.execute_query(
+                    """
+                    INSERT INTO garbage_files (file_id, pattern, detected_at)
+                    VALUES (
+                        (SELECT id FROM indexed_files_optimized WHERE path = %s),
+                        %s,
+                        CURRENT_TIMESTAMP
                     )
-                else:
-                    logger.info(f"Fichier indexé (changé): {file_path}")
-                
-                # Mettre à jour la table indexed_files
-                db.execute_query(
-                    """
-                    INSERT INTO indexed_files (path, config_id, last_hash, last_size, last_modified)
-                    VALUES (%s, %s, %s, %s, %s)
-                    ON CONFLICT (path)
-                    DO UPDATE SET
-                        last_hash = EXCLUDED.last_hash,
-                        last_size = EXCLUDED.last_size,
-                        last_modified = EXCLUDED.last_modified,
-                        last_seen_at = CURRENT_TIMESTAMP,
-                        is_deleted = false,
-                        deleted_at = NULL
+                    ON CONFLICT (file_id) DO NOTHING
                     """,
-                    [file_path, config_id, file_hash, file_size, file_mtime],
+                    [file_path, self._get_garbage_pattern(file_name)],
                     fetch=False
                 )
-            else:
-                # Fichier inchangé → juste mettre à jour last_seen_at
-                db.execute_query(
-                    """
-                    UPDATE indexed_files
-                    SET last_seen_at = CURRENT_TIMESTAMP
-                    WHERE path = %s
-                    """,
-                    [file_path],
-                    fetch=False
-                )
-                logger.debug(f"Fichier inchangé (ignoré): {file_path}")
-            
+
         except Exception as e:
             error_message = str(e)
             file_path = file_info.get('path', '')
@@ -641,12 +696,11 @@ class IndexerWorker:
             return '*.swp'
         return 'unknown'
     
-    def _mark_deleted_files(self, job: IndexerJob):
-        """Marque les fichiers supprimés depuis la dernière indexation"""
+    def _mark_deleted_files(self, job: IndexerJob, space_id: str = ''):
         try:
             from backend.src.database.postgres_adapter import PostgreSQLAdapter
             import os
-            
+
             db_config = {
                 'host': os.getenv('POSTGRES_HOST', 'postgres'),
                 'port': int(os.getenv('POSTGRES_PORT', 5432)),
@@ -654,31 +708,28 @@ class IndexerWorker:
                 'user': os.getenv('POSTGRES_USER', 'openindex_user'),
                 'password': os.getenv('POSTGRES_PASSWORD', 'openindex_secure_password')
             }
-            
+
             db = PostgreSQLAdapter(db_config)
-            
-            # Marquer comme supprimés les fichiers qui étaient indexés mais plus trouvés
+
             db.execute_query(
                 """
-                UPDATE indexed_files
-                SET is_deleted = true,
-                    deleted_at = CURRENT_TIMESTAMP
-                WHERE config_id = %s
-                  AND path LIKE %s
+                UPDATE indexed_files_optimized
+                SET is_deleted = true, deleted_at = CURRENT_TIMESTAMP
+                WHERE path LIKE %s
                   AND is_deleted = false
-                  AND last_seen_at < CURRENT_TIMESTAMP - INTERVAL '1 hour'
+                  AND updated_at < CURRENT_TIMESTAMP - INTERVAL '1 hour'
                 """,
-                [job.config_id, f"{job.path}%"],
+                [f"{job.path}%"],
                 fetch=False
             )
-            
+
             deleted_count = db.execute_query(
-                "SELECT COUNT(*) FROM indexed_files WHERE config_id = %s AND is_deleted = true",
-                [job.config_id]
-            )[0][0] if db.execute_query("SELECT COUNT(*) FROM indexed_files WHERE config_id = %s AND is_deleted = true", [job.config_id]) else 0
-            
-            logger.info(f"Fichiers marqués comme supprimés: {deleted_count}")
-            
+                "SELECT COUNT(*) FROM indexed_files_optimized WHERE path LIKE %s AND is_deleted = true",
+                [f"{job.path}%"]
+            )
+            count = deleted_count[0][0] if deleted_count else 0
+            logger.info(f"Fichiers marqués comme supprimés: {count}")
+
         except Exception as e:
             logger.warning(f"Erreur marquage fichiers supprimés: {e}")
     
@@ -871,7 +922,7 @@ class IndexerWorker:
             return 0
 
     def _should_retry_file(self, file_path: str) -> bool:
-        """Vérifie si un fichier doit être réessayé (moins de 3 tentatives)"""
+        """Vérifie si un fichier doit être réessayé (max 5 tentatives via DB)"""
         try:
             from backend.src.database.postgres_adapter import PostgreSQLAdapter
             import os
@@ -1067,7 +1118,7 @@ class IndexerWorker:
                 'error_type': 'missing_file_marking_error'
             })
 
-    def _handle_file_conflict(self, file_info: Dict, config_id: str, error_message: str):
+    def _handle_file_conflict(self, file_info: Dict, config_id: str, error_message: str, space_id: str = '', directory_id: str = ''):
         """Gère les conflits de fichiers en utilisant une stratégie de résolution"""
         try:
             from backend.src.database.postgres_adapter import PostgreSQLAdapter
@@ -1075,7 +1126,7 @@ class IndexerWorker:
 
             db_config = {
                 'host': os.getenv('POSTGRES_HOST', 'postgres'),
-                'port': int(os.getenv('POSTGRES_PORT', 5432),
+                'port': int(os.getenv('POSTGRES_PORT', '5432')),
                 'database': os.getenv('POSTGRES_DB', 'openindex'),
                 'user': os.getenv('POSTGRES_USER', 'openindex_user'),
                 'password': os.getenv('POSTGRES_PASSWORD', 'openindex_secure_password')
@@ -1128,7 +1179,7 @@ class IndexerWorker:
 
             # Essayer d'insérer le fichier avec le nouveau nom
             logger.info(f"Tentative d'insertion du fichier renommé: {new_file_path}")
-            self._insert_file(file_info, config_id)
+            self._insert_file(file_info, config_id, space_id, directory_id)
 
             logger.info(f"Conflit résolu par renommage: {file_path} -> {new_file_path}")
 
@@ -1140,21 +1191,8 @@ class IndexerWorker:
             })
             # Si la résolution échoue, incrémenter le compteur d'erreurs
             self._increment_error_count()
-<task_progress>
-- [x] Rechercher les implémentations de retry automatique
-- [x] Rechercher les implémentations de gestion des erreurs
-- [x] Vérifier si les fonctionnalités sont complètes
-- [x] Créer une Priorité 4 pour les fonctionnalités manquantes
-- [x] Augmenter le nombre maximum de tentatives à 5 dans indexer_worker.py
-- [x] Augmenter le nombre maximum de tentatives à 5 dans archive_transfer_worker.py
-- [x] Augmenter le nombre maximum de tentatives à 5 dans la migration SQL
-- [x] Augmenter le nombre maximum de tentatives à 5 dans indexer_router.py
-- [x] Implémenter la gestion des fichiers disparus
-- [x] Implémenter la gestion des conflits
-- [ ] Ajouter des tests unitaires
 
     def _add_to_batch(self, file_info: Dict[str, Any], config_id: str):
-        """Ajoute un fichier au batch pour insertion par lots"""
         with self._batch_lock:
             self._file_batch.append({
                 'path': file_info.get('path', ''),
@@ -1162,15 +1200,16 @@ class IndexerWorker:
                 'size': file_info.get('size', 0),
                 'checksum': file_info.get('checksum'),
                 'last_modified': file_info.get('last_modified'),
-                'config_id': config_id
+                'modified_at': file_info.get('modified_at'),
+                'config_id': config_id,
+                'space_id': file_info.get('space_id', ''),
+                'directory_id': file_info.get('directory_id', ''),
             })
 
-            # Si le batch atteint la taille maximale, le vider
             if len(self._file_batch) >= self._batch_size:
                 self._flush_batch()
 
     def _flush_batch(self):
-        """Vide le batch en insérant tous les fichiers en une seule opération"""
         if not self._file_batch:
             return
 
@@ -1192,46 +1231,39 @@ class IndexerWorker:
                 batch_copy = self._file_batch.copy()
                 self._file_batch.clear()
 
-            # Utiliser la méthode batch insert
-            db.insert_files_batch(batch_copy, batch_copy[0]['config_id'] if batch_copy else '')
+            space_id = batch_copy[0].get('space_id', '') if batch_copy else ''
 
-            logger.info(f"Batch insert: {len(batch_copy)} fichiers insérés en une opération", extra={
+            db.insert_files_batch_optimized(batch_copy, space_id)
+
+            logger.info(f"Batch insert optimized: {len(batch_copy)} fichiers", extra={
                 'job_id': self.current_job.id if self.current_job else None,
                 'files_processed': len(batch_copy),
                 'batch_size': self._batch_size
             })
 
         except Exception as e:
-            logger.error(f"Erreur lors du batch insert: {e}", extra={
+            logger.error(f"Erreur batch insert optimized: {e}", extra={
                 'job_id': self.current_job.id if self.current_job else None,
                 'error': str(e)
             })
-            # En cas d'erreur, réessayer les fichiers individuellement
             with self._batch_lock:
                 failed_batch = self._file_batch.copy()
                 self._file_batch.clear()
 
             for file_info in failed_batch:
                 try:
-                    self._insert_file(file_info, file_info['config_id'])
+                    self._insert_file(
+                        file_info,
+                        file_info.get('config_id', ''),
+                        file_info.get('space_id', ''),
+                        file_info.get('directory_id', '')
+                    )
                 except Exception as retry_error:
-                    logger.warning(f"Échec du retry pour le fichier {file_info.get('path', '')}: {retry_error}", extra={
+                    logger.warning(f"Échec retry fichier {file_info.get('path', '')}: {retry_error}", extra={
                 'file_path': file_info.get('path', ''),
                 'error': str(retry_error),
                 'error_type': 'batch_retry_error'
             })
-<task_progress>
-- [x] Rechercher les implémentations de retry automatique
-- [x] Rechercher les implémentations de gestion des erreurs
-- [x] Vérifier si les fonctionnalités sont complètes
-- [x] Créer une Priorité 4 pour les fonctionnalités manquantes
-- [x] Augmenter le nombre maximum de tentatives à 5 dans indexer_worker.py
-- [ ] Augmenter le nombre maximum de tentatives à 5 dans archive_transfer_worker.py
-- [ ] Augmenter le nombre maximum de tentatives à 5 dans la migration SQL
-- [ ] Augmenter le nombre maximum de tentatives à 5 dans indexer_router.py
-- [ ] Implémenter la gestion des fichiers disparus
-- [ ] Implémenter la gestion des conflits
-- [ ] Ajouter des tests unitaires
 
     def get_stats(self) -> Dict[str, Any]:
         """Retourne les statistiques du worker"""

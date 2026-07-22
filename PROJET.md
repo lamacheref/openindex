@@ -6,43 +6,69 @@ OpenIndex fournit un socle d'indexation de fichiers SMB avec restitution via API
 
 ## Phase 1 - Indexation intelligente des espaces SMB
 
-### 1.1 Scrutation périodique et multi-espaces
-- **Scheduler configurable** : exécution hors heures de travail (22h-6h)
-- **Surveillance incrémentielle** : détection des changements entre scrutations
-- **Gestion multi-espaces** : configuration de plusieurs partages SMB distincts
+### 1.1 Protocole d'indexation en 2 phases
 
-### 1.2 Collecte des métadonnées
+L'indexation suit un protocole strict en deux passages pour garantir l'intégrité de la base et minimiser la charge sur le serveur SMB :
+
+**Phase A — Enregistrement des répertoires (BFS depuis la racine)**
+- Parcours l'arborescence en **largeur (BFS)** depuis le répertoire racine
+- Pour chaque répertoire rencontré, inscription immédiate dans la table `directories` avec :
+  - `space_id`, `parent_path`, `name`, `full_path`, `depth`
+  - Relation hiérarchique (`parent_id`) pour reconstruction de l'arbre
+- Descente couche par couche jusqu'à épuisement de la profondeur maximale
+- Aucun fichier n'est indexé pendant cette phase
+
+**Phase B — Indexation des fichiers (bottom-up, des feuilles vers la racine)**
+- Récupération de tous les répertoires connus triés par **profondeur décroissante** (des plus profonds à la racine)
+- Pour chaque répertoire (du plus profond au moins profond) :
+  1. Lister les fichiers présents
+  2. Pour chaque fichier, vérifier s'il existe déjà en base sur les 4 métadonnées : **nom + taille + date_création + date_modification**
+  3. Si les 4 métadonnées correspondent → fichier considéré inchangé, ignoré (pas de réindexation, pas de re-hashage)
+  4. Si une métadonnée diffère → fichier considéré changé ou nouveau → indexation complète avec xxHash
+
+### 1.2 Files de traitement différenciées
+- **Queue rapide** (fast) : fichiers <200Mo, hashage xxHash immédiat pendant la Phase B
+- **Queue lente** (slow) : fichiers ≥200Mo, hashage xxHash différé (job séparé, traitement nocturne)
+- **Queue retry** : fichiers verrouillés/en utilisation, réessai automatique (max 5 tentatives, backoff exponentiel)
+
+### 1.3 Collecte des métadonnées
 **Fichiers :**
-- Nom, type, taille, dates création/modification
-- Hash **xxHash** pour unicité et détection modifications
-- Chemin complet et relation avec dossier parent
+- Nom, type (extension), taille, dates création/modification
+- Hash **xxHash** (64-bit) pour unicité et détection des changements
+- Chemin complet, relation avec le dossier parent (`directory_id`) et l'espace SMB (`space_id`)
+- Statuts : doublon, corbeille (garbage), supprimé
 
 **Dossiers :**
-- Métadonnées complètes (pas de hashage nécessaire)
-- Structure hiérarchique avec auto-incrémentation
-- Calcul de taille récursive
-
-### 1.3 Files de traitement différenciées
-- **Queue rapide** : fichiers <200Mo (hashage immédiat)
-- **Queue lente** : fichiers ≥200Mo (traitement nocturne)
-- **Queue retry** : fichiers verrouillés/en utilisation
+- Métadonnées complètes : nom, chemin, profondeur, dates, taille cumulée
+- Structure hiérarchique via `parent_id` et `depth`
+- Calcul de taille récursive (somme des fichiers enfants)
 
 ### 1.4 Gestion intelligente des contenus
-- **Raccourcis** : traités comme fichiers standards avec détection cible
-- **Déchets** : marquage automatique des patterns suspects (*.tmp, ~*, etc.)
-- **Fichiers déplacés/renommés** : détectés comme nouveaux via hash+chemin
+- **Raccourcis/liens symboliques** : détection et traitement spécifique (à implémenter)
+- **Déchets** : marquage automatique des patterns suspects (*.tmp, ~*, Thumbs.db, .DS_Store, *.bak, *.swp)
+- **Fichiers déplacés/renommés** : détectés comme nouveaux via hash + chemin (si hash identique mais chemin différent → potentiel déplacement)
 
 ### 1.5 Base de données PostgreSQL
 ```sql
-smb_spaces (id, name, path, credentials, active)
-directories (id, space_id, parent_id, name, full_path, created_at, modified_at, size)
-files (id, space_id, directory_id, name, full_path, size, created_at, modified_at, hash_xxhash, status)
+smb_spaces (id, name, host, share, domain_zone, connection_username, connection_password, is_active, created_at, updated_at, last_crawled_at, total_files_indexed, total_bytes_indexed)
+
+directories (id, space_id, parent_id, name, path, parent_path, depth, file_count, directory_count, total_size, created_at, updated_at)
+-- UNIQUE(space_id, path)
+
+indexed_files_optimized (id, space_id, directory_id, path, name, extension, size, hash_xxh64, hash_sha256, last_modified, created_at, updated_at, is_duplicate, duplicate_of, is_garbage, is_deleted, deleted_at)
+-- UNIQUE(space_id, path)
 ```
 
 ### 1.6 Stratégie de mise à jour
-- **Mode incrémentiel** : comparaison hash + timestamps
-- **Réindexation manuelle** : disponible pour l'administrateur
-- **Volume cible** : 166k+ fichiers avec évolutivité
+- **Mode incrémentiel (Phase B)** : comparaison sur (nom + taille + created_at + modified_at) → si identique, fichier ignoré
+- **Mode complet** : réindexation intégrale avec re-hashage xxHash
+- **Réindexation manuelle** : disponible pour l'administrateur via `POST /api/indexer/jobs`
+- **Volume cible** : 166k+ fichiers, évolutivité verticale/horizontale
+
+### 1.7 Scheduler
+- **Scrutation périodique** : exécution configurable (cron), par défaut hors heures de travail (22h-6h)
+- **Gestion multi-espaces** : un job par espace SMB avec sa propre configuration et son propre historique
+- **Surveillance incrémentielle** : détection des changements entre deux scrutations consécutives
 
 ## Phase 2 - Archivage intelligent des fichiers
 
@@ -326,21 +352,27 @@ Le **jour J5** marque la phase de qualité et observabilité industrielle :
 
 ## Périmètre actuel
 
-- Collecte et inventaire des fichiers/répertoires.
-- Exposition des données via API FastAPI.
-- Consultation, recherche et visualisation depuis frontend statique.
-- Détection de doublons et indicateurs globaux.
-- Indexation SMB complète avec files différenciées, xxHash, détection incrémentielle.
-- Archivage avec queue de jobs persistants et worker dédié.
-- Authentification PocketBase.
+- Indexeur SMB : queues fast/slow/retry ✅, xxHash ✅, incrémentiel ✅
+- **Écarts constatés** :
+  - Alimentation de la table `directories` ❌ (schéma existant, jamais peuplée par le worker d'indexation)
+  - Protocole 2 phases (BFS dossiers → bottom-up fichiers) ❌ (implémente un DFS mono-phase)
+  - Table cible `indexed_files_optimized` ❌ (le worker écrit dans la table legacy `files`)
+  - Contrôle d'existence sur 4 métadonnées (nom+taille+created+modified) ❌ (seulement hash+size+mtime)
+  - Gestion des raccourcis/symlinks ❌ (non implémentée)
+- Archivage avec queue de jobs persistants et worker dédié ✅
+- Authentification PocketBase ✅
+- API FastAPI, frontend statique, détection de doublons ✅
 
 ## Livrables disponibles
 
-- Crawler Python SMB (base existante + historique d'optimisations).
-- API FastAPI (`src/api/main.py`).
-- Frontend (`frontend/index.html`).
-- Déploiement via Docker Compose (`docker-compose.yml`) — **en cours de remplacement**.
-- Installateur LXC automatisé (`scripts/install_lxc.sh`) — **à construire**.
+- Worker d'indexation SMB (`backend/src/workers/indexer_worker.py`) — **refonte protocolaire en cours**
+- Scheduler cron (`backend/src/workers/indexer_scheduler.py`)
+- API indexeur (`backend/src/api/indexer_router.py`)
+- Client SMB (`backend/src/utils/crawl_utils.py`)
+- API FastAPI (`backend/src/api/main.py`)
+- Frontend (`frontend/index.html`)
+- Déploiement via Docker Compose (`docker-compose.yml`) — **en cours de remplacement par LXC**
+- Installateur LXC automatisé (`scripts/install_lxc.sh`) — **à construire**
 
 ## Trajectoire
 

@@ -1162,6 +1162,107 @@ class PostgreSQLAdapter:
                     self.logger.error(f"Erreur lors du batch insert: {e}")
                     raise
 
+    def insert_file_optimized(self, file_info: Dict[str, Any], space_id: str, directory_id: str) -> None:
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                import os
+                ext = os.path.splitext(file_info.get('name', ''))[1].lower() if file_info.get('name') else ''
+                cursor.execute(
+                    """
+                    INSERT INTO indexed_files_optimized (
+                        space_id, directory_id, path, name, extension,
+                        size, hash_xxh64, hash_sha256, last_modified,
+                        is_garbage, is_deleted
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (space_id, path) DO UPDATE SET
+                        directory_id = EXCLUDED.directory_id,
+                        name = EXCLUDED.name,
+                        extension = EXCLUDED.extension,
+                        size = EXCLUDED.size,
+                        hash_xxh64 = EXCLUDED.hash_xxh64,
+                        hash_sha256 = EXCLUDED.hash_sha256,
+                        last_modified = EXCLUDED.last_modified,
+                        is_garbage = EXCLUDED.is_garbage,
+                        is_deleted = false,
+                        deleted_at = NULL,
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    [
+                        space_id,
+                        directory_id,
+                        file_info.get('path', ''),
+                        file_info.get('name', ''),
+                        ext,
+                        file_info.get('size', 0),
+                        file_info.get('checksum', ''),
+                        None,
+                        file_info.get('modified_at'),
+                        file_info.get('is_garbage', False),
+                        False
+                    ]
+                )
+            conn.commit()
+
+    def insert_files_batch_optimized(self, files_data: List[Dict[str, Any]], space_id: str) -> int:
+        if not files_data:
+            return 0
+
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                try:
+                    import os
+                    values = []
+                    for f in files_data:
+                        ext = os.path.splitext(f.get('name', ''))[1].lower() if f.get('name') else ''
+                        values.append((
+                            space_id,
+                            f.get('directory_id'),
+                            f.get('path', ''),
+                            f.get('name', ''),
+                            ext,
+                            f.get('size', 0),
+                            f.get('checksum', ''),
+                            None,
+                            f.get('modified_at'),
+                            f.get('is_garbage', False),
+                            False
+                        ))
+
+                    execute_values(
+                        cursor,
+                        """
+                        INSERT INTO indexed_files_optimized (
+                            space_id, directory_id, path, name, extension,
+                            size, hash_xxh64, hash_sha256, last_modified,
+                            is_garbage, is_deleted
+                        )
+                        VALUES %s
+                        ON CONFLICT (space_id, path) DO UPDATE SET
+                            directory_id = EXCLUDED.directory_id,
+                            name = EXCLUDED.name,
+                            extension = EXCLUDED.extension,
+                            size = EXCLUDED.size,
+                            hash_xxh64 = EXCLUDED.hash_xxh64,
+                            hash_sha256 = EXCLUDED.hash_sha256,
+                            last_modified = EXCLUDED.last_modified,
+                            is_garbage = EXCLUDED.is_garbage,
+                            is_deleted = false,
+                            deleted_at = NULL,
+                            updated_at = CURRENT_TIMESTAMP
+                        """,
+                        values
+                    )
+
+                    conn.commit()
+                    self.logger.info(f"Batch insert optimized: {len(files_data)} fichiers traités")
+                    return len(files_data)
+
+                except Exception as e:
+                    conn.rollback()
+                    self.logger.error(f"Erreur lors du batch insert optimized: {e}")
+                    raise
+
     def explain_analyze_query(self, query: str, params: Optional[List[Any]] = None) -> Dict[str, Any]:
         """
         Exécute EXPLAIN ANALYZE sur une requête pour analyser ses performances.

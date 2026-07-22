@@ -4,24 +4,25 @@ Solution d’indexation de partages SMB avec **crawler Python**, **API FastAPI**
 
 ## État actuel (J6 — juillet 2026)
 
-Le projet est en phase **J6 — Déploiement LXC & Validation Indexeur**. L'infrastructure Docker est en cours de remplacement par des conteneurs LXC natifs, plus stables et mieux adaptés à l'infrastructure cible.
+Le projet est en phase **J6 — Refonte protocole indexeur & Déploiement LXC**. La priorité immédiate est la mise en conformité de l'indexeur avec le protocole spec (Phase 1 PROJET.md), avant le déploiement LXC.
 
-L'indexeur SMB est fonctionnellement complet (T-INDEX-01) mais nécessite une validation finale en conditions réelles avant le tag 0.7.0.
+**L'audit du code a révélé 5 écarts entre la spec et l'implémentation** — voir `docs/rapports/20260722_rapport_avancement.md`. La refonte protocolaire (T-INDEX-R02) est en cours.
 
 ### Fonctionnalités disponibles
 
-**Indexeur SMB (T-INDEX-01) :**
-- Indexation complète SMB multi-espaces avec crawler récursif
-- Scheduler cron pour scrutation périodique
-- Files différenciées (fast <200Mo / slow >=200Mo)
-- Hashage xxHash64 avec streaming et fallback SHA256
-- Détection incrémentielle des changements (hash + timestamps)
-- Détection automatique des fichiers ordures (*.tmp, Thumbs.db, etc.)
-- Queue retry pour fichiers verrouillés
-- Batch insert optimisé (100 fichiers/lot)
-- Logs structurés JSON
-- 12+ endpoints API REST (`/api/indexer/*`)
-- Dashboard de monitoring temps réel
+**Indexeur SMB — en refonte protocolaire (T-INDEX-R02) :**
+- ✅ Files différenciées (fast <200Mo / slow >=200Mo)
+- ✅ Hashage xxHash64 avec streaming et fallback SHA256
+- ✅ Queue retry pour fichiers verrouillés (max 5 tentatives)
+- ✅ Détection automatique des fichiers ordures (*.tmp, Thumbs.db, etc.)
+- ✅ Scheduler cron pour scrutation périodique
+- ✅ Logs structurés JSON
+- ✅ 12+ endpoints API REST (`/api/indexer/*`)
+- ⏳ **Protocole 2 phases** : BFS dossiers → bottom-up fichiers (à implémenter)
+- ⏳ **Alimentation table `directories`** : schéma existant, jamais peuplée
+- ⏳ **Table `indexed_files_optimized`** : utilise encore la table legacy `files`
+- ⏳ **Contrôle 4 métadonnées** : nom+taille+created+modified (actuellement hash+size+mtime)
+- ❌ Raccourcis/symlinks : non implémenté
 
 **Archivage (T-ARCH-01/02/03/04) :**
 - Queue de jobs persistants en PostgreSQL
@@ -148,9 +149,12 @@ pytest -q tests/test_frontend_structure.py
 
 ## Limitations connues
 
-- **Docker déprécié** : l'infrastructure Docker est en cours de remplacement par LXC (phase J6). Utilisation possible mais non recommandée pour la production.
-- **Erreur de syntaxe** dans `_handle_file_conflict()` (`backend/src/workers/indexer_worker.py:1078`) — corrigée dans la version 0.7.0.
-- **Tests d'intégration manquants** : l'indexeur n'a que des tests unitaires mockés. Les tests d'intégration réels sont prévus en J6.
+- **Protocole d'indexation non conforme** : l'indexeur actuel implémente un DFS mono-phase au lieu du protocole BFS dossiers → bottom-up fichiers spécifié dans PROJET.md. La refonte (T-INDEX-R02) est prioritaire.
+- **Table `directories` jamais alimentée** : le schéma existe mais le worker d'indexation n'insère pas les répertoires.
+- **Table cible erronée** : les fichiers sont insérés dans la table legacy `files` au lieu de `indexed_files_optimized`.
+- **Contrôle d'existence partiel** : la comparaison utilise hash+size+modified au lieu de name+size+created+modified.
+- **Erreur de syntaxe** dans `_handle_file_conflict()` (`backend/src/workers/indexer_worker.py:1078`).
+- **Tests d'intégration manquants** : l'indexeur n'a que des tests unitaires mockés.
+- **Docker déprécié** : en cours de remplacement par LXC. Utilisation possible mais non recommandée pour la production.
 - Le backend SQLite est legacy et non supporté sur le parcours opératoire principal.
-- Le workflow `.gitea/workflows/ci.yml` est conservé en legacy et ne constitue pas la gate de merge de la stack active.
-- La validation locale dépend de l'accès au registre pip pour installer `requirements/dev.txt`.
+- Le workflow `.gitea/workflows/ci.yml` est conservé en legacy et ne constitue pas la gate de merge.

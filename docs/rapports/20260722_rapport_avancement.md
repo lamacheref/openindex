@@ -134,17 +134,17 @@ Le projet semble en pause. La version n'a pas été bumpée (toujours 0.6.23). L
 ### Mise à jour post-rapport (22 juillet 2026)
 
 **Documents modifiés dans cette session :**
-- `PROJET.md` : ajout Phase 6 (Déploiement LXC & Validation), nouveau Cap J6, mise à jour trajectoire
-- `ROADMAP.md` : remplacement de la roadmap J6 archivage par J6 LXC + validation indexeur
-- `TODO.md` : réécriture complète avec priorités LXC et indexeur
-- `README.md` : installation LXC en méthode principale, Docker en legacy déprécié
+- `PROJET.md` : mise à jour Phase 1 avec protocole 2 phases (BFS dossiers → bottom-up fichiers), nouveau schéma DB, périmètre/livrables reflétant les vrais écarts
+- `ROADMAP.md` : T-INDEX-R02 en priorité #1 (refonte protocole indexeur), T-LXC-01/03 repoussés après validation
+- `README.md` : état réel de l'indexeur (✅/⏳/❌), limitations détaillées
+- `TODO.md` : plan d'action complet priorisé (P0 → P1 → P2 → P3)
+- `docs/rapports/20260722_rapport_avancement.md` : présente mise à jour
 
 **Prochaines actions immédiates :**
-1. Créer `scripts/install_lxc.sh`
-2. Créer `docs/operations/INSTALLATION_LXC.md`
-3. Créer `docs/operations/EXPLOITATION_LXC.md`
-4. Corriger `_handle_file_conflict()` + aligner `max_attempts`
-5. Finaliser les tests Priority 4
+1. P0 — Corriger syntaxe `_handle_file_conflict()` + aligner `max_attempts` + nettoyer `task_progress`
+2. P1 — Refonte protocole indexeur (T-INDEX-R02) : BFS directories, bottom-up fichiers, `indexed_files_optimized`, contrôle 4 métadonnées
+3. P2 — Tests & validation (unitaires, intégration, benchmark 166k+)
+4. P3 — Déploiement LXC, documentation, version bump 0.7.0
 
 ---
 
