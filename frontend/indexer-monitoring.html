@@ -517,9 +517,10 @@
                     </div>
                     <div class="flex-1 bg-gray-950 text-green-400 rounded-xl p-4 overflow-y-auto font-mono text-xs leading-relaxed log-container">
                         <template x-for="(entry, i) in logs" :key="i">
-                            <div class="hover:bg-white/5">
-                                <span class="text-gray-500" x-text="entry.timestamp"></span>
-                                <span class="text-gray-400 ml-2" x-text="entry.message"></span>
+                            <div class="hover:bg-white/5 flex items-baseline gap-2">
+                                <span class="text-gray-600 text-[10px] w-6 text-right shrink-0" x-text="i"></span>
+                                <span class="text-gray-500 shrink-0" x-text="entry.timestamp"></span>
+                                <span class="text-gray-400" x-text="entry.message"></span>
                             </div>
                         </template>
                         <div x-show="logs.length === 0" class="text-gray-500 text-center py-8">
@@ -742,9 +743,11 @@
                             setTimeout(() => {
                                 if (this.logAutoScroll) {
                                     const el = document.querySelector('.log-container');
-                                    if (el) el.scrollTop = el.scrollHeight;
+                                    if (el && el.scrollTop + el.clientHeight >= el.scrollHeight - 50) {
+                                        el.scrollTop = el.scrollHeight;
+                                    }
                                 }
-                            }, 200);
+                            }, 100);
                         }
                     } catch (err) {
                         console.error('Erreur chargement logs:', err);

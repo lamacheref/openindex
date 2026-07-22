@@ -74,7 +74,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `e6b56595` | 2026-07-22 | non | non | fix: increase scroll timeout to 200ms |
+| `d25ca6fb` | 2026-07-22 | non | non | fix: add index col + smart auto-scroll (only if near bottom) |
+| `acdc1e54` | 2026-07-22 | oui | oui | fix: increase scroll timeout to 200ms |
 | `0ec256fe` | 2026-07-22 | oui | oui | fix: standard log order (newest at bottom, auto-scroll to bottom) |
 | `f37fce82` | 2026-07-22 | oui | oui | fix: reverse log order (newest first), auto-scroll to top |
 | `a02a6714` | 2026-07-22 | oui | oui | fix: default logService value |
@@ -123,4 +124,3 @@ pytest -q tests/
 | `31bc473b` | 2026-05-18 | oui | oui | T-INDEX-01: Multi-espaces SMB - API CRUD schedules + métriques par espace |
 | `54404d00` | 2026-05-18 | oui | oui | T-INDEX-01: Scrutation périodique - Scheduler cron + migration + tests (16 passants) |
 | `5a0f86fc` | 2026-05-18 | oui | oui | T-INDEX-01: Priorité 0 terminée - Découplage, mot de passe SMB, tests (53 passants) |
-| `4b5327e6` | 2026-05-12 | oui | oui | Refonte complète TODO.md selon PROJET.md v5 phases |
