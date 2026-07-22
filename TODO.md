@@ -74,9 +74,9 @@
 
 ### 1d — Finalisation
 
-- [ ] **Mettre à jour les statuts** : remplacer `crawl_config_id` par `space_id` dans les requêtes du worker
-- [ ] **Tester le cycle complet** : création d'un job → Phase A (BFS) → Phase B (bottom-up) → completed
-- [ ] **Vérifier les logs** : progression claire (Phase A: X répertoires / Phase B: Y fichiers ignorés, Z indexés)
+- [x] **Mettre à jour les statuts** : `space_id` utilisé dans les requêtes principales (`directories`, `indexed_files_optimized`), `config_id` conservé pour la compatibilité job
+- [x] **Logs de progression** : Phase A log toutes les 500 entrées, Phase B log final avec nb ignorés/indexés
+- [ ] **Tester le cycle complet** : nécessite PostgreSQL + SMB en runtime (hors session)
 
 ---
 
@@ -112,7 +112,7 @@
 - [x] Erreur syntaxe L.1078 corrigée
 - [x] `max_attempts` aligné à 5
 - [x] Blocs `task_progress` supprimés du code
-- [ ] Tests unitaires passant (70+)
-- [ ] Tests d'intégration passant (pipeline complet)
-- [ ] Benchmark 166k+ fichiers validé
-- [ ] Version 0.7.0 taguée
+- [ ] Tests unitaires passant (70+) — **Priorité 2**
+- [ ] Tests d'intégration passant (pipeline complet) — **Priorité 2**
+- [ ] Benchmark 166k+ fichiers validé — **Priorité 2**
+- [ ] Version 0.7.0 taguée — **Priorité 3**

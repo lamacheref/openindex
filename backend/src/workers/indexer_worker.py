@@ -329,7 +329,7 @@ class IndexerWorker:
 
     def _index_path(self, job: IndexerJob):
         """Indexe un chemin via le protocole 2 phases : BFS répertoires → bottom-up fichiers"""
-        from backend.src.crawl_utils import SMBClient, normalize_smb_path, get_file_info
+        from backend.src.crawl_utils import SMBClient, get_file_info
         
         logger.info(f"Indexation de {job.path} (protocole 2 phases)")
         
@@ -403,6 +403,9 @@ class IndexerWorker:
                 )
                 dir_count += 1
 
+                if dir_count % 500 == 0:
+                    logger.info(f"Phase A progression: {dir_count} répertoires découverts (profondeur {depth})")
+
                 entries = client.list_dir(current_path)
                 for entry in entries:
                     if isinstance(entry, dict):
@@ -444,7 +447,7 @@ class IndexerWorker:
             logger.warning("Aucun répertoire trouvé pour Phase B")
             return 0
 
-        file_count = 0
+        skipped = 0
         for dir_id, dir_path, dir_name in dirs:
             if self._stop_event.is_set():
                 raise InterruptedError("Indexation interrompue")
@@ -460,10 +463,12 @@ class IndexerWorker:
                     entry_name = entry.get('name', '')
                     is_dir = entry.get('is_directory', False)
                     entry_size = entry.get('size', 0)
+                    entry_mtime = entry.get('mtime')
                 else:
                     entry_name = getattr(entry, 'filename', '')
                     is_dir = getattr(entry, 'isDirectory', False)
                     entry_size = getattr(entry, 'size', 0)
+                    entry_mtime = getattr(entry, 'mtime', None)
 
                 if is_dir:
                     continue
@@ -477,10 +482,11 @@ class IndexerWorker:
                     WHERE path = %s AND name = %s AND size = %s
                       AND created_at = %s AND last_modified = %s
                     """,
-                    [full_path, entry_name, entry_size, entry.get('mtime'), entry.get('mtime')]
+                    [full_path, entry_name, entry_size, entry_mtime, entry_mtime]
                 )
 
                 if existing:
+                    skipped += 1
                     continue
 
                 try:
@@ -507,8 +513,10 @@ class IndexerWorker:
 
                 if job.files_found % 100 == 0:
                     self._update_job_progress(job)
-                    file_count = job.files_indexed
 
+        logger.info(f"Phase B: {job.files_found} fichiers trouvés, {skipped} ignorés (inchangés), {job.files_indexed} indexés", extra={
+            'job_id': job.id, 'config_id': job.config_id
+        })
         return job.files_indexed
     
     def _create_slow_file_job(self, file_info: Dict, parent_job: IndexerJob):
@@ -715,17 +723,18 @@ class IndexerWorker:
                 """
                 UPDATE indexed_files_optimized
                 SET is_deleted = true, deleted_at = CURRENT_TIMESTAMP
-                WHERE path LIKE %s
+                WHERE space_id = %s
+                  AND path LIKE %s
                   AND is_deleted = false
                   AND updated_at < CURRENT_TIMESTAMP - INTERVAL '1 hour'
                 """,
-                [f"{job.path}%"],
+                [space_id, f"{job.path}%"],
                 fetch=False
             )
 
             deleted_count = db.execute_query(
-                "SELECT COUNT(*) FROM indexed_files_optimized WHERE path LIKE %s AND is_deleted = true",
-                [f"{job.path}%"]
+                "SELECT COUNT(*) FROM indexed_files_optimized WHERE space_id = %s AND path LIKE %s AND is_deleted = true",
+                [space_id, f"{job.path}%"]
             )
             count = deleted_count[0][0] if deleted_count else 0
             logger.info(f"Fichiers marqués comme supprimés: {count}")

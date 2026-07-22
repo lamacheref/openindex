@@ -352,20 +352,20 @@ Le **jour J5** marque la phase de qualité et observabilité industrielle :
 
 ## Périmètre actuel
 
-- Indexeur SMB : queues fast/slow/retry ✅, xxHash ✅, incrémentiel ✅
-- **Écarts constatés** :
-  - Alimentation de la table `directories` ❌ (schéma existant, jamais peuplée par le worker d'indexation)
-  - Protocole 2 phases (BFS dossiers → bottom-up fichiers) ❌ (implémente un DFS mono-phase)
-  - Table cible `indexed_files_optimized` ❌ (le worker écrit dans la table legacy `files`)
-  - Contrôle d'existence sur 4 métadonnées (nom+taille+created+modified) ❌ (seulement hash+size+mtime)
-  - Gestion des raccourcis/symlinks ❌ (non implémentée)
+- Indexeur SMB : queues fast/slow/retry ✅, xxHash ✅, incrémentiel ✅, protocole 2 phases ✅
+- **Écarts résiduels** :
+  - Alimentation de la table `directories` ✅ (Phase A BFS)
+  - Protocole 2 phases (BFS dossiers → bottom-up fichiers) ✅
+  - Table cible `indexed_files_optimized` ✅
+  - Contrôle d'existence sur 4 métadonnées (nom+taille+created+modified) ✅
+  - Gestion des raccourcis/symlinks ❌ (non implémentée — hors périmètre Phase 1)
 - Archivage avec queue de jobs persistants et worker dédié ✅
 - Authentification PocketBase ✅
 - API FastAPI, frontend statique, détection de doublons ✅
 
 ## Livrables disponibles
 
-- Worker d'indexation SMB (`backend/src/workers/indexer_worker.py`) — **refonte protocolaire en cours**
+- Worker d'indexation SMB (`backend/src/workers/indexer_worker.py`) — **refonte protocolaire terminée (P0+P1a/b/c)**
 - Scheduler cron (`backend/src/workers/indexer_scheduler.py`)
 - API indexeur (`backend/src/api/indexer_router.py`)
 - Client SMB (`backend/src/utils/crawl_utils.py`)
