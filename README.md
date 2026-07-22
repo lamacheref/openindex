@@ -78,3 +78,58 @@ pytest -q tests/
 | `CHANGELOG.md` | Historique des versions |
 | `docs/operations/INDEXATION.md` | Administration de l'indexation |
 | `docs/operations/EXPLOITATION.md` | Runbook PostgreSQL |
+
+## Historique des commits
+
+| Hash | Date | Gitea | GitHub | Description |
+|------|------|-------|--------|-------------|
+| `5b21952f` | 2026-07-22 | non | non | feat: ajout historique des commits dans README + post-commit hook |
+| `663366ff` | 2026-07-22 | oui | oui | Restore scripts/versioning.py + fix pre-commit exécutable |
+| `510f627c` | 2026-07-22 | oui | oui | README: URL installation GitHub (main) |
+| `8331c600` | 2026-07-22 | oui | oui | README: URL installation pointe vers main (Devel supprimée) |
+| `a2db82a6` | 2026-07-22 | oui | oui | README: URL installation Gitea (vs GitHub), suppression ref CI-CD.md |
+| `3deee6b3` | 2026-07-22 | oui | oui | Merge pull request 'T-INDEX-R02 : Refonte protocolaire de l'indexation (BFS, bottom-up, écritures optimisées)' (#2) from Devel into main |
+| `be81fda0` | 2026-07-22 | oui | oui | Merge gitea/main into Devel, résolution conflit OpenIndex.code-workspace |
+| `f2e6064b` | 2026-07-22 | oui | oui | Suppression des pipelines CI/CD (GitHub Actions, Gitea CI, CI-CD.md) — déploiement LXC |
+| `5a5e746d` | 2026-07-22 | oui | oui | README: déploiement ProxmoxVE (curl bash), état T-INDEX-R02 terminé |
+| `169dea87` | 2026-07-22 | oui | oui | T-LXC-01 installeur ProxmoxVE LXC complet |
+| `773fa3b2` | 2026-07-22 | oui | oui | T-INDEX-R02 finalisation 1d : logs, filtres space_id, PROJET.md à jour |
+| `a7aadd06` | 2026-07-22 | oui | oui | T-INDEX-R02 refonte protocole indexeur (P0 + P1a/b/c) |
+| `941c4f0e` | 2026-07-22 | oui | oui | Phase J6: réorientation LXC + validation indexeur |
+| `11948c34` | 2026-05-18 | oui | oui | Add indexer retries table and priority 4 features |
+| `caeffa13` | 2026-05-18 | oui | oui | Merge pull request 'V5_Projet' (#1) from V5_Projet into main |
+| `b82e2d5c` | 2026-05-18 | oui | oui | Ajout du fichier OpenIndex.code-workspace pour l'environnement de développement |
+| `1b978783` | 2026-05-18 | oui | oui | Mise à jour quotidienne : modifications de l'environnement virtuel et du TODO |
+| `5245847b` | 2026-05-18 | oui | oui | T-INDEX-01: Gestion des ordures - Détection et marquage des fichiers indésirables |
+| `aeb37d90` | 2026-05-18 | oui | oui | T-INDEX-01: Base PostgreSQL optimisée - Schéma complet |
+| `e126878b` | 2026-05-18 | oui | oui | T-INDEX-01: Détection des changements - Mode incrémentiel |
+| `d4a0c3a0` | 2026-05-18 | oui | oui | T-INDEX-01: Hashage xxHash - Implémentation dans crawl_utils |
+| `5fcb1701` | 2026-05-18 | oui | oui | T-INDEX-01: Files différenciées - Migration + worker avec queue_type |
+| `31bc473b` | 2026-05-18 | oui | oui | T-INDEX-01: Multi-espaces SMB - API CRUD schedules + métriques par espace |
+| `54404d00` | 2026-05-18 | oui | oui | T-INDEX-01: Scrutation périodique - Scheduler cron + migration + tests (16 passants) |
+| `5a0f86fc` | 2026-05-18 | oui | oui | T-INDEX-01: Priorité 0 terminée - Découplage, mot de passe SMB, tests (53 passants) |
+| `4b5327e6` | 2026-05-12 | oui | oui | Refonte complète TODO.md selon PROJET.md v5 phases |
+| `7d24e483` | 2026-05-05 | oui | oui | Fix: crawl_utils avec smbclient pour indexer worker |
+| `18a5b60f` | 2026-05-05 | oui | oui | Add crawl_utils.py module for SMB operations in indexer worker |
+| `598b8b85` | 2026-05-05 | oui | oui | Fix: Interface indexer et création de jobs |
+| `2e8e3b6a` | 2026-05-05 | oui | oui | Fix: Création et édition de sources - Corrections complètes |
+| `f657b8d7` | 2026-05-05 | oui | oui | Fix: API DELETE crawl-configs + Modales remplacent les popups |
+| `4de59d09` | 2026-05-05 | oui | oui | Fix: Ajout de source SMB - Fonctionnel |
+| `4fac6d37` | 2026-05-05 | oui | oui | Fix: Désactivation auth + correction UI Sources + ajout modale création source |
+| `7723b9e5` | 2026-05-05 | oui | oui | T-INDEX-01: Implémentation du service d'indexation dédié |
+| `d1fc8417` | 2026-04-14 | oui | oui | Auto-commit: changes staged by Mistral Vibe |
+| `4adc8151` | 2026-04-14 | oui | oui | T-AUTH-02: Implémentation complète de l'authentification PocketBase |
+| `523d3865` | 2026-04-14 | oui | oui | T-AUTH-01: PocketBase authentication integration completed |
+| `a83ab069` | 2026-04-14 | oui | oui | Merge remote-tracking branch 'github/Devel' into Devel |
+| `ae9db2ca` | 2026-04-09 | oui | oui | docs: Reorganize TODO.md - T-ARCH-04 section moved + IMPÉRATIF TESTS #85 |
+| `8d10519b` | 2026-04-09 | oui | oui | docs: Update ROADMAP.md with T-ARCH-02, T-ARCH-03, T-ARCH-04 completions |
+| `c3a878c6` | 2026-04-09 | oui | oui | docs: Update TODO.md with T-ARCH-04 (Issue #85) SMB fix and tests |
+| `484b5b3f` | 2026-04-09 | oui | oui | Fix #85: Configuration SMB incorrecte - Montage dynamique avec fallback |
+| `7e263f60` | 2026-04-09 | oui | oui | Fix archive stack PostgreSQL configuration and schema bootstrapping |
+| `f94b882f` | 2026-04-08 | oui | oui | Fix archive explorer flow and document SMB config follow-up |
+| `9f2f3662` | 2026-04-08 | oui | oui | Update: Mise à jour du TODO.md avec les corrections apportées |
+| `1c790ac3` | 2026-04-08 | oui | oui | Remove: Suppression du test de versioning instable |
+| `af60e31e` | 2026-04-08 | oui | oui | Fix: Synchronisation finale de package.json avec VERSION 0.6.8 |
+| `bf22aa84` | 2026-04-08 | oui | oui | Fix: Mise à jour de package.json pour correspondre à VERSION 0.6.7 |
+| `c510233c` | 2026-04-08 | oui | oui | Fix: Correction de plusieurs tests échouants |
+| `f3a568f4` | 2026-04-08 | oui | oui | Fix: Correction du système de version pour supporter les variables d'environnement |
