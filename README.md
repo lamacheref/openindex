@@ -74,7 +74,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `79ce49cc` | 2026-07-22 | non | non | fix: smbclient cannot connect to subdirectory, use cd before ls |
+| `9ab916c8` | 2026-07-22 | non | non | fix: smbclient connect pass password via stdin, connect to share not -L |
+| `c2b4af4a` | 2026-07-22 | oui | oui | fix: smbclient cannot connect to subdirectory, use cd before ls |
 | `cf310d30` | 2026-07-22 | oui | oui | fix: correct import path crawl_utils (utils.crawl_utils) |
 | `03df7049` | 2026-07-22 | oui | oui | fix: normalize UNC start_path in backend (strip duplicate slashes) |
 | `e9b8161f` | 2026-07-22 | oui | oui | fix: start_path triple slash, use local tailwind.css |
@@ -123,4 +124,3 @@ pytest -q tests/
 | `4adc8151` | 2026-04-14 | oui | oui | T-AUTH-02: Implémentation complète de l'authentification PocketBase |
 | `523d3865` | 2026-04-14 | oui | oui | T-AUTH-01: PocketBase authentication integration completed |
 | `a83ab069` | 2026-04-14 | oui | oui | Merge remote-tracking branch 'github/Devel' into Devel |
-| `ae9db2ca` | 2026-04-09 | oui | oui | docs: Reorganize TODO.md - T-ARCH-04 section moved + IMPÉRATIF TESTS #85 |

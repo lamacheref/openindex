@@ -33,24 +33,20 @@ class SMBClient:
     def connect(self) -> bool:
         """Test la connexion SMB avec smbclient"""
         try:
-            # Test simple avec smbclient -L pour lister les partages
+            # Lister le partage pour valider les identifiants
             cmd = [
-                'smbclient',
-                '-L', self.host,
-                '-U', f"{self.username}%",
-                '-W', self.domain
+                'smbclient', self._share_url,
+                '-U', self.username,
+                '-W', self.domain,
+                '-c', 'ls'
             ]
-            
-            # Ajouter le mot de passe via variable d'environnement pour éviter l'affichage dans ps
-            env = os.environ.copy()
-            env['PASSWD'] = self.password
             
             result = subprocess.run(
                 cmd,
+                input=f"{self.password}\n",
                 capture_output=True,
                 text=True,
-                timeout=10,
-                env=env
+                timeout=10
             )
             
             if result.returncode == 0:
@@ -58,11 +54,11 @@ class SMBClient:
                 logger.info(f"Connecté à {self._share_url}")
                 return True
             else:
-                logger.error(f"Erreur connexion SMB: {result.stderr}")
+                logger.error(f"Erreur connexion SMB: {result.stderr.strip()}")
                 return False
                 
         except Exception as e:
-            logger.error(f"Erreur connexion SMB à {self.host}/{self.share}: {e}")
+            logger.error(f"Erreur connexion SMB à {self._share_url}: {e}")
             return False
     
     def disconnect(self):
@@ -97,7 +93,8 @@ class SMBClient:
             )
             
             if result.returncode != 0:
-                logger.error(f"Erreur listage {remote_path}: {result.stderr}")
+                err_msg = result.stderr.strip() or f"code retour {result.returncode}"
+                logger.error(f"Erreur listage {remote_path}: {err_msg}")
                 return entries
             
             # Parser la sortie de smbclient
