@@ -143,6 +143,13 @@
                     <i class="fas fa-folder-tree w-5 text-center"></i>
                     <span class="font-medium">Sources</span>
                 </button>
+                
+                <button @click="currentView = 'logs'"
+                        :class="{ 'active': currentView === 'logs' }"
+                        class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-600">
+                    <i class="fas fa-terminal w-5 text-center"></i>
+                    <span class="font-medium">Logs</span>
+                </button>
             </nav>
             
             <!-- Status Worker -->
@@ -485,6 +492,42 @@
                         Ouvrir la console d'archivage
                     </a>
                 </div>
+                
+                <!-- LOGS VIEW -->
+                <div x-show="currentView === 'logs'" class="h-full flex flex-col">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">Logs temps réel</h3>
+                        <div class="flex items-center gap-3">
+                            <select x-model="logService" @change="fetchLogs()" 
+                                    class="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
+                                <option value="openindex-indexer-worker">Worker</option>
+                                <option value="openindex-api">API</option>
+                                <option value="openindex-indexer-scheduler">Scheduler</option>
+                            </select>
+                            <label class="flex items-center gap-1.5 text-sm text-gray-600">
+                                <input type="checkbox" x-model="logAutoScroll" class="rounded">
+                                Auto-scroll
+                            </label>
+                            <button @click="fetchLogs()" 
+                                    class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-sm flex items-center gap-1.5">
+                                <i class="fas fa-sync-alt"></i>
+                                Rafraîchir
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex-1 bg-gray-950 text-green-400 rounded-xl p-4 overflow-y-auto font-mono text-xs leading-relaxed log-container">
+                        <template x-for="(entry, i) in logs" :key="i">
+                            <div class="hover:bg-white/5">
+                                <span class="text-gray-500" x-text="entry.timestamp"></span>
+                                <span class="text-gray-400 ml-2" x-text="entry.message"></span>
+                            </div>
+                        </template>
+                        <div x-show="logs.length === 0" class="text-gray-500 text-center py-8">
+                            <i class="fas fa-spinner fa-spin mr-2"></i>
+                            Chargement des logs...
+                        </div>
+                    </div>
+                </div>
             </div>
         </main>
     </div>
@@ -588,13 +631,19 @@
                     domain: ''
                 },
                 
+                // Logs
+                logs: [],
+                logService: 'openindex-indexer-worker',
+                logAutoScroll: true,
+                
                 // Computed
                 get pageTitle() {
                     const titles = {
                         'dashboard': 'Tableau de bord',
                         'jobs': 'Jobs d\'indexation',
                         'configs': 'Sources',
-                        'archive': 'Archivage'
+                        'archive': 'Archivage',
+                        'logs': 'Logs'
                     };
                     return titles[this.currentView] || 'Gestionnaire d\'Indexation';
                 },
@@ -612,8 +661,10 @@
                 // Methods
                 async init() {
                     await this.refreshData();
-                    // Rafraîchissement automatique toutes les 5 secondes
                     setInterval(() => this.refreshData(), 5000);
+                    setInterval(() => {
+                        if (this.currentView === 'logs') this.fetchLogs();
+                    }, 3000);
                 },
                 
                 async refreshData() {
@@ -679,6 +730,24 @@
                         }
                     } catch (err) {
                         console.error('Erreur arrêt job:', err);
+                    }
+                },
+                
+                async fetchLogs() {
+                    try {
+                        const res = await fetch(`/api/indexer/logs?service=${encodeURIComponent(this.logService)}&lines=200`);
+                        if (res.ok) {
+                            const data = await res.json();
+                            this.logs = data.lines || [];
+                            setTimeout(() => {
+                                if (this.logAutoScroll) {
+                                    const el = document.querySelector('.log-container');
+                                    if (el) el.scrollTop = el.scrollHeight;
+                                }
+                            }, 50);
+                        }
+                    } catch (err) {
+                        console.error('Erreur chargement logs:', err);
                     }
                 },
                 

@@ -9,6 +9,8 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 import uuid
 import logging
+import subprocess
+import shlex
 
 logger = logging.getLogger("openindex.api.indexer")
 
@@ -89,6 +91,14 @@ class IndexerRetry(BaseModel):
 class IndexerRetriesList(BaseModel):
     retries: List[IndexerRetry]
     total: int = 0
+
+class LogEntry(BaseModel):
+    timestamp: str
+    message: str
+
+class LogsResponse(BaseModel):
+    service: str
+    lines: List[LogEntry]
 
 # Fonction utilitaire pour obtenir l'adaptateur DB
 def get_db_adapter():
@@ -579,4 +589,36 @@ async def list_indexer_retries():
 
     except Exception as e:
         logger.error(f"Erreur list retries: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {e}")
+
+@router.get("/logs", response_model=LogsResponse)
+async def get_logs(service: str = Query("openindex-indexer-worker", description="Service systemd"), lines: int = Query(200, ge=10, le=2000)):
+    """Récupère les logs récents d'un service systemd"""
+    try:
+        cmd = ["journalctl", "-u", service, "--no-pager", "-n", str(lines), "-o", "short-iso"]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if result.returncode != 0:
+            raise HTTPException(status_code=500, detail=f"journalctl error: {result.stderr.strip()}")
+
+        entries = []
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split(None, 1)
+            if len(parts) >= 2:
+                entries.append(LogEntry(timestamp=parts[0], message=parts[1]))
+            else:
+                entries.append(LogEntry(timestamp="", message=line))
+
+        return LogsResponse(service=service, lines=entries)
+
+    except HTTPException:
+        raise
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="Timeout lecture des logs")
+    except FileNotFoundError:
+        raise HTTPException(status_code=500, detail="journalctl non trouvé")
+    except Exception as e:
+        logger.error(f"Erreur lecture logs: {e}")
         raise HTTPException(status_code=500, detail=f"Erreur: {e}")
