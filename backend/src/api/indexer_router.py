@@ -472,7 +472,7 @@ async def stop_job(job_id: str):
                 """
                 UPDATE indexer_jobs
                 SET status = 'cancelled', completed_at = CURRENT_TIMESTAMP,
-                    error_message = 'Arrêt demandé par l\'utilisateur'
+                    error_message = 'Arrêt demandé'
                 WHERE id = %s AND status = 'running'
                 """,
                 [job_id], fetch=False
