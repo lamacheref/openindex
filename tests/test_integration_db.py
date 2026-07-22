@@ -17,6 +17,9 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+TEST_SPACE_ID = '00000000-0000-0000-0000-000000000001'
+
+
 @pytest.fixture(scope='module')
 def db():
     from backend.src.database.postgres_adapter import PostgreSQLAdapter
@@ -24,15 +27,15 @@ def db():
     yield adapter
     with adapter.get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM indexed_files_optimized WHERE space_id = 'test-integration-space'")
-            cur.execute("DELETE FROM directories WHERE space_id = 'test-integration-space'")
-            cur.execute("DELETE FROM smb_spaces WHERE id = 'test-integration-space'")
+            cur.execute("DELETE FROM indexed_files_optimized WHERE space_id = %s", [TEST_SPACE_ID])
+            cur.execute("DELETE FROM directories WHERE space_id = %s", [TEST_SPACE_ID])
+            cur.execute("DELETE FROM smb_spaces WHERE id = %s", [TEST_SPACE_ID])
         conn.commit()
 
 
 @pytest.fixture(scope='module')
 def space_id():
-    return 'test-integration-space'
+    return TEST_SPACE_ID
 
 
 @pytest.fixture(scope='module')
