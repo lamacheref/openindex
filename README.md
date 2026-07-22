@@ -74,7 +74,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `b3e5a833` | 2026-07-22 | non | non | fix: start_path triple slash, use local tailwind.css |
+| `c8be1d4a` | 2026-07-22 | non | non | fix: normalize UNC start_path in backend (strip duplicate slashes) |
+| `e9b8161f` | 2026-07-22 | oui | oui | fix: start_path triple slash, use local tailwind.css |
 | `d8fd155e` | 2026-07-22 | oui | oui | fix: add GET /api/indexer/jobs/{job_id}, update benchmark script for Phase A/B |
 | `4f85ecac` | 2026-07-22 | oui | oui | fix frontend: copy alpine.min.js + fontawesome assets, add node_modules to gitignore |
 | `5e0301d1` | 2026-07-22 | oui | oui | fix integration tests: use UUID for space_id |
@@ -123,4 +124,3 @@ pytest -q tests/
 | `ae9db2ca` | 2026-04-09 | oui | oui | docs: Reorganize TODO.md - T-ARCH-04 section moved + IMPÉRATIF TESTS #85 |
 | `8d10519b` | 2026-04-09 | oui | oui | docs: Update ROADMAP.md with T-ARCH-02, T-ARCH-03, T-ARCH-04 completions |
 | `c3a878c6` | 2026-04-09 | oui | oui | docs: Update TODO.md with T-ARCH-04 (Issue #85) SMB fix and tests |
-| `484b5b3f` | 2026-04-09 | oui | oui | Fix #85: Configuration SMB incorrecte - Montage dynamique avec fallback |

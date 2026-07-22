@@ -6,7 +6,7 @@ Backend moderne avec WebSocket et monitoring temps réel
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect, APIRouter
 from fastapi.responses import HTMLResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Dict, Any
 import asyncio
 import hashlib
@@ -194,6 +194,15 @@ class CrawlConnectionConfig(BaseModel):
     domain: Optional[str] = None
 
 
+def _normalize_unc_path(v: str) -> str:
+    if not v.startswith('//'):
+        return v
+    prefix = '//'
+    rest = v[2:].lstrip('/')
+    rest = '/'.join(p for p in rest.split('/') if p)
+    return prefix + rest
+
+
 class CrawlConfigCreate(BaseModel):
     name: str
     domain_zone: str
@@ -202,6 +211,11 @@ class CrawlConfigCreate(BaseModel):
     include_paths: List[str] = Field(default_factory=list)
     exclude_paths: List[str] = Field(default_factory=list)
     connection: CrawlConnectionConfig
+
+    @field_validator('start_path')
+    @classmethod
+    def normalize_start_path(cls, v):
+        return _normalize_unc_path(v)
 
 
 class CrawlConnectionUpdate(BaseModel):
@@ -218,6 +232,11 @@ class CrawlConfigUpdate(BaseModel):
     include_paths: List[str] = Field(default_factory=list)
     exclude_paths: List[str] = Field(default_factory=list)
     connection: CrawlConnectionUpdate
+
+    @field_validator('start_path')
+    @classmethod
+    def normalize_start_path(cls, v):
+        return _normalize_unc_path(v)
 
 
 class CrawlConfigPublic(BaseModel):
