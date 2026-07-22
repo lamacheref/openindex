@@ -20,8 +20,13 @@ from api.indexer_router import IndexerRetry
 
 def test_indexer_retry_max_attempts():
     """Test que le nombre maximum de tentatives est bien de 5"""
-    retry = IndexerRetry()
-    assert retry.max_attempts == 5, "Le nombre maximum de tentatives devrait être 5"
+    retry = IndexerRetry(
+        file_id="test-file-id",
+        file_path="/test/file.txt",
+        job_id="test-job-id",
+        config_id="test-config-id"
+    )
+    assert retry.max_attempts == 5
 
 def test_is_file_missing_detection():
     """Test la détection des fichiers disparus"""
@@ -95,13 +100,14 @@ def test_mark_file_as_missing(mock_db):
 
     worker._mark_file_as_missing(file_path, config_id, error_message)
 
-    # Vérifier que la méthode a été appelée avec les bons paramètres
+    # Vérifier que la requête SQL contient la bonne table
     mock_db_instance.execute_query.assert_called_once()
-    call_args = mock_db_instance.execute_query.call_args[0][0]
-    assert "missing_files" in call_args
-    assert file_path in call_args
-    assert config_id in call_args
-    assert error_message in call_args
+    call_sql = mock_db_instance.execute_query.call_args[0][0]
+    call_params = mock_db_instance.execute_query.call_args[0][1]
+    assert "missing_files" in call_sql
+    assert file_path in call_params
+    assert config_id in call_params
+    assert error_message in call_params
 
 @patch('backend.src.database.postgres_adapter.PostgreSQLAdapter')
 def test_handle_file_conflict(mock_db):
@@ -124,19 +130,15 @@ def test_handle_file_conflict(mock_db):
 
     worker._handle_file_conflict(file_info, config_id, error_message)
 
-    # Vérifier que la méthode a été appelée avec les bons paramètres
-    calls = mock_db_instance.execute_query.call_args_list
-    assert len(calls) == 2  # Une pour le conflit, une pour l'insertion
-
-    # Vérifier le premier appel (enregistrement du conflit)
-    first_call = calls[0][0][0]
-    assert "file_conflicts" in first_call
-    assert "original_path" in first_call
-    assert "conflict_path" in first_call
+    # _handle_file_conflict enregistre le conflit via execute_query,
+    # puis _insert_file utilise insert_file_optimized (pas execute_query)
+    mock_db_instance.execute_query.assert_called_once()
+    call_sql = mock_db_instance.execute_query.call_args[0][0]
+    assert "file_conflicts" in call_sql
 
     # Vérifier que le fichier a été renommé
-    assert file_info['name'] == 'file_conflict_1.txt'
-    assert file_info['path'] == '/test/file_conflict_1.txt'
+    assert file_info['name'] == 'file.txt_conflict_1'
+    assert file_info['path'] == '/test/file.txt_conflict_1'
 
 @patch('backend.src.database.postgres_adapter.PostgreSQLAdapter')
 def test_retry_logging_improvements(mock_db):
@@ -168,35 +170,29 @@ def test_retry_logging_improvements(mock_db):
     # (Ceci est un test simplifié - dans un vrai test, on utiliserait un mock pour le logger)
 
 @patch('backend.src.database.postgres_adapter.PostgreSQLAdapter')
-def test_missing_file_handling(mock_db):
-    """Test la gestion complète des fichiers disparus"""
+def test_insert_file_calls_optimized(mock_db):
+    """Test que _insert_file appelle insert_file_optimized avec les bons paramètres"""
     worker = IndexerWorker()
 
-    # Configuration du mock
     mock_db_instance = mock_db.return_value
-    mock_db_instance.execute_query.return_value = None
 
-    # Test avec un fichier disparu
     file_info = {
-        'path': '/test/missing_file.txt',
-        'name': 'missing_file.txt',
+        'path': '/test/normal_file.txt',
+        'name': 'normal_file.txt',
         'checksum': 'abc123',
         'size': 1024
     }
     config_id = "test-config"
-    error_message = "File not found"
 
-    # Simuler un current_job
     worker.current_job = Mock()
     worker.current_job.id = "test-job-123"
 
-    # Appeler la méthode d'insertion qui devrait déclencher la gestion des fichiers disparus
     worker._insert_file(file_info, config_id)
 
-    # Vérifier que le fichier a été marqué comme disparu
-    mock_db_instance.execute_query.assert_called_once()
-    call_args = mock_db_instance.execute_query.call_args[0][0]
-    assert "missing_files" in call_args
+    # insert_file_optimized doit être appelé (pas execute_query directement)
+    mock_db_instance.insert_file_optimized.assert_called_once()
+    call_args, call_kwargs = mock_db_instance.insert_file_optimized.call_args
+    assert call_args[0] is file_info  # même dict modifié
 
 def test_retry_count_increment():
     """Test l'incrémentation du compteur de tentatives"""

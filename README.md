@@ -2,21 +2,11 @@
 
 Solution d'indexation de partages SMB avec **crawler Python**, **API FastAPI**, **frontend statique** et **PostgreSQL**.
 
-## Installation (ProxmoxVE — test)
+## Installation (LXC Ubuntu 24.04)
 
-```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/lamacheref/OpenIndex/main/scripts/install_lxc.sh)"
-```
+Documentation complète de déploiement → [`docs/operations/DEPLOY_LXC.md`](docs/operations/DEPLOY_LXC.md)
 
-Crée un conteneur LXC Ubuntu 24.04 (2 CPU, 2 Go RAM, 16 Go disque) avec :
-
-- PostgreSQL 17
-- PocketBase (auth)
-- FastAPI backend
-- Indexeur SMB (worker + scheduler)
-- Frontend statique servi par Nginx (port 80)
-
-Les credentials sont générés aléatoirement et sauvegardés dans `/srv/openindex/.env`.
+Crée un conteneur LXC Ubuntu 24.04 (2 CPU, 2 Go RAM, 16 Go disque) avec PostgreSQL 17, PocketBase, FastAPI, indexeur SMB et frontend Nginx.
 
 ## État actuel
 
@@ -25,8 +15,8 @@ Les credentials sont générés aléatoirement et sauvegardés dans `/srv/openin
 L'indexeur implémente désormais le protocole 2 phases : BFS des répertoires → bottom-up des fichiers, avec contrôle d'existence sur 4 métadonnées (nom + taille + date création + date modification) et écriture dans la table `indexed_files_optimized`.
 
 Ce qui reste :
-- ⏳ **Tests unitaires Phase A/B** — Priorité 2
-- ⏳ **Déploiement LXC stabilisé** — script créé, validation en cours
+- ✅ **Tests unitaires** — 90 tests (Phase A/B, Priority 4, indexer worker) passés
+- ⏳ **Déploiement LXC** — validation en cours sur Proxmox
 - ❌ Gestion des raccourcis/symlinks — hors périmètre Phase 1
 
 ## Fonctionnalités
@@ -78,12 +68,14 @@ pytest -q tests/
 | `CHANGELOG.md` | Historique des versions |
 | `docs/operations/INDEXATION.md` | Administration de l'indexation |
 | `docs/operations/EXPLOITATION.md` | Runbook PostgreSQL |
+| `docs/operations/DEPLOY_LXC.md` | Déploiement LXC pas-à-pas |
 
 ## Historique des commits
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `c82e4f8d` | 2026-07-22 | non | non | fix install: embed inner script, pass env vars, idempotent PG |
+| `e475b9d1` | 2026-07-22 | non | non | fix tests Priority 4 + docs T-LXC-03 + update TODO |
+| `fe209a30` | 2026-07-22 | oui | oui | fix install: embed inner script, pass env vars, idempotent PG |
 | `59986ec0` | 2026-07-22 | oui | oui | fix install 404: inner script + tests Phase A/B |
 | `c49e443d` | 2026-07-22 | oui | oui | feat: ajout historique des commits dans README + post-commit hook |
 | `663366ff` | 2026-07-22 | oui | oui | Restore scripts/versioning.py + fix pre-commit exécutable |
@@ -132,4 +124,3 @@ pytest -q tests/
 | `9f2f3662` | 2026-04-08 | oui | oui | Update: Mise à jour du TODO.md avec les corrections apportées |
 | `1c790ac3` | 2026-04-08 | oui | oui | Remove: Suppression du test de versioning instable |
 | `af60e31e` | 2026-04-08 | oui | oui | Fix: Synchronisation finale de package.json avec VERSION 0.6.8 |
-| `bf22aa84` | 2026-04-08 | oui | oui | Fix: Mise à jour de package.json pour correspondre à VERSION 0.6.7 |

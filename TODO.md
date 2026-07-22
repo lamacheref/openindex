@@ -82,20 +82,20 @@
 
 ## Priorité 2 — Tests & Validation
 
-- [ ] **Tests unitaires Phase A** : BFS directories, UPSERT, profondeur, déduction parent_id
-- [ ] **Tests unitaires Phase B** : bottom-up, contrôle 4 métadonnées, fast/slow/retry queues
-- [ ] **Tests unitaires `check_file_changed()`** : match 4 champs, mismatch partiel
-- [ ] **Tests unitaires `insert_file()`** vers `indexed_files_optimized`
+- [x] **Tests unitaires Phase A** : BFS directories, UPSERT, profondeur, déduction parent_id (64 tests)
+- [x] **Tests unitaires Phase B** : bottom-up, contrôle 4 métadonnées, fast/slow/retry queues
+- [x] **Tests unitaires `check_file_changed()`** : match 4 champs, mismatch partiel
+- [x] **Tests unitaires `insert_file()`** vers `indexed_files_optimized`
 - [ ] **Tests d'intégration** : pipeline complet PostgreSQL + SMB simulé (mock SMB mais vraie DB)
 - [ ] **Benchmark capacitaire** : `scripts/load_test_indexer.py` — 166k+ fichiers
-- [ ] **Finaliser les tests Priority 4** avec vrai mock DB
+- [x] **Finaliser les tests Priority 4** : 8 tests passés (mock DB)
 
 ---
 
 ## Priorité 3 — Déploiement LXC & Documentation
 
 - [x] **T-LXC-01** : `scripts/install_lxc.sh` (installeur ProxmoxVE LXC complet)
-- [ ] **T-LXC-03** : documentation opérationnelle
+- [x] **T-LXC-03** : `docs/operations/DEPLOY_LXC.md` + lien dans README.md
 - [ ] **Version bump** : 0.6.23 → 0.7.0
 - [ ] **Tag** : `v0.7.0`
 - [ ] **PR** revue et mergée
@@ -112,8 +112,9 @@
 - [x] Erreur syntaxe L.1078 corrigée
 - [x] `max_attempts` aligné à 5
 - [x] Blocs `task_progress` supprimés du code
-- [ ] Tests unitaires passant (70+) — **Priorité 2**
+- [x] Tests unitaires passant (90) — **Priorité 2**
 - [ ] Tests d'intégration passant (pipeline complet) — **Priorité 2**
 - [ ] Benchmark 166k+ fichiers validé — **Priorité 2**
 - [x] `scripts/install_lxc.sh` créé
+- [x] `docs/operations/DEPLOY_LXC.md` créé
 - [ ] Version 0.7.0 taguée — **Priorité 3**
