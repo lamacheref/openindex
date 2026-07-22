@@ -6,7 +6,7 @@
     <title>OpenIndex - Gestionnaire d'Indexation</title>
     
     <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="assets/tailwind.css">
     
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -683,7 +683,9 @@
                     
                     this.creatingConfig = true;
                     try {
-                        const startPath = `//${this.newConfig.host}/${this.newConfig.share}${this.newConfig.remote_path ? '/' + this.newConfig.remote_path : ''}`;
+                        const cleanShare = this.newConfig.share.replace(/^\/+|\/+$/g, '');
+                        const cleanRemotePath = this.newConfig.remote_path.replace(/^\/+|\/+$/g, '');
+                        const startPath = `//${this.newConfig.host}/${cleanShare}${cleanRemotePath ? '/' + cleanRemotePath : ''}`;
                         console.log('Start path:', startPath);
                         
                         const payload = {
@@ -797,10 +799,12 @@
                     
                     this.editingConfig = true;
                     try {
+                        const cleanShare = this.editConfigData.share.replace(/^\/+|\/+$/g, '');
+                        const cleanRemotePath = this.editConfigData.remote_path.replace(/^\/+|\/+$/g, '');
                         const payload = {
                             name: this.editConfigData.name,
                             domain_zone: this.editConfigData.domain || 'WORKGROUP',
-                            start_path: `//${this.editConfigData.host}/${this.editConfigData.share}${this.editConfigData.remote_path ? '/' + this.editConfigData.remote_path : ''}`,
+                            start_path: `//${this.editConfigData.host}/${cleanShare}${cleanRemotePath ? '/' + cleanRemotePath : ''}`,
                             connection: {
                                 username: this.editConfigData.username,
                                 password: this.editConfigData.password,
