@@ -70,9 +70,9 @@ msg_info "Setting up PostgreSQL"
 systemctl enable postgresql
 systemctl start postgresql
 
-su - postgres -c "psql -c \"CREATE USER ${POSTGRES_USER} WITH PASSWORD '${POSTGRES_PASSWORD}';\""
-su - postgres -c "psql -c \"CREATE DATABASE ${POSTGRES_DB} OWNER ${POSTGRES_USER};\""
-su - postgres -c "psql -c \"GRANT ALL PRIVILEGES ON DATABASE ${POSTGRES_DB} TO ${POSTGRES_USER};\""
+su - postgres -c "psql -c \"CREATE USER IF NOT EXISTS ${POSTGRES_USER} WITH PASSWORD '${POSTGRES_PASSWORD}';\""
+su - postgres -c "psql -c \"SELECT 'CREATE DATABASE ${POSTGRES_DB} OWNER ${POSTGRES_USER}' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '${POSTGRES_DB}')\gexec\""
+su - postgres -c "psql -c \"GRANT ALL PRIVILEGES ON DATABASE ${POSTGRES_DB} TO ${POSTGRES_USER};\" 2>/dev/null || true"
 su - postgres -c "psql -d ${POSTGRES_DB} -c \"GRANT ALL ON SCHEMA public TO ${POSTGRES_USER};\""
 
 cat > /etc/postgresql/*/main/pg_hba.conf << PGEOL

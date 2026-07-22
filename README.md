@@ -83,7 +83,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `1a03a2e5` | 2026-07-22 | non | non | fix install 404: inner script + tests Phase A/B |
+| `c82e4f8d` | 2026-07-22 | non | non | fix install: embed inner script, pass env vars, idempotent PG |
+| `59986ec0` | 2026-07-22 | oui | oui | fix install 404: inner script + tests Phase A/B |
 | `c49e443d` | 2026-07-22 | oui | oui | feat: ajout historique des commits dans README + post-commit hook |
 | `663366ff` | 2026-07-22 | oui | oui | Restore scripts/versioning.py + fix pre-commit exécutable |
 | `510f627c` | 2026-07-22 | oui | oui | README: URL installation GitHub (main) |
@@ -132,4 +133,3 @@ pytest -q tests/
 | `1c790ac3` | 2026-04-08 | oui | oui | Remove: Suppression du test de versioning instable |
 | `af60e31e` | 2026-04-08 | oui | oui | Fix: Synchronisation finale de package.json avec VERSION 0.6.8 |
 | `bf22aa84` | 2026-04-08 | oui | oui | Fix: Mise à jour de package.json pour correspondre à VERSION 0.6.7 |
-| `c510233c` | 2026-04-08 | oui | oui | Fix: Correction de plusieurs tests échouants |
