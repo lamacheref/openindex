@@ -74,7 +74,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `08b63894` | 2026-07-22 | non | non | fix: standard log order (newest at bottom, auto-scroll to bottom) |
+| `e6b56595` | 2026-07-22 | non | non | fix: increase scroll timeout to 200ms |
+| `0ec256fe` | 2026-07-22 | oui | oui | fix: standard log order (newest at bottom, auto-scroll to bottom) |
 | `f37fce82` | 2026-07-22 | oui | oui | fix: reverse log order (newest first), auto-scroll to top |
 | `a02a6714` | 2026-07-22 | oui | oui | fix: default logService value |
 | `96b86be6` | 2026-07-22 | oui | oui | feat: dedicated log file /var/log/openindex/indexer-worker.log, logs tab reads from file |
@@ -123,4 +124,3 @@ pytest -q tests/
 | `54404d00` | 2026-05-18 | oui | oui | T-INDEX-01: Scrutation périodique - Scheduler cron + migration + tests (16 passants) |
 | `5a0f86fc` | 2026-05-18 | oui | oui | T-INDEX-01: Priorité 0 terminée - Découplage, mot de passe SMB, tests (53 passants) |
 | `4b5327e6` | 2026-05-12 | oui | oui | Refonte complète TODO.md selon PROJET.md v5 phases |
-| `7d24e483` | 2026-05-05 | oui | oui | Fix: crawl_utils avec smbclient pour indexer worker |
