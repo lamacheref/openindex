@@ -94,7 +94,7 @@
 
 ## Priorité 3 — Déploiement LXC & Documentation
 
-- [ ] **T-LXC-01** : `scripts/install_lxc.sh` (après validation indexeur)
+- [x] **T-LXC-01** : `scripts/install_lxc.sh` (installeur ProxmoxVE LXC complet)
 - [ ] **T-LXC-03** : documentation opérationnelle
 - [ ] **Version bump** : 0.6.23 → 0.7.0
 - [ ] **Tag** : `v0.7.0`
@@ -115,4 +115,5 @@
 - [ ] Tests unitaires passant (70+) — **Priorité 2**
 - [ ] Tests d'intégration passant (pipeline complet) — **Priorité 2**
 - [ ] Benchmark 166k+ fichiers validé — **Priorité 2**
+- [x] `scripts/install_lxc.sh` créé
 - [ ] Version 0.7.0 taguée — **Priorité 3**
