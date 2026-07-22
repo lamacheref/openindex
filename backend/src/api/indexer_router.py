@@ -434,6 +434,65 @@ async def cancel_job(job_id: str):
         logger.error(f"Erreur annulation: {e}")
         raise HTTPException(status_code=500, detail=f"Erreur: {e}")
 
+@router.post("/jobs/{job_id}/stop")
+async def stop_job(job_id: str):
+    """Arrête un job d'indexation (pending ou running)"""
+    try:
+        db = get_db_adapter()
+
+        # Vérifier le statut actuel du job
+        check_query = "SELECT status FROM indexer_jobs WHERE id = %s"
+        results = db.execute_query(check_query, [job_id])
+        if not results:
+            raise HTTPException(status_code=404, detail="Job introuvable")
+
+        current_status = results[0][0]
+
+        if current_status == "pending":
+            # Job en attente : annuler directement
+            db.execute_query(
+                """
+                UPDATE indexer_jobs
+                SET status = 'cancelled', completed_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                """,
+                [job_id], fetch=False
+            )
+            logger.info(f"Job pending annulé: {job_id}")
+            return {"success": True, "message": "Job annulé"}
+
+        elif current_status == "running":
+            # Job en cours : signaler l'arrêt au worker
+            from backend.src.workers.indexer_worker import get_worker
+            worker = get_worker()
+            worker.stop_current_job()
+
+            # Marquer comme cancelled dans la DB (le worker finira la mise à jour)
+            db.execute_query(
+                """
+                UPDATE indexer_jobs
+                SET status = 'cancelled', completed_at = CURRENT_TIMESTAMP,
+                    error_message = 'Arrêt demandé par l\'utilisateur'
+                WHERE id = %s AND status = 'running'
+                """,
+                [job_id], fetch=False
+            )
+            logger.info(f"Job running annulé: {job_id}")
+            return {"success": True, "message": "Arrêt du job en cours..."}
+
+        else:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Impossible d'arrêter un job en statut '{current_status}'"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur arrêt job {job_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {e}")
+
+
 @router.get("/performance", response_model=IndexerPerformance)
 async def get_indexer_performance():
     """Récupère les métriques de performance temps réel de l'indexeur"""

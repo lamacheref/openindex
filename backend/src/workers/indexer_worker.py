@@ -117,6 +117,7 @@ class IndexerWorker:
         self.jobs_history: List[IndexerJob] = []
         self.max_history = 100
         self._stop_event = threading.Event()
+        self._job_stop_event = threading.Event()
         self._worker_thread: Optional[threading.Thread] = None
 
         # Verrou pour accès thread-safe aux jobs
@@ -150,6 +151,11 @@ class IndexerWorker:
         self._worker_thread = threading.Thread(target=self._run, daemon=True)
         self._worker_thread.start()
         logger.info("Worker d'indexation démarré")
+    
+    def stop_current_job(self):
+        """Demande l'arrêt du job en cours seulement (le worker continue)"""
+        logger.info("Arrêt du job en cours demandé...")
+        self._job_stop_event.set()
     
     def stop(self):
         """Arrête le worker proprement"""
@@ -275,6 +281,16 @@ class IndexerWorker:
                 'duration': (job.completed_at - job.started_at).total_seconds()
             })
 
+        except (InterruptedError, KeyboardInterrupt) as e:
+            job.status = IndexerStatus.CANCELLED
+            job.completed_at = datetime.now(timezone.utc)
+            job.error_message = "Arrêt demandé"
+            self._job_stop_event.clear()
+            logger.info(f"Job {job.id} annulé sur demande", extra={
+                'job_id': job.id,
+                'config_id': job.config_id
+            })
+
         except Exception as e:
             job.status = IndexerStatus.FAILED
             job.completed_at = datetime.now(timezone.utc)
@@ -384,7 +400,7 @@ class IndexerWorker:
         dir_count = 0
 
         while queue:
-            if self._stop_event.is_set():
+            if self._stop_event.is_set() or self._job_stop_event.is_set():
                 raise InterruptedError("Indexation interrompue")
 
             current_path, depth, parent_path = queue.popleft()
@@ -454,7 +470,7 @@ class IndexerWorker:
 
         skipped = 0
         for dir_id, dir_path, dir_name in dirs:
-            if self._stop_event.is_set():
+            if self._stop_event.is_set() or self._job_stop_event.is_set():
                 raise InterruptedError("Indexation interrompue")
 
             try:

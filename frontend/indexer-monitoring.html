@@ -366,15 +366,23 @@
                                                   x-text="formatStatus(job.status)"></span>
                                         </td>
                                         <td class="px-6 py-4">
-                                            <div x-show="job.status === 'running'" class="w-32">
-                                                <div class="progress-bar">
-                                                    <div class="progress-fill" 
-                                                         :style="`width: ${(job.files_indexed / job.files_found) * 100 || 0}%`"></div>
+                                            <template x-if="job.status === 'running' && job.files_found > 0">
+                                                <div class="w-32">
+                                                    <div class="progress-bar">
+                                                        <div class="progress-fill" 
+                                                             :style="`width: ${(job.files_indexed / job.files_found) * 100}%`"></div>
+                                                    </div>
+                                                    <div class="text-xs text-gray-500 mt-1">
+                                                        <span x-text="job.files_indexed"></span> / <span x-text="job.files_found"></span>
+                                                    </div>
                                                 </div>
-                                                <div class="text-xs text-gray-500 mt-1">
-                                                    <span x-text="job.files_indexed"></span> / <span x-text="job.files_found"></span>
+                                            </template>
+                                            <template x-if="job.status === 'running' && (!job.files_found || job.files_found === 0)">
+                                                <div class="flex items-center gap-1 text-xs text-gray-500">
+                                                    <i class="fas fa-spinner fa-spin text-blue-400"></i>
+                                                    <span>Dossiers...</span>
                                                 </div>
-                                            </div>
+                                            </template>
                                             <div x-show="job.status !== 'running'" class="text-sm text-gray-500">
                                                 <span x-text="job.files_indexed"></span> fichiers
                                                 <span x-show="job.bytes_total > 0" x-text="`(${formatBytes(job.bytes_total)})`"></span>
@@ -657,6 +665,20 @@
                         }
                     } catch (err) {
                         console.error('Erreur toggle worker:', err);
+                    }
+                },
+                
+                async stopJob(jobId) {
+                    try {
+                        const res = await fetch(`/api/indexer/jobs/${jobId}/stop`, { method: 'POST' });
+                        if (res.ok) {
+                            await this.refreshData();
+                        } else {
+                            const err = await res.json();
+                            console.error('Erreur arrêt job:', err);
+                        }
+                    } catch (err) {
+                        console.error('Erreur arrêt job:', err);
                     }
                 },
                 
