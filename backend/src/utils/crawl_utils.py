@@ -54,8 +54,7 @@ class SMBClient:
                 logger.info(f"Connecté à {self._share_url}")
                 return True
             else:
-                logger.error(f"Erreur connexion SMB (rc={result.returncode}): {result.stderr.strip() or '(aucun message)'}")
-                logger.error(f"Commande: {' '.join(cmd)}, stdout: {(result.stdout or '')[:200]}")
+                logger.error(f"Erreur connexion SMB ({result.stdout.strip() or result.stderr.strip() or 'code retour ' + str(result.returncode)})")
                 return False
                 
         except Exception as e:

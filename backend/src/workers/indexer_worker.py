@@ -343,7 +343,8 @@ class IndexerWorker:
             host=config['host'],
             share=config['share'],
             username=config['username'],
-            password=config['password']
+            password=config['password'],
+            domain=config.get('domain', '')
         )
         
         try:
