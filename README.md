@@ -74,7 +74,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `156bb994` | 2026-07-22 | non | non | fix: show live progress during Phase A dir discovery, reset at Phase B start |
+| `82203702` | 2026-07-22 | non | non | fix: keep files_found=0 during Phase A, show discovery text in UI |
+| `79f8e12d` | 2026-07-22 | oui | oui | fix: show live progress during Phase A dir discovery, reset at Phase B start |
 | `afad2e87` | 2026-07-22 | oui | oui | fix: pass domain to SMBClient in worker |
 | `33de4985` | 2026-07-22 | oui | oui | chore: debug connect method |
 | `708d04d3` | 2026-07-22 | oui | oui | fix: smbclient connect pass password via stdin, connect to share not -L |
@@ -123,4 +124,3 @@ pytest -q tests/
 | `4de59d09` | 2026-05-05 | oui | oui | Fix: Ajout de source SMB - Fonctionnel |
 | `4fac6d37` | 2026-05-05 | oui | oui | Fix: Désactivation auth + correction UI Sources + ajout modale création source |
 | `7723b9e5` | 2026-05-05 | oui | oui | T-INDEX-01: Implémentation du service d'indexation dédié |
-| `d1fc8417` | 2026-04-14 | oui | oui | Auto-commit: changes staged by Mistral Vibe |
