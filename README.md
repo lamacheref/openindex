@@ -74,7 +74,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `f58c6a0b` | 2026-07-22 | non | non | fix integration tests: use UUID for space_id |
+| `13b0c9e2` | 2026-07-22 | non | non | fix frontend: copy alpine.min.js + fontawesome assets, add node_modules to gitignore |
+| `5e0301d1` | 2026-07-22 | oui | oui | fix integration tests: use UUID for space_id |
 | `c87adf6f` | 2026-07-22 | oui | oui | add integration DB tests (real PG) |
 | `8f1300fc` | 2026-07-22 | oui | oui | fix tests Priority 4 + docs T-LXC-03 + update TODO |
 | `fe209a30` | 2026-07-22 | oui | oui | fix install: embed inner script, pass env vars, idempotent PG |
@@ -123,4 +124,3 @@ pytest -q tests/
 | `484b5b3f` | 2026-04-09 | oui | oui | Fix #85: Configuration SMB incorrecte - Montage dynamique avec fallback |
 | `7e263f60` | 2026-04-09 | oui | oui | Fix archive stack PostgreSQL configuration and schema bootstrapping |
 | `f94b882f` | 2026-04-08 | oui | oui | Fix archive explorer flow and document SMB config follow-up |
-| `9f2f3662` | 2026-04-08 | oui | oui | Update: Mise à jour du TODO.md avec les corrections apportées |

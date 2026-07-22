@@ -87,7 +87,7 @@
 - [x] **Tests unitaires `check_file_changed()`** : match 4 champs, mismatch partiel
 - [x] **Tests unitaires `insert_file()`** vers `indexed_files_optimized`
 - [ ] **Tests d'intégration** : pipeline complet PostgreSQL + SMB simulé (mock SMB mais vraie DB)
-- [ ] **Benchmark capacitaire** : `scripts/load_test_indexer.py` — 166k+ fichiers
+- [ ] **Benchmark capacitaire** : `scripts/load_test_indexer.py` — 166k+ fichiers (nécessite mise à jour pour Phase A/B + mock SMB)
 - [x] **Finaliser les tests Priority 4** : 8 tests passés (mock DB)
 
 ---
