@@ -404,7 +404,9 @@ class IndexerWorker:
                 )
                 dir_count += 1
 
-                if dir_count % 500 == 0:
+                if dir_count % 100 == 0:
+                    job.files_found = dir_count
+                    self._update_job_progress(job)
                     logger.info(f"Phase A progression: {dir_count} répertoires découverts (profondeur {depth})")
 
                 entries = client.list_dir(current_path)
@@ -439,6 +441,10 @@ class IndexerWorker:
             'password': os.getenv('POSTGRES_PASSWORD', 'openindex_secure_password')
         }
         db = PostgreSQLAdapter(db_config)
+
+        job.files_found = 0
+        job.files_indexed = 0
+        self._update_job_progress(job)
 
         dirs = db.execute_query(
             "SELECT id, path, name FROM directories WHERE space_id = %s ORDER BY depth DESC",

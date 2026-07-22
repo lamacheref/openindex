@@ -74,7 +74,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `9d448653` | 2026-07-22 | non | non | fix: pass domain to SMBClient in worker |
+| `156bb994` | 2026-07-22 | non | non | fix: show live progress during Phase A dir discovery, reset at Phase B start |
+| `afad2e87` | 2026-07-22 | oui | oui | fix: pass domain to SMBClient in worker |
 | `33de4985` | 2026-07-22 | oui | oui | chore: debug connect method |
 | `708d04d3` | 2026-07-22 | oui | oui | fix: smbclient connect pass password via stdin, connect to share not -L |
 | `c2b4af4a` | 2026-07-22 | oui | oui | fix: smbclient cannot connect to subdirectory, use cd before ls |
@@ -123,4 +124,3 @@ pytest -q tests/
 | `4fac6d37` | 2026-05-05 | oui | oui | Fix: Désactivation auth + correction UI Sources + ajout modale création source |
 | `7723b9e5` | 2026-05-05 | oui | oui | T-INDEX-01: Implémentation du service d'indexation dédié |
 | `d1fc8417` | 2026-04-14 | oui | oui | Auto-commit: changes staged by Mistral Vibe |
-| `4adc8151` | 2026-04-14 | oui | oui | T-AUTH-02: Implémentation complète de l'authentification PocketBase |
