@@ -1008,6 +1008,612 @@ class PostgreSQLAdapter:
             conn.commit()
             return cursor.rowcount
 
+    def get_crawl_config_by_id(self, config_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Récupère une configuration de crawl par son ID.
+        
+        Args:
+            config_id: Identifiant de la configuration
+            
+        Returns:
+            Dictionnaire de la configuration ou None si introuvable
+        """
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT
+                        id::text,
+                        name,
+                        domain_zone,
+                        start_path,
+                        is_archive,
+                        include_paths,
+                        exclude_paths,
+                        connection_username,
+                        connection_password,
+                        connection_domain,
+                        created_at::text
+                    FROM crawl_configs
+                    WHERE id::text = %s
+                    LIMIT 1
+                    """,
+                    [config_id]
+                )
+                row = cursor.fetchone()
+                if not row:
+                    return None
+                return {
+                    "id": row[0],
+                    "name": row[1],
+                    "domain_zone": row[2],
+                    "start_path": row[3],
+                    "is_archive": bool(row[4]),
+                    "include_paths": row[5] or [],
+                    "exclude_paths": row[6] or [],
+                    "connection_username": row[7],
+                    "connection_password": row[8],
+                    "connection_domain": row[9],
+                    "created_at": row[10],
+                }
+
+    def insert_file(self, file_info: Dict[str, Any], config_id: str) -> None:
+        """
+        Insère ou met à jour un fichier dans la base de données.
+        Utilise un UPSERT basé sur le chemin du fichier.
+
+        Args:
+            file_info: Dictionnaire contenant les métadonnées du fichier
+                       (path, name, size, checksum, last_modified)
+            config_id: Identifiant de la configuration de crawl associée
+        """
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO files (
+                        path, name, size, checksum, last_modified,
+                        is_directory, is_duplicate, duplicate_of, crawl_config_id,
+                        created_at, updated_at
+                    )
+                    VALUES (%s, %s, %s, %s, %s, FALSE, FALSE, NULL, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    ON CONFLICT (path) DO UPDATE SET
+                        name = EXCLUDED.name,
+                        size = EXCLUDED.size,
+                        checksum = EXCLUDED.checksum,
+                        last_modified = EXCLUDED.last_modified,
+                        is_directory = FALSE,
+                        is_duplicate = COALESCE(files.is_duplicate, FALSE),
+                        duplicate_of = files.duplicate_of,
+                        crawl_config_id = EXCLUDED.crawl_config_id,
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    [
+                        file_info.get('path', ''),
+                        file_info.get('name', ''),
+                        file_info.get('size', 0),
+                        file_info.get('checksum'),
+                        file_info.get('last_modified'),
+                        config_id,
+                    ]
+                )
+            conn.commit()
+
+    def insert_files_batch(self, files_data: List[Dict[str, Any]], config_id: str) -> int:
+        """
+        Insère ou met à jour plusieurs fichiers en batch pour optimiser les performances.
+        Utilise execute_values pour des insertions par lots efficaces.
+
+        Args:
+            files_data: Liste de dictionnaires contenant les métadonnées des fichiers
+            config_id: Identifiant de la configuration de crawl associée
+
+        Returns:
+            Nombre de fichiers traités
+        """
+        if not files_data:
+            return 0
+
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                try:
+                    # Préparer les valeurs pour l'insertion par lots
+                    values = []
+                    for file_info in files_data:
+                        values.append((
+                            file_info.get('path', ''),
+                            file_info.get('name', ''),
+                            file_info.get('size', 0),
+                            file_info.get('checksum'),
+                            file_info.get('last_modified'),
+                            config_id,
+                        ))
+
+                    # Utiliser execute_values pour l'insertion par lots
+                    execute_values(
+                        cursor,
+                        """
+                        INSERT INTO files (
+                            path, name, size, checksum, last_modified,
+                            is_directory, is_duplicate, duplicate_of, crawl_config_id,
+                            created_at, updated_at
+                        )
+                        VALUES %s
+                        ON CONFLICT (path) DO UPDATE SET
+                            name = EXCLUDED.name,
+                            size = EXCLUDED.size,
+                            checksum = EXCLUDED.checksum,
+                            last_modified = EXCLUDED.last_modified,
+                            is_directory = FALSE,
+                            is_duplicate = COALESCE(files.is_duplicate, FALSE),
+                            duplicate_of = files.duplicate_of,
+                            crawl_config_id = EXCLUDED.crawl_config_id,
+                            updated_at = CURRENT_TIMESTAMP
+                        """,
+                        values
+                    )
+
+                    conn.commit()
+                    self.logger.info(f"Batch insert: {len(files_data)} fichiers traités")
+                    return len(files_data)
+
+                except Exception as e:
+                    conn.rollback()
+                    self.logger.error(f"Erreur lors du batch insert: {e}")
+                    raise
+
+    def insert_file_optimized(self, file_info: Dict[str, Any], space_id: str, directory_id: str) -> None:
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                import os
+                ext = os.path.splitext(file_info.get('name', ''))[1].lower() if file_info.get('name') else ''
+                cursor.execute(
+                    """
+                    INSERT INTO indexed_files_optimized (
+                        space_id, directory_id, path, name, extension,
+                        size, hash_xxh64, hash_sha256, last_modified,
+                        is_garbage, is_deleted
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (space_id, path) DO UPDATE SET
+                        directory_id = EXCLUDED.directory_id,
+                        name = EXCLUDED.name,
+                        extension = EXCLUDED.extension,
+                        size = EXCLUDED.size,
+                        hash_xxh64 = EXCLUDED.hash_xxh64,
+                        hash_sha256 = EXCLUDED.hash_sha256,
+                        last_modified = EXCLUDED.last_modified,
+                        is_garbage = EXCLUDED.is_garbage,
+                        is_deleted = false,
+                        deleted_at = NULL,
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    [
+                        space_id,
+                        directory_id,
+                        file_info.get('path', ''),
+                        file_info.get('name', ''),
+                        ext,
+                        file_info.get('size', 0),
+                        file_info.get('checksum', ''),
+                        None,
+                        file_info.get('modified_at'),
+                        file_info.get('is_garbage', False),
+                        False
+                    ]
+                )
+            conn.commit()
+
+    def insert_files_batch_optimized(self, files_data: List[Dict[str, Any]], space_id: str) -> int:
+        if not files_data:
+            return 0
+
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                try:
+                    import os
+                    values = []
+                    for f in files_data:
+                        ext = os.path.splitext(f.get('name', ''))[1].lower() if f.get('name') else ''
+                        values.append((
+                            space_id,
+                            f.get('directory_id'),
+                            f.get('path', ''),
+                            f.get('name', ''),
+                            ext,
+                            f.get('size', 0),
+                            f.get('checksum', ''),
+                            None,
+                            f.get('modified_at'),
+                            f.get('is_garbage', False),
+                            False
+                        ))
+
+                    execute_values(
+                        cursor,
+                        """
+                        INSERT INTO indexed_files_optimized (
+                            space_id, directory_id, path, name, extension,
+                            size, hash_xxh64, hash_sha256, last_modified,
+                            is_garbage, is_deleted
+                        )
+                        VALUES %s
+                        ON CONFLICT (space_id, path) DO UPDATE SET
+                            directory_id = EXCLUDED.directory_id,
+                            name = EXCLUDED.name,
+                            extension = EXCLUDED.extension,
+                            size = EXCLUDED.size,
+                            hash_xxh64 = EXCLUDED.hash_xxh64,
+                            hash_sha256 = EXCLUDED.hash_sha256,
+                            last_modified = EXCLUDED.last_modified,
+                            is_garbage = EXCLUDED.is_garbage,
+                            is_deleted = false,
+                            deleted_at = NULL,
+                            updated_at = CURRENT_TIMESTAMP
+                        """,
+                        values
+                    )
+
+                    conn.commit()
+                    self.logger.info(f"Batch insert optimized: {len(files_data)} fichiers traités")
+                    return len(files_data)
+
+                except Exception as e:
+                    conn.rollback()
+                    self.logger.error(f"Erreur lors du batch insert optimized: {e}")
+                    raise
+
+    def explain_analyze_query(self, query: str, params: Optional[List[Any]] = None) -> Dict[str, Any]:
+        """
+        Exécute EXPLAIN ANALYZE sur une requête pour analyser ses performances.
+        Utile pour identifier les goulets d'étranglement dans les requêtes lentes.
+
+        Args:
+            query: Requête SQL à analyser
+            params: Paramètres de la requête
+
+        Returns:
+            Dictionnaire avec les résultats de l'analyse
+        """
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                try:
+                    # Exécuter EXPLAIN ANALYZE
+                    explain_query = f"EXPLAIN ANALYZE {query}"
+                    cursor.execute(explain_query, params or [])
+
+                    # Récupérer les résultats
+                    rows = cursor.fetchall()
+                    conn.commit()
+
+                    # Formater les résultats
+                    analysis = {
+                        'query': query,
+                        'params': params,
+                        'execution_plan': [row[0] for row in rows],
+                        'timestamp': datetime.now().isoformat()
+                    }
+
+                    # Extraire des métriques clés si disponibles
+                    plan_text = '\n'.join(analysis['execution_plan'])
+                    analysis['plan_text'] = plan_text
+
+                    # Rechercher des indicateurs de performance
+                    if 'Seq Scan' in plan_text:
+                        analysis['warnings'] = analysis.get('warnings', []) + ['Sequential scan detected - consider adding indexes']
+                    if 'cost=' in plan_text:
+                        # Extraire les coûts estimés
+                        import re
+                        cost_matches = re.findall(r'cost=([\d\.]+)\.\.([\d\.]+)', plan_text)
+                        if cost_matches:
+                            analysis['estimated_cost'] = {
+                                'startup': float(cost_matches[0][0]),
+                                'total': float(cost_matches[0][1])
+                            }
+
+                    return analysis
+
+                except Exception as e:
+                    conn.rollback()
+                    self.logger.error(f"Erreur lors de l'analyse de la requête: {e}")
+                    raise
+
+    def check_and_optimize_indexes(self) -> Dict[str, Any]:
+        """
+        Vérifie les index existants et propose des optimisations.
+        Analyse les tables principales et vérifie la présence des index recommandés.
+
+        Returns:
+            Dictionnaire avec l'état des index et les recommandations
+        """
+        index_report = {
+            'tables_analyzed': [],
+            'missing_indexes': [],
+            'recommendations': [],
+            'timestamp': datetime.now().isoformat()
+        }
+
+        with self.get_connection() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+                try:
+                    # Analyser les tables principales
+                    main_tables = ['files', 'crawl_configs', 'crawl_runs', 'indexer_jobs', 'indexer_retries']
+
+                    for table in main_tables:
+                        # Vérifier si la table existe
+                        cursor.execute(
+                            """
+                            SELECT EXISTS (
+                                SELECT 1
+                                FROM information_schema.tables
+                                WHERE table_schema = 'public' AND table_name = %s
+                            )
+                            """,
+                            [table]
+                        )
+                        table_exists = cursor.fetchone()[0]
+
+                        if not table_exists:
+                            continue
+
+                        table_info = {
+                            'table_name': table,
+                            'indexes': [],
+                            'columns': []
+                        }
+
+                        # Récupérer les colonnes
+                        cursor.execute(
+                            """
+                            SELECT column_name, data_type
+                            FROM information_schema.columns
+                            WHERE table_name = %s
+                            ORDER BY ordinal_position
+                            """,
+                            [table]
+                        )
+                        table_info['columns'] = [dict(row) for row in cursor.fetchall()]
+
+                        # Récupérer les index
+                        cursor.execute(
+                            """
+                            SELECT
+                                i.relname AS index_name,
+                                a.attname AS column_name,
+                                pg_get_indexdef(i.oid) AS index_def
+                            FROM
+                                pg_class t,
+                                pg_class i,
+                                pg_index ix,
+                                pg_attribute a
+                            WHERE
+                                t.oid = ix.indrelid
+                                AND i.oid = ix.indexrelid
+                                AND a.attrelid = t.oid
+                                AND a.attnum = ANY(ix.indkey)
+                                AND t.relkind = 'r'
+                                AND t.relname = %s
+                            ORDER BY
+                                i.relname
+                            """,
+                            [table]
+                        )
+                        table_info['indexes'] = [dict(row) for row in cursor.fetchall()]
+
+                        # Vérifier les index recommandés
+                        if table == 'files':
+                            required_indexes = [
+                                ('idx_files_path', 'path'),
+                                ('idx_files_crawl_config_id', 'crawl_config_id'),
+                                ('idx_files_checksum', 'checksum'),
+                                ('idx_files_last_modified', 'last_modified')
+                            ]
+
+                            for idx_name, column_name in required_indexes:
+                                has_index = any(
+                                    idx['column_name'] == column_name
+                                    for idx in table_info['indexes']
+                                )
+
+                                if not has_index:
+                                    index_report['missing_indexes'].append({
+                                        'table': table,
+                                        'column': column_name,
+                                        'suggested_index': f'CREATE INDEX {idx_name} ON {table}({column_name})'
+                                    })
+                                    index_report['recommendations'].append(
+                                        f"Ajouter l'index {idx_name} sur {table}.{column_name} pour améliorer les performances"
+                                    )
+
+                        index_report['tables_analyzed'].append(table_info)
+
+                    # Analyser la taille des tables
+                    cursor.execute(
+                        """
+                        SELECT
+                            table_name,
+                            pg_size_pretty(pg_total_relation_size(quote_ident(table_name))) as size,
+                            pg_stat_user_tables.seq_scan as seq_scans,
+                            pg_stat_user_tables.idx_scan as index_scans
+                        FROM
+                            information_schema.tables
+                        LEFT JOIN
+                            pg_stat_user_tables ON relname = table_name
+                        WHERE
+                            table_schema = 'public'
+                            AND table_name = ANY(%s)
+                        """,
+                        [main_tables]
+                    )
+                    table_stats = [dict(row) for row in cursor.fetchall()]
+                    index_report['table_statistics'] = table_stats
+
+                    conn.commit()
+                    return index_report
+
+                except Exception as e:
+                    conn.rollback()
+                    self.logger.error(f"Erreur lors de la vérification des index: {e}")
+                    raise
+
+    def get_slow_queries(self, threshold_ms: int = 100) -> List[Dict[str, Any]]:
+        """
+        Récupère les requêtes lentes à partir des logs PostgreSQL.
+        Note: Requiert que pg_stat_statements soit activé sur le serveur.
+
+        Args:
+            threshold_ms: Seuil en millisecondes pour considérer une requête comme lente
+
+        Returns:
+            Liste des requêtes lentes avec leurs statistiques
+        """
+        slow_queries = []
+
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+                    # Vérifier si pg_stat_statements est disponible
+                    cursor.execute(
+                        """
+                        SELECT EXISTS (
+                            SELECT 1
+                            FROM pg_available_extensions
+                            WHERE name = 'pg_stat_statements'
+                        )
+                        """
+                    )
+                    has_pg_stat = cursor.fetchone()[0]
+
+                    if not has_pg_stat:
+                        self.logger.warning("pg_stat_statements n'est pas activé. Impossible de récupérer les requêtes lentes.")
+                        return slow_queries
+
+                    # Récupérer les requêtes lentes
+                    cursor.execute(
+                        """
+                        SELECT
+                            query,
+                            calls,
+                            total_time,
+                            mean_time,
+                            rows,
+                            100.0 * shared_blks_hit / nullif(shared_blks_hit + shared_blks_read, 0) AS hit_percent
+                        FROM
+                            pg_stat_statements
+                        WHERE
+                            mean_time > %s
+                        ORDER BY
+                            mean_time DESC
+                        LIMIT 20
+                        """,
+                        [threshold_ms]
+                    )
+
+                    for row in cursor.fetchall():
+                        slow_queries.append({
+                            'query': row['query'],
+                            'calls': row['calls'],
+                            'total_time_ms': row['total_time'],
+                            'mean_time_ms': row['mean_time'],
+                            'rows': row['rows'],
+                            'cache_hit_percent': row['hit_percent']
+                        })
+
+                    conn.commit()
+                    return slow_queries
+
+        except Exception as e:
+            self.logger.error(f"Erreur lors de la récupération des requêtes lentes: {e}")
+            return slow_queries
+
+    def optimize_database_performance(self) -> Dict[str, Any]:
+        """
+        Exécute une série de vérifications et d'optimisations pour améliorer les performances.
+        Inclut l'analyse des tables, la vérification des index et des recommandations.
+
+        Returns:
+            Rapport complet d'optimisation
+        """
+        optimization_report = {
+            'timestamp': datetime.now().isoformat(),
+            'operations': []
+        }
+
+        try:
+            # 1. Vérifier et optimiser les index
+            self.logger.info("Vérification des index...")
+            index_report = self.check_and_optimize_indexes()
+            optimization_report['operations'].append({
+                'operation': 'index_check',
+                'status': 'completed',
+                'details': index_report
+            })
+
+            # 2. Analyser les requêtes lentes
+            self.logger.info("Analyse des requêtes lentes...")
+            slow_queries = self.get_slow_queries()
+            optimization_report['operations'].append({
+                'operation': 'slow_query_analysis',
+                'status': 'completed',
+                'details': {
+                    'slow_queries_count': len(slow_queries),
+                    'queries': slow_queries
+                }
+            })
+
+            # 3. Exécuter VACUUM ANALYZE sur les tables principales
+            self.logger.info("Exécution de VACUUM ANALYZE...")
+            with self.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    main_tables = ['files', 'crawl_configs', 'crawl_runs']
+                    for table in main_tables:
+                        try:
+                            cursor.execute(f"VACUUM ANALYZE {table}")
+                            optimization_report['operations'].append({
+                                'operation': 'vacuum_analyze',
+                                'status': 'completed',
+                                'table': table
+                            })
+                        except Exception as e:
+                            conn.rollback()
+                            optimization_report['operations'].append({
+                                'operation': 'vacuum_analyze',
+                                'status': 'failed',
+                                'table': table,
+                                'error': str(e)
+                            })
+
+                    conn.commit()
+
+            # 4. Recommandations générales
+            recommendations = []
+
+            if index_report.get('missing_indexes'):
+                recommendations.append(
+                    f"Ajouter {len(index_report['missing_indexes'])} index manquants pour améliorer les performances"
+                )
+
+            if len(slow_queries) > 0:
+                recommendations.append(
+                    f"Optimiser {len(slow_queries)} requêtes lentes identifiées"
+                )
+
+            recommendations.append(
+                "Envisager d'activer pg_stat_statements pour un monitoring continu des performances"
+            )
+
+            optimization_report['recommendations'] = recommendations
+            optimization_report['status'] = 'completed'
+
+            self.logger.info("Optimisation de la base de données terminée")
+            return optimization_report
+
+        except Exception as e:
+            self.logger.error(f"Erreur lors de l'optimisation de la base de données: {e}")
+            optimization_report['status'] = 'failed'
+            optimization_report['error'] = str(e)
+            return optimization_report
+
 # Fonction utilitaire pour créer l'adaptateur à partir de la configuration
 def create_postgres_adapter(config_manager) -> PostgreSQLAdapter:
     """

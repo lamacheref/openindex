@@ -20,13 +20,11 @@ from enum import Enum
 import smbclient
 from smbprotocol.exceptions import SMBConnectionClosed, SMBAuthenticationError
 
-
 # Configuration du retry avec backoff exponentiel
-DEFAULT_MAX_RETRIES = 3
+DEFAULT_MAX_RETRIES = 5
 DEFAULT_BASE_DELAY = 1.0  # secondes
 DEFAULT_MAX_DELAY = 60.0  # secondes
 DEFAULT_EXPONENTIAL_BASE = 2.0
-
 
 def calculate_backoff_delay(
     retry_count: int,
@@ -37,33 +35,32 @@ def calculate_backoff_delay(
 ) -> float:
     """
     Calcule le délai de retry avec backoff exponentiel et jitter.
-    
+
     Formule: min(base_delay * (exponential_base ^ retry_count), max_delay)
     Avec jitter aléatoire pour éviter les thundering herds.
-    
+
     Args:
         retry_count: Numéro de la tentative (0-indexed)
         base_delay: Délai de base en secondes
         max_delay: Délai maximum en secondes
         exponential_base: Base pour l'exponentiation
         jitter: Ajouter un jitter aléatoire
-        
+
     Returns:
         Délai en secondes
     """
     # Calcul exponentiel
     delay = base_delay * (exponential_base ** retry_count)
-    
+
     # Cap à max_delay
     delay = min(delay, max_delay)
-    
+
     # Ajouter du jitter (±25% aléatoire) pour éviter les requêtes simultanées
     if jitter:
         jitter_factor = 0.75 + (random.random() * 0.5)  # 0.75 à 1.25
         delay *= jitter_factor
-    
-    return delay
 
+    return delay
 
 def retry_with_backoff(
     max_retries: int = DEFAULT_MAX_RETRIES,
@@ -73,9 +70,9 @@ def retry_with_backoff(
 ):
     """
     Décorateur pour retry avec backoff exponentiel.
-    
+
     Exemple:
-        @retry_with_backoff(max_retries=3)
+        @retry_with_backoff(max_retries=5)
         def transfer_file(source, dest):
             # code qui peut échouer
             pass
@@ -83,45 +80,61 @@ def retry_with_backoff(
     def decorator(func):
         def wrapper(*args, **kwargs):
             last_exception = None
-            
+
             for attempt in range(max_retries + 1):
                 try:
                     return func(*args, **kwargs)
                 except retryable_exceptions as exc:
                     last_exception = exc
-                    
+
                     if attempt < max_retries:
                         delay = calculate_backoff_delay(
                             retry_count=attempt,
                             base_delay=base_delay,
                             max_delay=max_delay
                         )
-                        
+
                         # Log le retry
                         func_name = getattr(func, '__name__', 'decorated_function')
                         if args and hasattr(args[0], 'logger'):
                             args[0].logger.warning(
-                                f"â ï¸  {func_name} ï¿½chouï¿½ (tentative {attempt + 1}/{max_retries + 1}): {exc}"
+                                f"â ï¸  {func_name} ï¿½chouï¿½ (tentative {attempt + 1}/{max_retries + 1}): {exc}",
+                                extra={
+                                    'attempt': attempt + 1,
+                                    'max_attempts': max_retries + 1,
+                                    'retry_delay': delay,
+                                    'error_type': type(exc).__name__
+                                }
                             )
-                            args[0].logger.info(f"â³ï¸ Retry dans {delay:.2f}s...")
+                            args[0].logger.info(f"â³ï¸ Retry dans {delay:.2f}s...",
+                                              extra={
+                                                  'retry_delay': delay,
+                                                  'next_attempt': attempt + 2
+                                              })
                         else:
                             print(f"â ï¸  {func_name} ï¿½chouï¿½ (tentative {attempt + 1}/{max_retries + 1}): {exc}")
                             print(f"â³ï¸ Retry dans {delay:.2f}s...")
-                        
+
                         time.sleep(delay)
                     else:
                         # Dernière tentative échouée
                         func_name = getattr(func, '__name__', 'decorated_function')
                         if args and hasattr(args[0], 'logger'):
                             args[0].logger.error(
-                                f"â  {func_name} ï¿½chouï¿½ aprï¿½s {max_retries + 1} tentatives: {exc}"
+                                f"â  {func_name} ï¿½chouï¿½ aprï¿½s {max_retries + 1} tentatives: {exc}",
+                                extra={
+                                    'attempt': max_retries + 1,
+                                    'max_attempts': max_retries + 1,
+                                    'error_type': type(exc).__name__,
+                                    'final_error': True
+                                }
                             )
                         else:
                             print(f"â  {func_name} ï¿½chouï¿½ aprï¿½s {max_retries + 1} tentatives: {exc}")
                         raise last_exception
-            
+
             raise last_exception
-        
+
         return wrapper
     return decorator
 
@@ -131,7 +144,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from backend.src.database.postgres_adapter import PostgreSQLAdapter
 from backend.src.core.logging_config import get_logger_manager
 
-
 class TransferStatus(Enum):
     """Statuts possibles pour un transfert."""
     PENDING = "pending"
@@ -139,7 +151,6 @@ class TransferStatus(Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
-
 
 @dataclass
 class TransferJob:
@@ -153,7 +164,6 @@ class TransferJob:
     max_retries: int
     source_size: Optional[int] = None
     source_checksum: Optional[str] = None
-
 
 class ArchiveTransferWorker:
     """
@@ -276,7 +286,7 @@ class ArchiveTransferWorker:
                     dest_path=row[3],
                     priority=row[4],
                     retry_count=row[5],  # current_retry_count from function
-                    max_retries=3
+                    max_retries=5
                 )
                 self.logger.info(f"📦 Job récupéré: {job.id} ({job.job_type}) - {job.source_path}")
                 return job
@@ -341,7 +351,7 @@ class ArchiveTransferWorker:
             with self.lock:
                 self.active_transfers.pop(job.id, None)
 
-    @retry_with_backoff(max_retries=3, base_delay=1.0)
+    @retry_with_backoff(max_retries=5, base_delay=1.0)
     def _copy_file(self, job: TransferJob) -> int:
         """Copie un fichier via SMB avec suivi de progression et retry."""
         source_size = job.source_size or 0
@@ -375,7 +385,7 @@ class ArchiveTransferWorker:
 
         return bytes_copied
 
-    @retry_with_backoff(max_retries=3, base_delay=1.0)
+    @retry_with_backoff(max_retries=5, base_delay=1.0)
     def _move_file(self, job: TransferJob) -> int:
         """Déplace un fichier (copie + suppression source) avec retry."""
         self.logger.info(f"📄 Déplacement: {job.source_path} -> {job.dest_path}")
@@ -389,7 +399,7 @@ class ArchiveTransferWorker:
 
         return bytes_moved
 
-    @retry_with_backoff(max_retries=3, base_delay=1.0)
+    @retry_with_backoff(max_retries=5, base_delay=1.0)
     def _delete_file(self, job: TransferJob) -> int:
         """Supprime un fichier avec retry."""
         self.logger.info(f"🗑️  Suppression: {job.source_path}")
@@ -419,8 +429,8 @@ class ArchiveTransferWorker:
             if success:
                 self.adapter.execute_query(
                     """
-                    UPDATE archive_jobs 
-                    SET status = 'completed'::archive_job_status, 
+                    UPDATE archive_jobs
+                    SET status = 'completed'::archive_job_status,
                         completed_at = CURRENT_TIMESTAMP,
                         bytes_transferred = %s,
                         error_message = NULL,
@@ -434,9 +444,9 @@ class ArchiveTransferWorker:
                 # Incrémenter retry_count et marquer failed ou retry
                 new_retry_count = self.adapter.execute_query(
                     """
-                    UPDATE archive_jobs 
+                    UPDATE archive_jobs
                     SET retry_count = retry_count + 1,
-                        status = CASE 
+                        status = CASE
                             WHEN retry_count + 1 >= max_retries THEN 'failed'::archive_job_status
                             ELSE 'failed'::archive_job_status
                         END,
@@ -476,7 +486,6 @@ class ArchiveTransferWorker:
             self.logger.error(f"❌ Erreur récupération stats: {exc}")
             return {"error": str(exc)}
 
-
 def main():
     """Point d'entrée principal."""
     parser = argparse.ArgumentParser(description="Archive Transfer Worker")
@@ -504,7 +513,6 @@ def main():
         print("\n🛑 Interruption par l'utilisateur")
     finally:
         worker.stop()
-
 
 if __name__ == "__main__":
     main()

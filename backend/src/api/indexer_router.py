@@ -17,7 +17,6 @@ router = APIRouter(
     tags=["indexer"]
 )
 
-
 # Modèles Pydantic
 class IndexerStats(BaseModel):
     pending_count: int = 0
@@ -29,10 +28,8 @@ class IndexerStats(BaseModel):
     last_job_created: Optional[datetime] = None
     last_completion: Optional[datetime] = None
 
-
 class IndexerJobCreate(BaseModel):
     config_id: str
-
 
 class IndexerJobResponse(BaseModel):
     id: str
@@ -48,22 +45,50 @@ class IndexerJobResponse(BaseModel):
     bytes_total: int = 0
     error_message: Optional[str] = None
 
-
 class IndexerJobsList(BaseModel):
     jobs: List[IndexerJobResponse]
     total: int
 
-
 class CurrentJobResponse(BaseModel):
     worker_running: bool
     job: Optional[IndexerJobResponse] = None
-
 
 class WorkerActionResponse(BaseModel):
     success: bool
     message: str
     worker_running: bool
 
+class IndexerPerformance(BaseModel):
+    files_processed: int = 0
+    errors_count: int = 0
+    files_per_second: float = 0.0
+    error_rate: float = 0.0
+    uptime_seconds: float = 0.0
+    last_reset: Optional[str] = None
+
+class IndexerHealth(BaseModel):
+    status: str
+    worker_running: bool = False
+    database_connected: bool = False
+    current_job: bool = False
+    pending_jobs: int = 0
+    timestamp: Optional[str] = None
+    error: Optional[str] = None
+
+class IndexerRetry(BaseModel):
+    file_id: str
+    file_path: str
+    job_id: str
+    config_id: str
+    attempt_count: int = 0
+    max_attempts: int = 5
+    next_retry_at: Optional[str] = None
+    last_error: Optional[str] = None
+    created_at: Optional[str] = None
+
+class IndexerRetriesList(BaseModel):
+    retries: List[IndexerRetry]
+    total: int = 0
 
 # Fonction utilitaire pour obtenir l'adaptateur DB
 def get_db_adapter():
@@ -71,7 +96,7 @@ def get_db_adapter():
     try:
         from backend.src.api.main import PostgreSQLAdapter
         import os
-        
+
         config = {
             'host': os.getenv('POSTGRES_HOST', 'postgres'),
             'port': int(os.getenv('POSTGRES_PORT', 5432)),
@@ -84,15 +109,14 @@ def get_db_adapter():
         logger.error(f"Erreur DB: {e}")
         raise HTTPException(status_code=500, detail="Erreur de base de données")
 
-
 @router.get("/stats", response_model=IndexerStats)
 async def get_indexer_stats():
     """Récupère les statistiques globales de l'indexation"""
     try:
         db = get_db_adapter()
-        
+
         query = """
-            SELECT 
+            SELECT
                 COUNT(*) FILTER (WHERE status = 'pending') as pending_count,
                 COUNT(*) FILTER (WHERE status = 'running') as running_count,
                 COUNT(*) FILTER (WHERE status = 'completed') as completed_count,
@@ -103,9 +127,9 @@ async def get_indexer_stats():
                 MAX(completed_at) FILTER (WHERE status = 'completed') as last_completion
             FROM indexer_jobs
         """
-        
+
         results = db.execute_query(query)
-        
+
         if results:
             row = results[0]
             return IndexerStats(
@@ -118,22 +142,21 @@ async def get_indexer_stats():
                 last_job_created=row[6],
                 last_completion=row[7]
             )
-        
+
         return IndexerStats()
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Erreur stats: {e}")
         raise HTTPException(status_code=500, detail=f"Erreur: {e}")
 
-
 @router.get("/current-job", response_model=CurrentJobResponse)
 async def get_current_job():
     """Récupère le job d'indexation en cours"""
     try:
         db = get_db_adapter()
-        
+
         # Chercher le job en cours
         query = """
             SELECT id, path, config_id, config_name, status, created_at,
@@ -144,9 +167,9 @@ async def get_current_job():
             ORDER BY started_at DESC
             LIMIT 1
         """
-        
+
         results = db.execute_query(query)
-        
+
         job = None
         if results:
             row = results[0]
@@ -164,21 +187,20 @@ async def get_current_job():
                 bytes_total=row[10] or 0,
                 error_message=row[11]
             )
-        
+
         # Vérifier si le worker tourne (via présence d'un job running)
         worker_running = job is not None
-        
+
         return CurrentJobResponse(
             worker_running=worker_running,
             job=job
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Erreur current job: {e}")
         raise HTTPException(status_code=500, detail=f"Erreur: {e}")
-
 
 @router.get("/jobs", response_model=IndexerJobsList)
 async def list_indexer_jobs(
@@ -189,17 +211,17 @@ async def list_indexer_jobs(
     """Liste les jobs d'indexation"""
     try:
         db = get_db_adapter()
-        
+
         # Construire la requête avec filtres
         where_conditions = []
         params = []
-        
+
         if status:
             where_conditions.append("status = %s")
             params.append(status)
-        
+
         where_clause = "WHERE " + " AND ".join(where_conditions) if where_conditions else ""
-        
+
         # Requête principale
         query = f"""
             SELECT id, path, config_id, config_name, status, created_at,
@@ -210,10 +232,10 @@ async def list_indexer_jobs(
             ORDER BY created_at DESC
             LIMIT %s OFFSET %s
         """
-        
+
         params.extend([limit, offset])
         results = db.execute_query(query, params)
-        
+
         jobs = []
         for row in results:
             jobs.append(IndexerJobResponse(
@@ -230,33 +252,32 @@ async def list_indexer_jobs(
                 bytes_total=row[10] or 0,
                 error_message=row[11]
             ))
-        
+
         # Compter le total
         count_query = f"SELECT COUNT(*) FROM indexer_jobs {where_clause}"
         count_params = params[:-2] if where_conditions else []
         count_results = db.execute_query(count_query, count_params)
         total = count_results[0][0] if count_results else 0
-        
+
         return IndexerJobsList(jobs=jobs, total=total)
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Erreur list jobs: {e}")
         raise HTTPException(status_code=500, detail=f"Erreur: {e}")
 
-
 @router.post("/jobs", response_model=IndexerJobResponse)
 async def create_indexer_job(payload: IndexerJobCreate):
     """Crée un nouveau job d'indexation"""
     try:
         db = get_db_adapter()
-        
+
         # Vérifier que la config existe
         config = db.get_crawl_config_by_id(payload.config_id)
         if not config:
             raise HTTPException(status_code=404, detail="Configuration introuvable")
-        
+
         # Créer le job
         job_id = str(uuid.uuid4())
         query = """
@@ -266,20 +287,20 @@ async def create_indexer_job(payload: IndexerJobCreate):
                       started_at, completed_at, files_found, files_indexed,
                       bytes_total, error_message
         """
-        
+
         results = db.execute_query(query, [
             job_id,
             config.get('start_path', ''),
             payload.config_id,
             config.get('name', 'Unnamed')
         ], commit=True)
-        
+
         if not results:
             raise HTTPException(status_code=500, detail="Échec de la création du job")
-        
+
         row = results[0]
         logger.info(f"Job créé: {job_id} pour config {payload.config_id}")
-        
+
         return IndexerJobResponse(
             id=str(row[0]),
             path=row[1],
@@ -294,13 +315,12 @@ async def create_indexer_job(payload: IndexerJobCreate):
             bytes_total=row[10] or 0,
             error_message=row[11]
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Erreur création job: {e}")
         raise HTTPException(status_code=500, detail=f"Erreur: {e}")
-
 
 @router.post("/start", response_model=WorkerActionResponse)
 async def start_worker():
@@ -309,21 +329,20 @@ async def start_worker():
         # Le worker tourne en tant que service séparé
         # On vérifie juste qu'il y a des jobs pending
         db = get_db_adapter()
-        
+
         query = "SELECT COUNT(*) FROM indexer_jobs WHERE status = 'pending'"
         results = db.execute_query(query)
         pending_count = results[0][0] if results else 0
-        
+
         return WorkerActionResponse(
             success=True,
             message=f"Worker démarré (service Docker). {pending_count} jobs en attente.",
             worker_running=True
         )
-        
+
     except Exception as e:
         logger.error(f"Erreur démarrage: {e}")
         raise HTTPException(status_code=500, detail=f"Erreur: {e}")
-
 
 @router.post("/stop", response_model=WorkerActionResponse)
 async def stop_worker():
@@ -332,45 +351,132 @@ async def stop_worker():
         # Le worker s'arrête via Docker
         # On vérifie s'il y a un job running
         db = get_db_adapter()
-        
+
         query = "SELECT COUNT(*) FROM indexer_jobs WHERE status = 'running'"
         results = db.execute_query(query)
         running_count = results[0][0] if results else 0
-        
+
         return WorkerActionResponse(
             success=True,
             message=f"Arrêt demandé. {running_count} jobs en cours seront interrompus.",
             worker_running=running_count > 0
         )
-        
+
     except Exception as e:
         logger.error(f"Erreur arrêt: {e}")
         raise HTTPException(status_code=500, detail=f"Erreur: {e}")
-
 
 @router.delete("/jobs/{job_id}")
 async def cancel_job(job_id: str):
     """Annule un job en attente"""
     try:
         db = get_db_adapter()
-        
+
         query = """
             UPDATE indexer_jobs
             SET status = 'cancelled', completed_at = CURRENT_TIMESTAMP
             WHERE id = %s AND status = 'pending'
             RETURNING id
         """
-        
+
         results = db.execute_query(query, [job_id])
-        
+
         if not results:
             raise HTTPException(status_code=404, detail="Job introuvable ou non annulable")
-        
+
         logger.info(f"Job annulé: {job_id}")
         return {"success": True, "message": "Job annulé"}
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Erreur annulation: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {e}")
+
+@router.get("/performance", response_model=IndexerPerformance)
+async def get_indexer_performance():
+    """Récupère les métriques de performance temps réel de l'indexeur"""
+    try:
+        # Importer le worker pour accéder aux métriques
+        from backend.src.workers.indexer_worker import get_worker
+
+        worker = get_worker()
+        metrics = worker.get_performance_metrics()
+
+        return IndexerPerformance(
+            files_processed=metrics['files_processed'],
+            errors_count=metrics['errors_count'],
+            files_per_second=metrics['files_per_second'],
+            error_rate=metrics['error_rate'],
+            uptime_seconds=metrics['uptime_seconds'],
+            last_reset=metrics['last_reset']
+        )
+
+    except Exception as e:
+        logger.error(f"Erreur performance: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {e}")
+
+@router.get("/health", response_model=IndexerHealth)
+async def get_indexer_health():
+    """Récupère l'état de santé de l'indexeur"""
+    try:
+        # Importer le worker pour accéder à l'état de santé
+        from backend.src.workers.indexer_worker import get_worker
+
+        worker = get_worker()
+        health = worker.get_health_status()
+
+        return IndexerHealth(
+            status=health['status'],
+            worker_running=health['worker_running'],
+            database_connected=health['database_connected'],
+            current_job=health['current_job'],
+            pending_jobs=health['pending_jobs'],
+            timestamp=health['timestamp'],
+            error=health.get('error')
+        )
+
+    except Exception as e:
+        logger.error(f"Erreur health check: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {e}")
+
+@router.get("/retries", response_model=IndexerRetriesList)
+async def list_indexer_retries():
+    """Liste les fichiers en attente de réessai"""
+    try:
+        db = get_db_adapter()
+
+        query = """
+            SELECT
+                r.id, r.file_id, r.file_path, r.job_id, r.config_id,
+                r.attempt_count, r.max_attempts, r.next_retry_at,
+                r.last_error, r.created_at
+            FROM indexer_retries r
+            ORDER BY r.next_retry_at ASC
+        """
+
+        results = db.execute_query(query)
+
+        retries = []
+        for row in results:
+            retries.append(IndexerRetry(
+                file_id=str(row[1]),
+                file_path=row[2],
+                job_id=str(row[3]),
+                config_id=str(row[4]),
+                attempt_count=row[5] or 0,
+                max_attempts=row[6] or 5,
+                next_retry_at=row[7].isoformat() if row[7] else None,
+                last_error=row[8],
+                created_at=row[9].isoformat() if row[9] else None
+            ))
+
+        # Compter le total
+        count_results = db.execute_query("SELECT COUNT(*) FROM indexer_retries")
+        total = count_results[0][0] if count_results else 0
+
+        return IndexerRetriesList(retries=retries, total=total)
+
+    except Exception as e:
+        logger.error(f"Erreur list retries: {e}")
         raise HTTPException(status_code=500, detail=f"Erreur: {e}")

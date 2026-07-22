@@ -1,207 +1,119 @@
-# TODO OpenIndex — Refonte selon PROJET.md
+# TODO OpenIndex — Plan d'action : Refonte protocole indexeur (T-INDEX-R02)
 
-## Objectif
-
-**Implémenter les 5 phases définies dans PROJET.md** avec un ordre de priorité clair pour la préproduction :
-1. Indexeur efficace (Phase 1)
-2. UI admin (Phase 4)  
-3. UI Utilisateur sans authentification (archivage + suppression)
+**Objectif :** Mettre l'indexeur en conformité avec le protocole spec Phase 1 PROJET.md (BFS dossiers → bottom-up fichiers, table `indexed_files_optimized`, contrôle 4 métadonnées).
 
 ---
 
-## 1) Priorité Critique — Indexeur Efficace (Phase 1)
+## Priorité 0 — Correctifs immédiats (avant toute refonte)
 
-### T-INDEX-01 — Refonte complète du système d'indexation
-- [ ] **Scrutation périodique** : Scheduler configurable (22h-6h)
-- [ ] **Multi-espaces SMB** : Configuration de plusieurs partages distincts
-- [ ] **Files différenciées** : Queue rapide (<200Mo) et queue lente (≥200Mo)
-- [ ] **Hashage xxHash** : Remplacer SHA256 par xxHash pour performance
-- [ ] **Détection changements** : Mode incrémentiel avec hash + timestamps
-- [ ] **Gestion des ordures** : Détection automatique (*.tmp, ~*, Thumbs.db)
-- [ ] **Base PostgreSQL** : Schéma optimisé avec tables smb_spaces, directories, files
-- [ ] **Tests de charge** : Validation avec 166k+ fichiers
-- [ ] **Documentation** : Guide d'administration de l'indexation
-
-### T-INDEX-02 — Optimisation et monitoring
-- [ ] **Métriques temps réel** : Vitesse d'indexation, erreurs, files traitées
-- [ ] **Health checks** : Endpoints de santé pour le crawler
-- [ ] **Gestion des erreurs** : Queue retry pour fichiers verrouillés
-- [ ] **Performance** : Optimisation des requêtes PostgreSQL
-- [ ] **Logs structurés** : Format JSON pour tous les composants
+- [x] **Corriger la syntaxe** `_handle_file_conflict()` L.1078
+  - `backend/src/workers/indexer_worker.py`
+  - `'port': int(os.getenv('POSTGRES_PORT', 5432),` → `'port': int(os.getenv('POSTGRES_PORT', '5432')),`
+- [x] **Aligner `max_attempts`** à 5 partout :
+  - `backend/src/workers/indexer_worker.py` L.90
+  - `backend/src/workers/archive_transfer_worker.py` L.25
+  - `database/migrations/010_add_indexer_retries_table.sql` L.13
+  - `backend/src/api/indexer_router.py` L.90
+- [x] **Nettoyer les blocs `task_progress`** épars dans le code :
+  - L.1143-1155 et L.1223-1234 dans `indexer_worker.py`
+  - Ces blocs sont des notes de dev, pas du code exécutable
 
 ---
 
-## 2) Priorité Haute — UI Administrateur (Phase 4.1)
+## Priorité 1 — Refonte du protocole d'indexation (T-INDEX-R02)
 
-### T-ADMIN-01 — Tableau de bord admin
-- [ ] **Métriques principales** : Fichiers indexés, espace utilisé, erreurs/warnings
-- [ ] **Contrôles manuels** : Lancement/arrêt/pause/resume des indexations
-- [ ] **Notifications temps réel** : WebSocket pour erreurs et warnings
-- [ ] **Gestion des ordures** : Interface de validation pour fichiers problématiques
-- [ ] **Dashboard Grafana** : Visualisation des métriques système
+### 1a — Phase A : BFS des répertoires
 
-### T-ADMIN-02 — Gestion des espaces et configurations
-- [ ] **Configuration SMB** : Interface pour ajouter/modifier/supprimer les espaces
-- [ ] **Test de connexion** : Validation des credentials SMB
-- [ ] **Scheduler** : Configuration des plages horaires d'indexation
-- [ ] **Seuils configurables** : Taille files, patterns d'exclusion
+- [x] **Réécrire `_crawl_recursive()`** en `_phase_a_bfs_directories()` (BFS)
+  - Utilise `collections.deque` pour le parcours en largeur
+  - Parcourir niveau par niveau (root → depth=1 → depth=2 → ...)
+- [x] **Insérer chaque répertoire** dans la table `directories` :
+  - `space_id`, `name`, `path`, `parent_path`, `depth`
+  - UPSERT sur `UNIQUE(space_id, path)`
+- [x] **Ne pas toucher aux fichiers** pendant cette phase
+- [x] **Métriques** : nombre de répertoires découverts retourné et loggé
 
-### T-ADMIN-03 — Gestion des doublons avancée
-- [ ] **Détection** : Hash + nom avec affichage groupé
-- [ ] **Actions multiples** : Suppression individuelle/multiple + archivage
-- [ ] **Corbeille 30 jours** : Traçabilité complète avec restauration
-- [ ] **Confirmation requise** : Validation avant toute suppression
+### 1b — Phase B : Bottom-up fichiers
 
----
+- [x] **Récupérer les répertoires** classés par `depth DESC` :
+  ```sql
+  SELECT id, path, name FROM directories
+  WHERE space_id = %s
+  ORDER BY depth DESC
+  ```
+- [x] **Pour chaque répertoire** (du plus profond au moins profond) :
+  - Lister les fichiers via `SMBClient.list_dir(repertoire_path)`
+  - Ignorer les sous-répertoires (déjà traités en Phase A)
+- [x] **Contrôle d'existence 4 métadonnées** :
+  ```sql
+  SELECT id FROM indexed_files_optimized
+  WHERE path = %s AND name = %s AND size = %s
+    AND created_at = %s AND last_modified = %s
+  ```
+  - Si trouvé → fichier inchangé, passer au suivant (pas de re-hashage)
+  - Si non trouvé → fichier nouveau ou modifié → indexer
+- [x] **Appliquer les files différenciées** :
+  - Si size < 200Mo → hashage xxHash immédiat, insertion
+  - Si size >= 200Mo → créer un job `slow` dédié
+  - Si fichier verrouillé → queue retry (via `_add_file_to_retry`)
 
-## 3) Priorité Moyenne — UI Utilisateur Simplifiée (Phase 4.3)
+### 1c — Basculer vers `indexed_files_optimized`
 
-### T-USER-01 — Interface sans authentification
-- [ ] **Navigation simple** : Explorateur de fichiers intuitif
-- [ ] **Actions de base** : Archivage manuel et suppression de fichiers
-- [ ] **Visualisation** : Aperçus pour images, PDF, bureautique
-- [ ] **Recherche** : Recherche par nom et type de fichier
-- [ ] **Design Material** : Interface moderne et responsive
+- [x] **Ajouter `insert_file_optimized()`** dans `postgres_adapter.py` :
+  - Cible : `indexed_files_optimized`
+  - Colonnes : `space_id`, `directory_id`, `path`, `name`, `extension`, `size`,
+    `hash_xxh64`, `hash_sha256`, `last_modified`, `is_garbage`, `is_deleted`
+  - UPSERT sur `(space_id, path)`
+- [x] **Ajouter `insert_files_batch_optimized()`** dans `postgres_adapter.py` :
+  - Même cible, batch via `execute_values`
+- [x] **Supprimer l'écriture legacy** dans la worker :
+  - `_insert_file()` cible `indexed_files_optimized` (via `insert_file_optimized`)
+  - `_flush_batch()` cible `indexed_files_optimized` (via `insert_files_batch_optimized`)
+  - Plus d'écriture dans les tables `files` et `indexed_files`
+- [x] **Contrôle 4 métadonnées inline** dans `_phase_b_bottom_up_files()`
 
-### T-USER-02 — Archivage manuel simplifié
-- [ ] **Sélection multiple** : Interface pour choisir les fichiers à archiver
-- [ ] **Prévisualisation** : Espace requis et durée estimée
-- [ ] **Progression** : Barre de progression pour les transferts
-- [ ] **Raccourcis optionnels** : Création de liens symboliques
+### 1d — Finalisation
 
----
-
-## 4) Priorité Moyenne — Archivage Intelligent (Phase 2)
-
-### T-ARCH-01 — Système d'archivage robuste
-- [ ] **Zones miroir** : Configuration multi-zones d'archivage
-- [ ] **Workflow sécurisé** : Vérification hash avant/après copie
-- [ ] **Retry automatique** : Max 5 tentatives avec logging détaillé
-- [ ] **Gestion des erreurs** : Fichiers disparus, verrouillés, conflits
-- [ ] **Traçabilité** : Logs complets des opérations d'archivage
-
-### T-ARCH-02 — Archivage automatique (post-v1.0.0)
-- [ ] **Règles configurables** : Type "archive" ET taille >500Mo
-- [ ] **Exécution nocturne** : Avant indexation pour éviter surcharge
-- [ ] **Raccourcis obligatoires** : Création automatique pour archivage auto
-- [ ] **Validation admin** : Interface de validation des règles
-
-## 5) Priorité Basse — Sommaires IA (Phase 3)
-
-### T-AI-01 — Infrastructure IA locale
-- [ ] **Ollama Docker** : Déploiement de Mistral-Nemo
-- [ ] **Configuration** : 32GB RAM, 8 threads CPU
-- [ ] **Tests performance** : Validation sur CPU seul sans GPU
-
-### T-AI-02 — Génération asynchrone des sommaires
-- [ ] **Site dynamique** : Base de données mise à jour lors de l'indexation
-- [ ] **Statut "en cours"** : Affichage "traitement IA" si résumé non généré
-- [ ] **Extraction texte** : Pour fichiers ≤100Mo
-- [ ] **Base dédiée** : Tables ai_summaries, file_previews, summary_cache
-
-### T-AI-03 — Visualisation multi-formats
-- [ ] **OnlyOffice** : Intégration bureautique (Word, Excel, PowerPoint)
-- [ ] **PDF.js** : Visualisation native PDF
-- [ ] **Galerie images** : Thumbnails automatiques
-- [ ] **Players HTML5** : Vidéos et audio natifs
-
-### T-AI-04 — Interface Material Design
-- [ ] **Cards visuelles** : Aperçus immédiats avec métadonnées
-- [ ] **Recherche plein texte** : Dans sommaires IA et métadonnées
-- [ ] **Export avancé** : PDF/Word des sommaires générés
+- [x] **Mettre à jour les statuts** : `space_id` utilisé dans les requêtes principales (`directories`, `indexed_files_optimized`), `config_id` conservé pour la compatibilité job
+- [x] **Logs de progression** : Phase A log toutes les 500 entrées, Phase B log final avec nb ignorés/indexés
+- [ ] **Tester le cycle complet** : nécessite PostgreSQL + SMB en runtime (hors session)
 
 ---
 
-## 6) Priorité Basse — Production et Exploitation (Phase 5)
+## Priorité 2 — Tests & Validation
 
-### T-PROD-01 — Monitoring et observabilité
-- [ ] **Métriques système** : CPU, RAM, disque utilisés par processus
-- [ ] **Alerting** : Seuils d'alerte (espace disque, performances IA)
-- [ ] **Logs centralisés** : Stack ELK avec rétention 30 jours
-- [ ] **Dashboard Grafana** : Visualisation temps réel
-
-### T-PROD-02 — Sauvegarde et recovery
-- [ ] **Backup PostgreSQL** : pg_dump quotidien + WAL archiving
-- [ ] **Backup configurations** : Paramètres SMB, modèles IA, certificats
-- [ ] **Plan de recovery** : Procédures de restauration testées
-- [ ] **RTO/RPO** : Objectifs de recovery time/point
-
-### T-PROD-03 — Audit mensuel complet
-- [ ] **Audit stockage** : Noms trop longs, espaces, profondeur PATH
-- [ ] **Mistral PRO** : Compte configuré pour analyse RGPD
-- [ ] **Détection données personnelles** : Scan intelligent des fichiers
-- [ ] **Recherche credentials** : Mots de passe et informations sensibles
-- [ ] **Rapport détaillé** : Recommandations et plan d'action
-
-### T-PROD-04 — CI/CD et sécurité
-- [ ] **Pipeline GitLab** : Build/test/déploiement automatisé
-- [ ] **Blue-green deployment** : Déploiement sans coupure
-- [ ] **Tests qualité** : Couverture >80% + tests E2E
-- [ ] **Sécurité avancée** : Audit trails, rate limiting, vulnerability scanning
+- [ ] **Tests unitaires Phase A** : BFS directories, UPSERT, profondeur, déduction parent_id
+- [ ] **Tests unitaires Phase B** : bottom-up, contrôle 4 métadonnées, fast/slow/retry queues
+- [ ] **Tests unitaires `check_file_changed()`** : match 4 champs, mismatch partiel
+- [ ] **Tests unitaires `insert_file()`** vers `indexed_files_optimized`
+- [ ] **Tests d'intégration** : pipeline complet PostgreSQL + SMB simulé (mock SMB mais vraie DB)
+- [ ] **Benchmark capacitaire** : `scripts/load_test_indexer.py` — 166k+ fichiers
+- [ ] **Finaliser les tests Priority 4** avec vrai mock DB
 
 ---
 
-## Éléments Terminés à Revoir (Vérifié, Aligné, Testé)
+## Priorité 3 — Déploiement LXC & Documentation
 
-### ✅ T-ARCH-04 — Correction SMB SMIDEN (Issue #85)
-**Statut:** ✅ **VÉRIFIÉ** | **Alignement:** Phase 2.1 | **Tests:** À refaire selon nouvelle architecture
-- [x] **Module gestionnaire** : `src/smb_mount_manager.py` - À aligner avec Phase 2
-- [x] **Mode hybride** : Priorité montage SMB - Conserver pour Phase 2
-- [ ] **Tests selon Phase 1** : Adapter les tests pour le nouvel indexeur
-- [ ] **Documentation** : Mettre à jour selon PROJET.md
-
-### ✅ T-AUTH-01 — Authentification PocketBase
-**Statut:** ✅ **VÉRIFIÉ** | **Alignement:** Phase 4.2 | **Tests:** À intégrer
-- [x] **Système complet** : JWT, rôles, permissions - Conserver pour Phase 4
-- [ ] **Intégration AD** : Remplacer PocketBase par LDAP (Windows Server 2019)
-- [ ] **Mapping permissions** : Basé sur groupes AD et permissions SMB
-- [ ] **Fallback local** : Accès admin DB si AD indisponible
-
-### ✅ T-ART-01/02/03 — Gestion des artefacts
-**Statut:** ✅ **VÉRIFIÉ** | **Alignement:** Phase 4.4 | **Tests:** À adapter
-- [x] **Doublons avancés** : Détection et actions - Intégrer dans Phase 4.3
-- [x] **Filtres configurables** : Seuils et préférences - Adapter pour UI admin
-- [ ] **Corbeille 30 jours** : Implémenter selon Phase 4.4
-- [ ] **Interface utilisateur** : Simplifier pour Phase 4.3 (sans authentification)
+- [x] **T-LXC-01** : `scripts/install_lxc.sh` (installeur ProxmoxVE LXC complet)
+- [ ] **T-LXC-03** : documentation opérationnelle
+- [ ] **Version bump** : 0.6.23 → 0.7.0
+- [ ] **Tag** : `v0.7.0`
+- [ ] **PR** revue et mergée
 
 ---
 
-## Définition de Terminée (DoD)
+## Définition de Terminé (DoD) T-INDEX-R02
 
-Pour chaque tâche T-XXX :
-- [ ] Code implémenté et testé (unit tests + tests d'intégration)
-- [ ] Documentation technique mise à jour (README, docstrings)
-- [ ] Documentation opérationnelle mise à jour (EXPLOITATION.md)
-- [ ] UI/UX cohérente avec Material Design
-- [ ] Migrations DB créées si nécessaire
-- [ ] Preuve de fonctionnement (logs, captures d'écran)
-- [ ] Commit clair et traçable dans Git
-- [ ] Alignement avec PROJET.md validé
-
----
-
-## Notes de Pilotage
-
-**Ordre de priorité préproduction :**
-1. **T-INDEX-01/02** : Indexeur efficace (fondation)
-2. **T-ADMIN-01/02/03** : UI admin (contrôle)
-3. **T-USER-01/02** : UI utilisateur simplifiée (usage)
-4. **T-ARCH-01/02** : Archivage intelligent (fonctionnalité)
-5. **T-AI-01/02/03/04** : Sommaires IA (valeur ajoutée)
-6. **T-PROD-01/02/03/04** : Production et exploitation (industrialisation)
-
-**Dépendances clés :**
-- T-INDEX-* requis avant T-ADMIN-* (données à afficher)
-- T-ADMIN-* requis avant T-USER-* (infrastructure partagée)
-- T-ARCH-* dépend de T-INDEX-* (données indexées)
-
-**Architecture cible :**
-- Approche "queue-based" pour toutes opérations lourdes
-- Material Design pour toutes les interfaces
-- PostgreSQL comme source de vérité unique
-- WebSocket pour temps réel
-
----
-
-*Dernière mise à jour : 2026-05-12*
-*Aligné avec PROJET.md v5 phases*
+- [x] Phase A BFS alimente `directories` avec hiérarchie complète
+- [x] Phase B bottom-up indexe les fichiers feuilles → racine
+- [x] Contrôle d'existence sur 4 métadonnées (name+size+created+modified)
+- [x] Insertions dans `indexed_files_optimized` (plus `files` legacy)
+- [x] Files différenciées fast/slow/retry fonctionnelles
+- [x] Erreur syntaxe L.1078 corrigée
+- [x] `max_attempts` aligné à 5
+- [x] Blocs `task_progress` supprimés du code
+- [ ] Tests unitaires passant (70+) — **Priorité 2**
+- [ ] Tests d'intégration passant (pipeline complet) — **Priorité 2**
+- [ ] Benchmark 166k+ fichiers validé — **Priorité 2**
+- [x] `scripts/install_lxc.sh` créé
+- [ ] Version 0.7.0 taguée — **Priorité 3**

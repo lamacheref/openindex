@@ -98,6 +98,10 @@ app.include_router(artefact_filters_router)
 from backend.src.api.indexer_router import router as indexer_router
 app.include_router(indexer_router)
 
+# Inclusion du router pour les schedules d'indexation (T-INDEX-01)
+from backend.src.api.indexer_schedule_router import router as indexer_schedule_router
+app.include_router(indexer_schedule_router)
+
 # Configuration CORS pour le frontend
 app.add_middleware(
     CORSMiddleware,

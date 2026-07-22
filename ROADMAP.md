@@ -1,93 +1,62 @@
-# ROADMAP OpenIndex (J6 — avril 2026)
+# ROADMAP OpenIndex (J6 — juillet 2026)
 
 ## Vision
 
-Industrialiser OpenIndex pour un usage régulier en environnement SMB volumineux, en sécurisant la chaîne : ingestion -> API -> visualisation -> exploitation.
+Industrialiser OpenIndex pour un usage régulier en environnement SMB volumineux, en substituant Docker par une infrastructure LXC plus stable et en validant le bon bout-en-bout de l'indexeur.
 
 ## Phases
 
-## Phase J1 (historique) — Kickoff opérationnel
-### Objectifs J1
-- Cadrer les priorités de sprint et les responsabilités.
-- Rendre la documentation de pilotage totalement alignée.
-- Mettre sous contrôle les points critiques de fiabilité (tests/sauvegarde).
+## Phases J1-J5 (historique)
+- **J1** : Kickoff opérationnel, baseline documentaire, TODO priorisé.
+- **J2** : Fiabilisation des tests API/front, procédures d'incident, CI.
+- **J3** : Stabilisation applicative, exploitation robuste stack API + frontend PostgreSQL.
+- **J4** : Consolidation PostgreSQL, recrawls complets, schéma stabilisé (validé 2026-03-18).
+- **J5** : Qualité et observabilité, dashboards, DoD, release process.
 
-### Sorties attendues J1
-- Baseline documentaire stable et versionnée.
-- TODO priorisé avec critères de done explicites.
-- Plan de passage J1 -> J2 validé.
+## Phase J6 — Déploiement LXC & Validation Indexeur (en cours)
 
-## Phase J2 (historique) — Fiabilisation
-- Renforcer les tests API/front essentiels.
-- Formaliser procédures d'incident sur la base active.
-- Clarifier les workflows CI utiles et déprécier les parcours legacy.
+### Contexte
+L'audit du code a révélé 5 écarts majeurs entre la spec PROJET.md Phase 1 et l'implémentation de l'indexeur. Cette phase priorise la **refonte protocolaire de l'indexeur** avant le déploiement LXC, pour garantir un socle métier fiable.
 
-## Phase de stabilisation initiale (historique)
-- Exploitation robuste initiale de la stack API + frontend avant bascule PostgreSQL.
-- Optimisation des performances de consultation.
-- Durcissement des exécutions longues côté crawler.
-
-## Phase J4 — Consolidation PostgreSQL (validée)
-- Opérer le backend de données principal en PostgreSQL avec vérification de la disponibilité et stabilité.
-- Stabiliser le schéma et la stratégie d'indexation dans PostgreSQL.
-- Exécuter des recrawls complets sur zones de test avec PostgreSQL.
-- Décision `Go` documentée le `2026-03-18`.
-- Lot correctif opérateur clôturé le `2026-03-19` : progression runtime fiable, cohérence UI renforcée, réconciliation des runs `cancelling`, purge WebSocket des clients fermés, abandon explicite du prototype `estimate-{hash}`.
-
-## Phase J5 (prochaine) — Qualité et observabilité
-- Couverture de tests mesurée et suivie.
-- Dashboards de santé et alerting.
-- Processus de release strict (DoD + checklist publication).
-- Reprendre le backlog principal sur recrawl réel, performance PostgreSQL et observabilité, sans rouvrir le lot correctif opérateur clôturé.
-- Préparer la configuration multi-repository et la segmentation des sources de crawl.
-- Faire converger l'UI finale vers une console opératoire active, centrée sur le crawl réel et l'exploitation.
-- Concevoir un explorateur de fichiers double panneau et une page dédiée aux traitements des artefacts.
-
-## Phase J6 — Data Lifecycle & Archivage Automatique (en cours)
 ### Objectifs J6
-- Stabiliser le transfert de données entre sources et archives via queues de travail.
-- Implémenter un système complet de gestion du cycle de vie des données.
-- Mettre en place l'archivage automatique configurable.
-- Sécuriser l'application avec un système d'authentification robuste.
+1. **Refondre l'indexeur** pour implémenter le protocole 2 phases (BFS dossiers → bottom-up fichiers).
+2. **Basculer les insertions** de la table legacy `files` vers `indexed_files_optimized`.
+3. **Alimenter la table `directories`** avec la hiérarchie complète.
+4. **Valider** avec des tests d'intégration réels et un benchmark 166k+ fichiers.
+5. Abandonner Docker pour LXC une fois l'indexeur validé.
+6. Atteindre la version 0.7.0.
 
-### Livraisons J6
-- **T-ARCH-01** (✅ complété 2026-04-02) : Archive Queue System
-  - Queue de jobs persistants en PostgreSQL
-  - Transfer Worker avec retry exponentiel + jitter
-  - API REST complète (7 endpoints)
-  - Monitoring temps réel et health checks
-  - Suite de tests complète (22+31+4 tests)
-  - Documentation technique complète
+### Lots J6
 
-- **T-ARCH-02** (✅ complété 2026-04-08) : Scheduling et configuration
-  - ✅ Déclenchement par cron des jobs d'archivage
-  - ✅ Configuration des règles en base de données
-  - ✅ UI de monitoring des files d'attente
-  - ✅ 53/53 tests passés (31 API + 22 worker)
-  - ✅ Issues #68-#72, #75 fermées
+#### T-INDEX-R02 — Refonte du protocole d'indexation (priorité #1)
+- [ ] **Phase A — BFS directories** : réécrire `_crawl_recursive()` en BFS, insérer chaque répertoire dans `directories` avec `space_id`, `parent_path`, `depth`
+- [ ] **Phase B — Bottom-up files** : récupérer les répertoires classés par profondeur décroissante, indexer les fichiers feuilles → racine
+- [ ] **Contrôle d'existence 4 métadonnées** : étendre `check_file_changed()` pour comparer nom + taille + created_at + modified_at
+- [ ] **Basculer vers `indexed_files_optimized`** : remplacer les INSERT dans `files` par des INSERT dans `indexed_files_optimized`
+- [ ] **Correction syntaxe `_handle_file_conflict()`** (L.1078)
+- [ ] **Alignement `max_attempts`** (5 partout)
+- [ ] **Nettoyage des `task_progress`** épars (L.1143-1155 et L.1223-1234)
+- [ ] **Tests adaptés** : mise à jour des tests unitaires mockés pour couvrir les 2 phases
+- [ ] **Tests d'intégration** : pipeline complet PostgreSQL + SMB simulé
+- [ ] **Benchmark** 166k+ fichiers
 
-- **T-ARCH-03** (✅ complété 2026-04-08) : Corrections UI et stabilisation
-  - ✅ Terminologie et textes d'information corrigés
-  - ✅ Correction blocage runs et flapping état
-  - ✅ Version alignée avec fichier VERSION
-  - ✅ Corrections panneau source (breadcrumb cliquable)
+#### T-LXC-01 — Installateur LXC automatisé
+- [ ] Script `scripts/install_lxc.sh` : déploiement complet en une commande
+- [ ] Création des conteneurs : pgsql, api, frontend, worker, pocketbase
+- [ ] Réseau bridge LXC, montage SMB, persistance des données
+- [ ] Wizard de configuration interactive
+- [ ] Idempotence et mise à jour supportées
 
-- **T-ARCH-04** (✅ complété 2026-04-09) : Correction SMB SMIDEN (Issue #85)
-  - ✅ Architecture hybride : montage SMB + fallback programmatique
-  - ✅ Module `smb_mount_manager.py` avec gestion dynamique des montages
-  - ✅ Auto-remontage après timeout 30min d'inactivité
-  - ✅ API endpoints `/api/smb-mounts` pour monitoring et contrôle
-  - ✅ Résout Issues #80 et #85 (credentials SMB incorrects)
+#### T-LXC-03 — Documentation opérationnelle
+- [ ] Guide d'installation LXC pas-à-pas
+- [ ] Guide d'exploitation (démarrage, arrêt, monitoring)
+- [ ] Procédure de recovery et runbook
+- [ ] Mise à jour README.md, PROJET.md, ROADMAP.md
 
-- **T-AUTH-01** (✅ complété 2026-04-14) : Authentification des utilisateurs
-  - ✅ Intégration PocketBase pour l'authentification
-  - ✅ Pages de login et accès refusé fonctionnelles
-  - ✅ Protection des routes avec règles granulaires
-  - ✅ Gestion des sessions JWT
-  - ✅ Interface d'administration PocketBase configurée
-
-### Prochaines livraisons prévues
-- **T-ART-01/02/03** : Gestion des artefacts et doublons
-- **T-SEARCH-01** : Moteur de recherche et sommaire
-- **T-AUTO-01** : Archivage automatique intelligent
-- **T-AUTH-02** : Améliorations de sécurité (2FA, logs, rate limiting)
+### Livraisons déjà disponibles (phases antérieures)
+- **T-INDEX-01** (⚠️ partiel 2026-05-18) : Indexeur SMB avec xxHash, files différenciées, scheduler cron, détection incrémentielle, garbage files — **refonte protocolaire en cours (T-INDEX-R02)**
+- **T-ARCH-01** (✅ 2026-04-02) : Archive Queue System avec worker dédié, retry exponentiel
+- **T-ARCH-02** (✅ 2026-04-08) : Scheduling d'archivage, configuration, monitoring
+- **T-ARCH-03** (✅ 2026-04-08) : Corrections UI et stabilisation
+- **T-ARCH-04** (✅ 2026-04-09) : Architecture hybride montage SMB + fallback
+- **T-AUTH-01** (✅ 2026-04-14) : Intégration PocketBase, login JWT, routes protégées
