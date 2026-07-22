@@ -253,7 +253,60 @@ Real-time: WebSocket pour notifications temps réel
 - **Plan d'action** : priorisation des corrections
 - **Historique** : suivi des audits mensuels et évolutions
 
-## Cap J5 (en cours)
+## Phase 6 — Déploiement LXC & Validation Industrielle de l'Indexeur
+
+### 6.1 Infrastructure LXC (substitution à Docker)
+- **Abandon de Docker** : remplacement de l'orchestration Docker Compose par un déploiement LXC natif
+- **Conteneurs LXC dédiés** : un conteneur par service (postgresql, api, frontend, worker-indexer, worker-archive, scheduler)
+- **Réseau LXC bridge** : communication inter-conteneurs via réseau LVC natif
+- **Stockage** : montage de partages SBM directement dans le conteneur worker-indexer
+- **Persistance** : données PostgreSQL sur volume LXC lié à l'hôte
+
+### 6.2 Installateur automatisé
+- **Script unique** : `scripts/install_lxc.sh` — déploiement complet en une commande
+- **Prérequis vérifiés** : détection et installation des dépendances (lxc, lxc-config, smbclient, etc.)
+- **Configuration interactive** : wizard de paramétrage (IP, chemins SMB, credentials)
+- **Idempotence** : installation reproductible, sans effets de bord
+- **Mise à jour** : support du upgrade des conteneurs sans perte de données
+
+### 6.3 Validation complète de l'indexeur
+- **Tests d'intégration réels** : validation du pipeline complet sur PostgreSQL + SMB simulé
+- **Correction des anomalies résiduelles** :
+  - Erreur de syntaxe `_handle_file_conflict()` (`backend/src/workers/indexer_worker.py:1078`)
+  - Alignement des `max_attempts` (5 essais partout)
+  - Tests Priority 4 avec vrai mock DB
+- **Benchmark capacitaire** : validation avec 166k+ fichiers, mesure de performance
+- **DoD finale** : PR + version bump 0.7.0 + tag
+
+### 6.4 Documentation opérationnelle
+- **Guide d'installation LXC** : procédure complète pas-à-pas
+- **Guide d'exploitation** : démarrage, arrêt, monitoring des conteneurs
+- **Procédure de recovery** : restauration après incident
+- **Runbook** : opérations courantes (sauvegarde, mise à jour, diagnostic)
+
+### 6.5 Schéma cible
+```
+Hôte LXC (Debian/Ubuntu)
+├── lxc-openindex-pgsql    # PostgreSQL 16
+├── lxc-openindex-api      # FastAPI (uvicorn)
+├── lxc-openindex-frontend # Nginx (frontend statique)
+├── lxc-openindex-worker   # Indexeur SMB + workers
+└── lxc-openindex-pb       # PocketBase (auth)
+       Réseau bridge lxcbr0 (10.0.3.0/24)
+```
+
+---
+
+## Cap J6 (phase en cours — Déploiement LXC & Validation)
+
+La **phase J6** marque le basculement vers une infrastructure LXC industrialisée :
+
+- Installateur LXC automatisé, testé et documenté.
+- Indexeur validé fonctionnellement et en charge.
+- Docker déprécié comme socle de déploiement (maintenu pour compatibilité temporaire).
+- DoD de la version 0.7.0 complétée.
+
+## Cap J5 (historique — Qualité et observabilité)
 
 Le **jour J5** marque la phase de qualité et observabilité industrielle :
 
@@ -261,12 +314,15 @@ Le **jour J5** marque la phase de qualité et observabilité industrielle :
 - Dashboards de santé et alerting.
 - Processus de release strict (DoD + checklist publication).
 
-## Cap J1 (historique)
+## Cap J1-J4 (historique)
 
 - Stabiliser le cadre documentaire (vision, roadmap, suivi, changelog).
-- Poser un cadre d’exécution hebdomadaire clair (priorités + done).
-- Conserver la stack technique actuelle comme base d’itération rapide.
-- Préparer les conditions de passage en J2/J3 sans dette d’organisation.
+- Poser un cadre d'exécution hebdomadaire clair (priorités + done).
+- Conserver la stack technique actuelle comme base d'itération rapide.
+- Préparer les conditions de passage en J2/J3 sans dette d'organisation.
+- Fiabilisation tests + exploitation.
+- Stabilisation applicative renforcée.
+- Consolidation PostgreSQL.
 
 ## Périmètre actuel
 
@@ -274,18 +330,23 @@ Le **jour J5** marque la phase de qualité et observabilité industrielle :
 - Exposition des données via API FastAPI.
 - Consultation, recherche et visualisation depuis frontend statique.
 - Détection de doublons et indicateurs globaux.
+- Indexation SMB complète avec files différenciées, xxHash, détection incrémentielle.
+- Archivage avec queue de jobs persistants et worker dédié.
+- Authentification PocketBase.
 
 ## Livrables disponibles
 
-- Crawler Python SMB (base existante + historique d’optimisations).
+- Crawler Python SMB (base existante + historique d'optimisations).
 - API FastAPI (`src/api/main.py`).
 - Frontend (`frontend/index.html`).
-- Déploiement via Docker Compose (`docker-compose.yml`).
+- Déploiement via Docker Compose (`docker-compose.yml`) — **en cours de remplacement**.
+- Installateur LXC automatisé (`scripts/install_lxc.sh`) — **à construire**.
 
 ## Trajectoire
 
-- **J1** : cadrage et discipline d’exécution.
+- **J1** : cadrage et discipline d'exécution.
 - **J2** : fiabilisation tests + exploitation.
 - **J3** : stabilisation applicative renforcée.
 - **J4** : consolidation PostgreSQL.
 - **J5** : observabilité et qualité industrielle.
+- **J6** : déploiement LXC & validation de l'indexeur (phase en cours).

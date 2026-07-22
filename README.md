@@ -2,60 +2,35 @@
 
 Solution d’indexation de partages SMB avec **crawler Python**, **API FastAPI**, **frontend statique** et **PostgreSQL**.
 
-## État actuel (J6 — mai 2026)
+## État actuel (J6 — juillet 2026)
 
-Le projet dispose désormais d'un **système complet de queue d'archivage** avec worker dédié, retry automatique et monitoring temps réel, ainsi qu'un **indexeur SMB performant** avec détection des changements et gestion des files prioritaires.
+Le projet est en phase **J6 — Déploiement LXC & Validation Indexeur**. L'infrastructure Docker est en cours de remplacement par des conteneurs LXC natifs, plus stables et mieux adaptés à l'infrastructure cible.
 
-### Dernière livraison majeure — T-INDEX-01 (2026-05-18)
-- **Commit:** `1b978783c90eb1ba2d8f0ae088a3eefe2ea1ea62`
-- **Version:** 0.7.0 (prévue après finalisation)
-- **Status:** ✅ Opérationnel avec toutes les fonctionnalités principales implémentées
+L'indexeur SMB est fonctionnellement complet (T-INDEX-01) mais nécessite une validation finale en conditions réelles avant le tag 0.7.0.
 
-**Nouvelles fonctionnalités T-INDEX-01:**
-- **Indexeur SMB complet** : Crawler récursif avec support multi-espaces
-- **Scrutation périodique** : Scheduler cron avec planification flexible
-- **Files différenciées** : Queue rapide/lente avec seuil automatique 200Mo
-- **Hashage xxHash** : Calcul de checksums optimisé pour les gros fichiers
-- **Détection des changements** : Mode incrémentiel pour réindexation rapide
-- **Gestion des ordures** : Détection automatique des fichiers indésirables (*.tmp, Thumbs.db, etc.)
-- **Base PostgreSQL optimisée** : Schéma complet avec 5 tables optimisées et vues de monitoring
-- **Métriques temps réel** : Endpoints de performance et health checks
-- **Queue retry** : Mécanisme automatique pour fichiers verrouillés (max 3 tentatives)
-- **Optimisation PostgreSQL** : Batch insert, requêtes préparées, analyse des goulets
-- **Logs structurés JSON** : Format standardisé pour tous les composants
-- **Tests complets** : 70+ tests unitaires couvrant tous les modules
+### Fonctionnalités disponibles
 
-### Infrastructure précédente — T-ARCH-01 (2026-04-02)
-- **Commit:** `70312f587e2f4ebb10bd7fad453e0f751220cf30`
-- **Version:** 0.4.18
-- **Status:** ✅ Opérationnel avec corrections critiques appliquées
+**Indexeur SMB (T-INDEX-01) :**
+- Indexation complète SMB multi-espaces avec crawler récursif
+- Scheduler cron pour scrutation périodique
+- Files différenciées (fast <200Mo / slow >=200Mo)
+- Hashage xxHash64 avec streaming et fallback SHA256
+- Détection incrémentielle des changements (hash + timestamps)
+- Détection automatique des fichiers ordures (*.tmp, Thumbs.db, etc.)
+- Queue retry pour fichiers verrouillés
+- Batch insert optimisé (100 fichiers/lot)
+- Logs structurés JSON
+- 12+ endpoints API REST (`/api/indexer/*`)
+- Dashboard de monitoring temps réel
 
-**Nouvelles fonctionnalités T-ARCH-01:**
-- **Archive Queue System** : Queue de jobs persistants en PostgreSQL
-- **Transfer Worker** : Worker dédié avec retry exponentiel + jitter
-- **API REST** : 7 endpoints pour gestion des jobs (`/api/archive/queue/*`)
-- **Monitoring** : Stats en temps réel et health checks
-- **Tests complets** : Unitaires, intégration, charge (22+31+4 tests)
+**Archivage (T-ARCH-01/02/03/04) :**
+- Queue de jobs persistants en PostgreSQL
+- Transfer Worker avec retry exponentiel + jitter
+- Architecture hybride montage SMB + fallback programmatique
+- API REST complète (7 endpoints)
 
-**Corrections critiques appliquées:**
-- PoolError PostgreSQL (double putconn)
-- SMBConnectionError → SMBConnectionClosed
-- CREATE TYPE idempotent dans init.sql
-- IndexError dans retry decorator
-- Import Enum manquant dans API
-
-### Infrastructure actuelle
-
-- API FastAPI (`src/api/main.py`) avec base de données **PostgreSQL** via `OPENINDEX_DB_BACKEND=postgresql`.
-- Frontend statique (`frontend/index.html`) servi par Nginx.
-- **Archive Transfer Worker** (`src/archive_transfer_worker.py`) avec retry et backoff exponentiel.
-- **SMB Health Monitor** (`src/smb_health_monitor.py`) pour surveillance serveurs.
-- Endpoint de diagnostic SQL `GET /api/db-explain` avec vue frontend associée.
-- Orchestration recommandée : `docker-compose.yml` (stack complète PostgreSQL).
-- Build/push d’images automatisé via GitHub Actions (`.github/workflows/docker-stack.yml`).
-
-> La migration SQLite n'est plus nécessaire : la zone de test ayant été massivement modifiée, un recrawl complet est la stratégie de référence.
-> La décision formelle J4 actuellement exploitable est `No-Go` tant que la nouvelle preuve de recrawl complet n'est pas publiée : voir `docs/2026-03-18_j4_go-no-go.md` et `docs/2026-03-18_j4_execution_report.md`.
+**Authentification (T-AUTH-01) :**
+- Intégration PocketBase, login JWT, routes protégées
 
 ## Fonctionnalités disponibles
 
@@ -98,21 +73,39 @@ Le projet dispose désormais d'un **système complet de queue d'archivage** avec
 
 ## Installation
 
-## Démarrage rapide (socle actuel avec PostgreSQL)
+### Installation LXC (recommandée — stable)
+
+```bash
+# Prérequis : Debian/Ubuntu avec LXC installé
+sudo apt install lxc lxc-templates bridge-utils smbclient
+
+# Déploiement complet (création des conteneurs, configuration, démarrage)
+sudo ./scripts/install_lxc.sh
+
+# Le script vous guidera à travers :
+#   1. Configuration réseau (bridge LXC)
+#   2. Paramètres SMB (partages, credentials)
+#   3. Mots de passe PostgreSQL et PocketBase
+```
+
+**Services déployés :**
+| Conteneur | Rôle | Accès |
+|---|---|---|
+| `lxc-openindex-pgsql` | PostgreSQL 16 | 10.0.3.10:5432 |
+| `lxc-openindex-api` | FastAPI | 10.0.3.11:8000 |
+| `lxc-openindex-frontend` | Nginx (frontend) | 10.0.3.12:80 |
+| `lxc-openindex-worker` | Indexeur + workers SMB | — |
+| `lxc-openindex-pb` | PocketBase (auth) | 10.0.3.14:8090 |
+
+### Déploiement Docker (legacy — déprécié)
 
 ```bash
 cp .env.example .env
-# optionnel: renseigner OPENINDEX_API_IMAGE / OPENINDEX_CRAWLER_IMAGE / OPENINDEX_UI_IMAGE dans .env
-# si packages GHCR privés: définir GHCR_USERNAME et GHCR_TOKEN dans .env
-
-# Vérifier la disponibilité de PostgreSQL
 ./deploy.sh pull
 ./deploy.sh up
-
-# préproduction GHCR privée
-./deploy.sh pull --preprod
-./deploy.sh up --preprod
 ```
+
+> Docker est maintenu pour compatibilité temporaire mais n'est plus le socle de production recommandé. La migration vers LXC est en cours (phase J6).
 
 ## Tests (commande unique)
 
@@ -146,16 +139,18 @@ pytest -q tests/test_frontend_structure.py
 - Planification : `ROADMAP.md`
 - Suivi d’exécution : `TODO.md`
 - Historique : `CHANGELOG.md`
+- Rapport d'avancement : `docs/rapports/20260722_rapport_avancement.md`
 - Journal détaillé : `docs/`
-- Décision Go/No-Go J4 : `docs/2026-03-18_j4_go-no-go.md`
-- Rapport d'exécution J4 : `docs/2026-03-18_j4_execution_report.md`
+- Guide d'installation LXC : `docs/operations/INSTALLATION_LXC.md` *(à construire)*
+- Guide d'exploitation LXC : `docs/operations/EXPLOITATION_LXC.md` *(à construire)*
 - Runbook hebdo d'exploitation PostgreSQL : `docs/operations/EXPLOITATION.md`
-- **Guide d'administration de l'indexation** : `docs/operations/INDEXATION.md`
-- Plan d'accélération 2 semaines : `docs/phases/J4_MIGRATION.md`
+- Guide d'administration de l'indexation : `docs/operations/INDEXATION.md`
 
 ## Limitations connues
 
-- Le backend SQLite est désormais legacy et non supporté sur le parcours opératoire principal.
+- **Docker déprécié** : l'infrastructure Docker est en cours de remplacement par LXC (phase J6). Utilisation possible mais non recommandée pour la production.
+- **Erreur de syntaxe** dans `_handle_file_conflict()` (`backend/src/workers/indexer_worker.py:1078`) — corrigée dans la version 0.7.0.
+- **Tests d'intégration manquants** : l'indexeur n'a que des tests unitaires mockés. Les tests d'intégration réels sont prévus en J6.
+- Le backend SQLite est legacy et non supporté sur le parcours opératoire principal.
 - Le workflow `.gitea/workflows/ci.yml` est conservé en legacy et ne constitue pas la gate de merge de la stack active.
 - La validation locale dépend de l'accès au registre pip pour installer `requirements/dev.txt`.
-- Les tests structurels frontend vérifient le contrat HTML/Alpine, pas le rendu visuel pixel-perfect.
