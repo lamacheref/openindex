@@ -730,6 +730,17 @@
                     }
                 },
                 
+                async cancelJob(jobId) {
+                    try {
+                        const res = await fetch(`/api/indexer/jobs/${jobId}/stop`, { method: 'POST' });
+                        if (res.ok) {
+                            await this.refreshData();
+                        }
+                    } catch (err) {
+                        console.error('Erreur annulation job:', err);
+                    }
+                },
+                
                 async stopJob(jobId) {
                     try {
                         const res = await fetch(`/api/indexer/jobs/${jobId}/stop`, { method: 'POST' });

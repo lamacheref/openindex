@@ -74,7 +74,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `52e52485` | 2026-07-23 | non | non | fix: add commit=True to purge/resume/cancel endpoints |
+| `12fbb98b` | 2026-07-23 | non | non | fix: add cancelJob function |
+| `253640ca` | 2026-07-23 | oui | oui | fix: add commit=True to purge/resume/cancel endpoints |
 | `aac68b17` | 2026-07-23 | oui | oui | feat: fault-tolerant worker (resume after crash), purge + resume buttons |
 | `33383a9c` | 2026-07-22 | oui | oui | fix: add index col + smart auto-scroll (only if near bottom) |
 | `acdc1e54` | 2026-07-22 | oui | oui | fix: increase scroll timeout to 200ms |
@@ -123,4 +124,3 @@ pytest -q tests/
 | `e126878b` | 2026-05-18 | oui | oui | T-INDEX-01: Détection des changements - Mode incrémentiel |
 | `d4a0c3a0` | 2026-05-18 | oui | oui | T-INDEX-01: Hashage xxHash - Implémentation dans crawl_utils |
 | `5fcb1701` | 2026-05-18 | oui | oui | T-INDEX-01: Files différenciées - Migration + worker avec queue_type |
-| `31bc473b` | 2026-05-18 | oui | oui | T-INDEX-01: Multi-espaces SMB - API CRUD schedules + métriques par espace |
