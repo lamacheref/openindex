@@ -153,14 +153,17 @@ def normalize_smb_path(path: str) -> str:
     return path
 
 
-def get_file_info(client: SMBClient, remote_path: str) -> Optional[Dict[str, Any]]:
+def get_file_info(client: SMBClient, remote_path: str, entries_list: Optional[List[Dict[str, Any]]] = None) -> Optional[Dict[str, Any]]:
     """Récupère les informations d'un fichier distant"""
     try:
         path = normalize_smb_path(remote_path)
         dir_path = os.path.dirname(path) if '/' in path else ''
         file_name = os.path.basename(path)
 
-        entries = client.list_dir(dir_path)
+        if entries_list is None:
+            entries = client.list_dir(dir_path)
+        else:
+            entries = entries_list
         for entry in entries:
             if entry['name'] == file_name:
                 # Calculer le hash xxHash si disponible

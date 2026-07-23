@@ -74,7 +74,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `018ef892` | 2026-07-23 | non | non | fix: update progress every 10 items in Phase B too |
+| `6db7a356` | 2026-07-23 | non | non | perf: avoid duplicate list_dir in get_file_info by passing entries_list |
+| `ba62f8c3` | 2026-07-23 | oui | oui | fix: update progress every 10 items in Phase B too |
 | `58c0b0a5` | 2026-07-23 | oui | oui | feat: real-time dir count in progression column (every 10 dirs) |
 | `f5d552ad` | 2026-07-23 | oui | oui | fix: add cancelJob function |
 | `253640ca` | 2026-07-23 | oui | oui | fix: add commit=True to purge/resume/cancel endpoints |
@@ -123,4 +124,3 @@ pytest -q tests/
 | `1b978783` | 2026-05-18 | oui | oui | Mise à jour quotidienne : modifications de l'environnement virtuel et du TODO |
 | `5245847b` | 2026-05-18 | oui | oui | T-INDEX-01: Gestion des ordures - Détection et marquage des fichiers indésirables |
 | `aeb37d90` | 2026-05-18 | oui | oui | T-INDEX-01: Base PostgreSQL optimisée - Schéma complet |
-| `e126878b` | 2026-05-18 | oui | oui | T-INDEX-01: Détection des changements - Mode incrémentiel |

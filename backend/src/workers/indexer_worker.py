@@ -548,7 +548,8 @@ class IndexerWorker:
                 logger.warning(f"Erreur liste répertoire {dir_path}: {e}")
                 continue
 
-            for entry in entries:
+            entries_list = list(entries)
+            for entry in entries_list:
                 if isinstance(entry, dict):
                     entry_name = entry.get('name', '')
                     is_dir = entry.get('is_directory', False)
@@ -580,7 +581,7 @@ class IndexerWorker:
                     continue
 
                 try:
-                    file_info = get_file_info(client, full_path)
+                    file_info = get_file_info(client, full_path, entries_list=entries_list)
                     if not file_info:
                         continue
 
