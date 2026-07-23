@@ -604,7 +604,7 @@ class IndexerWorker:
                     logger.warning(f"Erreur indexation fichier {full_path}: {e}")
                     self._increment_error_count()
 
-                if job.files_found % 100 == 0:
+                if job.files_found % 10 == 0:
                     self._update_job_progress(job)
 
         logger.info(f"Phase B: {job.files_found} fichiers trouvés, {skipped} ignorés (inchangés), {job.files_indexed} indexés", extra={
