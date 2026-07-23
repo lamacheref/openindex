@@ -347,6 +347,11 @@
                             <option value="completed">Terminé</option>
                             <option value="failed">Échoué</option>
                         </select>
+                        <button @click="purgeJobs()" 
+                                class="text-red-600 hover:text-red-700 text-sm font-medium flex items-center gap-1 px-2">
+                            <i class="fas fa-trash-alt"></i>
+                            Purger
+                        </button>
                     </div>
                     
                     <div class="overflow-x-auto">
@@ -406,6 +411,11 @@
                                                     @click="stopJob(job.id)"
                                                     class="text-amber-600 hover:text-amber-700 text-sm font-medium">
                                                 Arrêter
+                                            </button>
+                                            <button x-show="job.status === 'running'" 
+                                                    @click="resumeJob(job.id)"
+                                                    class="text-blue-600 hover:text-blue-700 text-sm font-medium ml-2">
+                                                Reprendre
                                             </button>
                                         </td>
                                     </tr>
@@ -731,6 +741,31 @@
                         }
                     } catch (err) {
                         console.error('Erreur arrêt job:', err);
+                    }
+                },
+                
+                async resumeJob(jobId) {
+                    try {
+                        const res = await fetch(`/api/indexer/jobs/${jobId}/resume`, { method: 'POST' });
+                        if (res.ok) {
+                            await this.refreshData();
+                        } else {
+                            const err = await res.json();
+                            console.error('Erreur reprise job:', err);
+                        }
+                    } catch (err) {
+                        console.error('Erreur reprise job:', err);
+                    }
+                },
+                
+                async purgeJobs() {
+                    try {
+                        const res = await fetch('/api/indexer/jobs/purge', { method: 'POST' });
+                        if (res.ok) {
+                            await this.refreshData();
+                        }
+                    } catch (err) {
+                        console.error('Erreur purge:', err);
                     }
                 },
                 

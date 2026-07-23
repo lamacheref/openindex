@@ -502,6 +502,42 @@ async def stop_job(job_id: str):
         raise HTTPException(status_code=500, detail=f"Erreur: {e}")
 
 
+@router.post("/jobs/purge")
+async def purge_jobs():
+    """Supprime les jobs terminés, annulés ou échoués"""
+    try:
+        db = get_db_adapter()
+        result = db.execute_query(
+            "DELETE FROM indexer_jobs WHERE status IN ('completed', 'cancelled', 'failed') RETURNING id"
+        )
+        count = len(result) if result else 0
+        logger.info(f"{count} jobs purgés")
+        return {"success": True, "purged": count}
+    except Exception as e:
+        logger.error(f"Erreur purge: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {e}")
+
+
+@router.post("/jobs/{job_id}/resume")
+async def resume_job(job_id: str):
+    """Remet un job en attente pour reprise (running orphelin)"""
+    try:
+        db = get_db_adapter()
+        result = db.execute_query(
+            "UPDATE indexer_jobs SET status = 'pending' WHERE id = %s AND status = 'running' RETURNING id",
+            [job_id]
+        )
+        if not result:
+            raise HTTPException(status_code=404, detail="Job introuvable ou déjà traité")
+        logger.info(f"Job remis en attente: {job_id}")
+        return {"success": True, "message": "Job remis en attente"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur reprise job {job_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {e}")
+
+
 @router.get("/performance", response_model=IndexerPerformance)
 async def get_indexer_performance():
     """Récupère les métriques de performance temps réel de l'indexeur"""

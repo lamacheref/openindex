@@ -74,7 +74,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `d25ca6fb` | 2026-07-22 | non | non | fix: add index col + smart auto-scroll (only if near bottom) |
+| `289f381b` | 2026-07-23 | non | non | feat: fault-tolerant worker (resume after crash), purge + resume buttons |
+| `33383a9c` | 2026-07-22 | oui | oui | fix: add index col + smart auto-scroll (only if near bottom) |
 | `acdc1e54` | 2026-07-22 | oui | oui | fix: increase scroll timeout to 200ms |
 | `0ec256fe` | 2026-07-22 | oui | oui | fix: standard log order (newest at bottom, auto-scroll to bottom) |
 | `f37fce82` | 2026-07-22 | oui | oui | fix: reverse log order (newest first), auto-scroll to top |
@@ -123,4 +124,3 @@ pytest -q tests/
 | `5fcb1701` | 2026-05-18 | oui | oui | T-INDEX-01: Files différenciées - Migration + worker avec queue_type |
 | `31bc473b` | 2026-05-18 | oui | oui | T-INDEX-01: Multi-espaces SMB - API CRUD schedules + métriques par espace |
 | `54404d00` | 2026-05-18 | oui | oui | T-INDEX-01: Scrutation périodique - Scheduler cron + migration + tests (16 passants) |
-| `5a0f86fc` | 2026-05-18 | oui | oui | T-INDEX-01: Priorité 0 terminée - Découplage, mot de passe SMB, tests (53 passants) |

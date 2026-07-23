@@ -191,6 +191,9 @@ class IndexerWorker:
     def _run(self):
         """Boucle principale du worker"""
         logger.info("Boucle principale du worker démarrée")
+
+        # Réinitialiser les jobs orphelins (stale running) au démarrage
+        self._reset_stale_jobs()
         
         while self.running and not self._stop_event.is_set():
             try:
@@ -208,6 +211,28 @@ class IndexerWorker:
                 self._stop_event.wait(self.poll_interval)
         
         logger.info("Boucle principale terminée")
+
+    def _reset_stale_jobs(self):
+        """Remet à 'pending' les jobs 'running' orphelins (crash/restart)"""
+        try:
+            from backend.src.database.postgres_adapter import PostgreSQLAdapter
+            import os as _os
+            db_config = {
+                'host': _os.getenv('POSTGRES_HOST', 'postgres'),
+                'port': int(_os.getenv('POSTGRES_PORT', 5432)),
+                'database': _os.getenv('POSTGRES_DB', 'openindex'),
+                'user': _os.getenv('POSTGRES_USER', 'openindex_user'),
+                'password': _os.getenv('POSTGRES_PASSWORD', 'openindex_secure_password')
+            }
+            db = PostgreSQLAdapter(db_config)
+            results = db.execute_query(
+                "UPDATE indexer_jobs SET status = 'pending' WHERE status = 'running' RETURNING id"
+            )
+            if results:
+                for row in results:
+                    logger.info(f"Job orphelin remis en attente: {row[0]}")
+        except Exception as e:
+            logger.error(f"Erreur réinitialisation jobs orphelins: {e}")
     
     def _fetch_next_job(self) -> Optional[IndexerJob]:
         """Récupère le prochain job pending depuis la base de données"""
@@ -384,7 +409,13 @@ class IndexerWorker:
             client.connect()
             remote_path = config.get('remote_path', '')
             
-            dir_count = self._phase_a_bfs_directories(client, remote_path, space_id, job)
+            # Vérifier si la Phase A est déjà faite (reprise après crash)
+            existing_dirs = self._count_existing_directories(space_id)
+            if existing_dirs > 0:
+                logger.info(f"Phase A déjà effectuée: {existing_dirs} répertoires en base, reprise Phase B")
+                dir_count = existing_dirs
+            else:
+                dir_count = self._phase_a_bfs_directories(client, remote_path, space_id, job)
             logger.info(f"Phase A terminée: {dir_count} répertoires découverts", extra={
                 'job_id': job.id, 'config_id': job.config_id
             })
@@ -398,6 +429,22 @@ class IndexerWorker:
         finally:
             client.disconnect()
     
+    def _count_existing_directories(self, space_id: str) -> int:
+        from backend.src.database.postgres_adapter import PostgreSQLAdapter
+        import os as _os
+        db_config = {
+            'host': _os.getenv('POSTGRES_HOST', 'postgres'),
+            'port': int(_os.getenv('POSTGRES_PORT', 5432)),
+            'database': _os.getenv('POSTGRES_DB', 'openindex'),
+            'user': _os.getenv('POSTGRES_USER', 'openindex_user'),
+            'password': _os.getenv('POSTGRES_PASSWORD', 'openindex_secure_password')
+        }
+        db = PostgreSQLAdapter(db_config)
+        result = db.execute_query(
+            "SELECT COUNT(*) FROM directories WHERE space_id = %s", [space_id]
+        )
+        return result[0][0] if result else 0
+
     def _phase_a_bfs_directories(self, client, root_path: str, space_id: str, job: IndexerJob) -> int:
         from collections import deque
         from backend.src.database.postgres_adapter import PostgreSQLAdapter
