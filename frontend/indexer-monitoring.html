@@ -378,7 +378,7 @@
                                                   x-text="formatStatus(job.status)"></span>
                                         </td>
                                         <td class="px-6 py-4">
-                                            <template x-if="job.status === 'running' && job.files_found > 0">
+                                            <template x-if="job.status === 'running' && job.files_found > 0 && job.files_indexed > 0">
                                                 <div class="w-32">
                                                     <div class="progress-bar">
                                                         <div class="progress-fill" 
@@ -387,6 +387,12 @@
                                                     <div class="text-xs text-gray-500 mt-1">
                                                         <span x-text="job.files_indexed"></span> / <span x-text="job.files_found"></span>
                                                     </div>
+                                                </div>
+                                            </template>
+                                            <template x-if="job.status === 'running' && job.files_found > 0 && job.files_indexed === 0">
+                                                <div class="flex items-center gap-1 text-xs text-blue-500">
+                                                    <i class="fas fa-folder-open"></i>
+                                                    <span x-text="job.files_found + ' dossiers'"></span>
                                                 </div>
                                             </template>
                                             <template x-if="job.status === 'running' && (!job.files_found || job.files_found === 0)">

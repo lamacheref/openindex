@@ -416,6 +416,8 @@ class IndexerWorker:
                 dir_count = existing_dirs
             else:
                 dir_count = self._phase_a_bfs_directories(client, remote_path, space_id, job)
+            job.files_found = dir_count
+            self._update_job_progress(job)
             logger.info(f"Phase A terminée: {dir_count} répertoires découverts", extra={
                 'job_id': job.id, 'config_id': job.config_id
             })
@@ -485,7 +487,9 @@ class IndexerWorker:
                 dir_count += 1
                 logger.info(f"Dossier: {current_path} (profondeur {depth})")
 
-                if dir_count % 100 == 0:
+                if dir_count % 10 == 0:
+                    job.files_found = dir_count
+                    self._update_job_progress(job)
                     logger.info(f"Phase A progression: {dir_count} répertoires découverts (profondeur {depth})")
 
                 entries = client.list_dir(current_path)
