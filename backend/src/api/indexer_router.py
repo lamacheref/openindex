@@ -429,7 +429,7 @@ async def cancel_job(job_id: str):
             RETURNING id
         """
 
-        results = db.execute_query(query, [job_id])
+        results = db.execute_query(query, [job_id], commit=True)
 
         if not results:
             raise HTTPException(status_code=404, detail="Job introuvable ou non annulable")
@@ -508,7 +508,8 @@ async def purge_jobs():
     try:
         db = get_db_adapter()
         result = db.execute_query(
-            "DELETE FROM indexer_jobs WHERE status IN ('completed', 'cancelled', 'failed') RETURNING id"
+            "DELETE FROM indexer_jobs WHERE status IN ('completed', 'cancelled', 'failed') RETURNING id",
+            commit=True
         )
         count = len(result) if result else 0
         logger.info(f"{count} jobs purgés")
@@ -525,7 +526,7 @@ async def resume_job(job_id: str):
         db = get_db_adapter()
         result = db.execute_query(
             "UPDATE indexer_jobs SET status = 'pending' WHERE id = %s AND status = 'running' RETURNING id",
-            [job_id]
+            [job_id], commit=True
         )
         if not result:
             raise HTTPException(status_code=404, detail="Job introuvable ou déjà traité")
