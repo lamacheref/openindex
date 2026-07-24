@@ -19,12 +19,16 @@ import logging.config
 
 # Fichier de log dédié
 LOG_DIR = "/var/log/openindex"
-LOG_FILE = os.path.join(LOG_DIR, "indexer-worker.log")
 
 # Configuration du logging JSON + fichier dédié
 def setup_logging():
     """Configure le logging : JSON vers stdout + fichier lisible"""
-    os.makedirs(LOG_DIR, exist_ok=True)
+    log_dir = LOG_DIR
+    try:
+        os.makedirs(log_dir, exist_ok=True)
+    except PermissionError:
+        log_dir = "/tmp/openindex-logs"
+        os.makedirs(log_dir, exist_ok=True)
 
     logging_config = {
         'version': 1,
@@ -48,7 +52,7 @@ def setup_logging():
             'file': {
                 'class': 'logging.handlers.RotatingFileHandler',
                 'formatter': 'simple',
-                'filename': LOG_FILE,
+                'filename': os.path.join(log_dir, "indexer-worker.log"),
                 'maxBytes': 10 * 1024 * 1024,  # 10 Mo
                 'backupCount': 3,
                 'encoding': 'utf-8'
@@ -97,6 +101,9 @@ class IndexerJob:
     files_found: int = 0
     files_indexed: int = 0
     bytes_total: int = 0
+    dirs_found: int = 0
+    phase: str = ""  # "", "A", "B", "C"
+    phase_b_done: bool = False
     error_message: Optional[str] = None
     
     def to_dict(self) -> Dict[str, Any]:
@@ -113,6 +120,8 @@ class IndexerJob:
             "files_found": self.files_found,
             "files_indexed": self.files_indexed,
             "bytes_total": self.bytes_total,
+            "dirs_found": self.dirs_found,
+            "phase": self.phase,
             "error_message": self.error_message
         }
 
@@ -256,7 +265,7 @@ class IndexerWorker:
             query = """
                 SELECT id, path, config_id, config_name, status, created_at,
                        started_at, completed_at, files_found, files_indexed, 
-                       bytes_total, error_message, queue_type
+                       bytes_total, dirs_found, phase, phase_b_done, error_message, queue_type
                 FROM indexer_jobs
                 WHERE status = 'pending'
                 ORDER BY 
@@ -281,9 +290,12 @@ class IndexerWorker:
                     files_found=row[8] or 0,
                     files_indexed=row[9] or 0,
                     bytes_total=row[10] or 0,
-                    error_message=row[11]
+                    dirs_found=row[11] or 0,
+                    phase=row[12] or '',
+                    phase_b_done=row[13] if len(row) > 13 else False,
+                    error_message=row[14] if len(row) > 14 else None
                 )
-                queue_type = row[12] if len(row) > 12 else 'fast'
+                queue_type = row[15] if len(row) > 15 else 'fast'
                 logger.info(f"Job {job.id} récupéré (queue: {queue_type})")
                 return job
             
@@ -386,10 +398,10 @@ class IndexerWorker:
         return result[0][0] if result else ''
 
     def _index_path(self, job: IndexerJob):
-        """Indexe un chemin via le protocole 2 phases : BFS répertoires → bottom-up fichiers"""
+        """Indexe un chemin via le protocole 3 phases : BFS répertoires → listing fichiers → hash"""
         from backend.src.utils.crawl_utils import SMBClient, get_file_info
         
-        logger.info(f"Indexation de {job.path} (protocole 2 phases)")
+        logger.info(f"Indexation de {job.path} (protocole 3 phases)")
         
         config = self._get_smb_config(job.config_id)
         if not config:
@@ -412,18 +424,30 @@ class IndexerWorker:
             # Vérifier si la Phase A est déjà faite (reprise après crash)
             existing_dirs = self._count_existing_directories(space_id)
             if existing_dirs > 0:
-                logger.info(f"Phase A déjà effectuée: {existing_dirs} répertoires en base, reprise Phase B")
+                logger.info(f"Phase A déjà effectuée: {existing_dirs} répertoires en base")
                 dir_count = existing_dirs
             else:
                 dir_count = self._phase_a_bfs_directories(client, remote_path, space_id, job)
-            job.files_found = dir_count
+            job.dirs_found = dir_count
             self._update_job_progress(job)
             logger.info(f"Phase A terminée: {dir_count} répertoires découverts", extra={
                 'job_id': job.id, 'config_id': job.config_id
             })
             
-            file_count = self._phase_b_bottom_up_files(client, space_id, job, config)
-            logger.info(f"Phase B terminée: {file_count} fichiers traités", extra={
+            # Phase B : sautée seulement si déjà marquée comme terminée pour ce job
+            if job.phase_b_done:
+                logger.info(f"Phase B déjà effectuée pour ce job, reprise Phase C")
+                file_count = self._count_existing_files(space_id)
+            else:
+                file_count = self._phase_b_list_files(client, space_id, job, config)
+                job.phase_b_done = True
+                self._update_job_progress(job)
+                logger.info(f"Phase B terminée: {file_count} fichiers listés", extra={
+                    'job_id': job.id, 'config_id': job.config_id
+                })
+            
+            hash_count = self._phase_c_hash_files(space_id, job, client, config)
+            logger.info(f"Phase C terminée: {hash_count} fichiers hashés", extra={
                 'job_id': job.id, 'config_id': job.config_id
             })
             
@@ -447,9 +471,27 @@ class IndexerWorker:
         )
         return result[0][0] if result else 0
 
+    def _count_existing_files(self, space_id: str) -> int:
+        from backend.src.database.postgres_adapter import PostgreSQLAdapter
+        import os as _os
+        db_config = {
+            'host': _os.getenv('POSTGRES_HOST', 'postgres'),
+            'port': int(_os.getenv('POSTGRES_PORT', 5432)),
+            'database': _os.getenv('POSTGRES_DB', 'openindex'),
+            'user': _os.getenv('POSTGRES_USER', 'openindex_user'),
+            'password': _os.getenv('POSTGRES_PASSWORD', 'openindex_secure_password')
+        }
+        db = PostgreSQLAdapter(db_config)
+        result = db.execute_query(
+            "SELECT COUNT(*) FROM indexed_files_optimized WHERE space_id = %s", [space_id]
+        )
+        return result[0][0] if result else 0
+
     def _phase_a_bfs_directories(self, client, root_path: str, space_id: str, job: IndexerJob) -> int:
+        job.dirs_found = 0
         from collections import deque
         from backend.src.database.postgres_adapter import PostgreSQLAdapter
+        from psycopg2.extras import execute_values
         import os
 
         db_config = {
@@ -461,37 +503,33 @@ class IndexerWorker:
         }
         db = PostgreSQLAdapter(db_config)
 
+        job.phase = "A"
+
         queue = deque()
         queue.append((root_path, 0, ''))
         dir_count = 0
+        dir_batch = []
 
         while queue:
             if self._stop_event.is_set() or self._job_stop_event.is_set():
+                self._flush_dir_batch(db, dir_batch)
                 raise InterruptedError("Indexation interrompue")
 
             current_path, depth, parent_path = queue.popleft()
             dir_name = os.path.basename(current_path) if current_path else '/'
 
+            dir_batch.append((space_id, current_path, dir_name, parent_path, depth))
+            dir_count += 1
+
+            if len(dir_batch) >= 100:
+                self._flush_dir_batch(db, dir_batch)
+                dir_batch = []
+
+            if dir_count % 10 == 0:
+                job.dirs_found = dir_count
+                self._update_job_progress(job)
+
             try:
-                db.execute_query(
-                    """
-                    INSERT INTO directories (space_id, path, name, parent_path, depth)
-                    VALUES (%s, %s, %s, %s, %s)
-                    ON CONFLICT (space_id, path) DO UPDATE SET
-                        name = EXCLUDED.name,
-                        depth = EXCLUDED.depth
-                    """,
-                    [space_id, current_path, dir_name, parent_path, depth],
-                    fetch=False
-                )
-                dir_count += 1
-                logger.info(f"Dossier: {current_path} (profondeur {depth})")
-
-                if dir_count % 10 == 0:
-                    job.files_found = dir_count
-                    self._update_job_progress(job)
-                    logger.info(f"Phase A progression: {dir_count} répertoires découverts (profondeur {depth})")
-
                 entries = client.list_dir(current_path)
                 for entry in entries:
                     if isinstance(entry, dict):
@@ -509,11 +547,37 @@ class IndexerWorker:
                 logger.warning(f"Erreur BFS répertoire {current_path}: {e}")
                 self._increment_error_count()
 
+        if dir_batch:
+            self._flush_dir_batch(db, dir_batch)
+
         return dir_count
 
-    def _phase_b_bottom_up_files(self, client, space_id: str, job: IndexerJob, config: Dict) -> int:
+    def _flush_dir_batch(self, db, batch: List[tuple]):
+        if not batch:
+            return
+        try:
+            from psycopg2.extras import execute_values
+            with db.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    execute_values(
+                        cursor,
+                        """
+                        INSERT INTO directories (space_id, path, name, parent_path, depth)
+                        VALUES %s
+                        ON CONFLICT (space_id, path) DO UPDATE SET
+                            name = EXCLUDED.name,
+                            depth = EXCLUDED.depth
+                        """,
+                        batch
+                    )
+                conn.commit()
+            for b in batch:
+                logger.info(f"Ajouté dossier {b[1]} à la base")
+        except Exception as e:
+            logger.warning(f"Erreur batch directories: {e}")
+
+    def _phase_b_list_files(self, client, space_id: str, job: IndexerJob, config: Dict) -> int:
         from backend.src.database.postgres_adapter import PostgreSQLAdapter
-        from backend.src.utils.crawl_utils import get_file_info
         import os
 
         db_config = {
@@ -525,21 +589,25 @@ class IndexerWorker:
         }
         db = PostgreSQLAdapter(db_config)
 
+        job.phase = "B"
         job.files_found = 0
         job.files_indexed = 0
         self._update_job_progress(job)
 
         dirs = db.execute_query(
-            "SELECT id, path, name FROM directories WHERE space_id = %s ORDER BY depth DESC",
+            "SELECT id, path, name FROM directories WHERE space_id = %s ORDER BY path ASC",
             [space_id]
         )
         if not dirs:
             logger.warning("Aucun répertoire trouvé pour Phase B")
             return 0
 
-        skipped = 0
+        total_files = 0
+        file_batch = []
+
         for dir_id, dir_path, dir_name in dirs:
             if self._stop_event.is_set() or self._job_stop_event.is_set():
+                self._flush_file_batch(db, file_batch, space_id)
                 raise InterruptedError("Indexation interrompue")
 
             try:
@@ -548,8 +616,7 @@ class IndexerWorker:
                 logger.warning(f"Erreur liste répertoire {dir_path}: {e}")
                 continue
 
-            entries_list = list(entries)
-            for entry in entries_list:
+            for entry in entries:
                 if isinstance(entry, dict):
                     entry_name = entry.get('name', '')
                     is_dir = entry.get('is_directory', False)
@@ -565,54 +632,229 @@ class IndexerWorker:
                     continue
 
                 full_path = f"{dir_path}/{entry_name}" if dir_path else entry_name
-                job.files_found += 1
 
                 existing = db.execute_query(
                     """
                     SELECT id FROM indexed_files_optimized
                     WHERE path = %s AND name = %s AND size = %s
-                      AND created_at = %s AND last_modified = %s
+                      AND last_modified = %s
                     """,
-                    [full_path, entry_name, entry_size, entry_mtime, entry_mtime]
+                    [full_path, entry_name, entry_size, entry_mtime]
                 )
 
                 if existing:
-                    skipped += 1
                     continue
 
-                try:
-                    file_info = get_file_info(client, full_path, entries_list=entries_list)
-                    if not file_info:
-                        continue
+                is_garbage = self._is_garbage_file(entry_name)
+                ext = os.path.splitext(entry_name)[1].lower() if entry_name else ''
 
-                    file_info['is_garbage'] = self._is_garbage_file(entry_name)
-                    file_queue_type = self._get_queue_type(entry_size)
+                file_batch.append({
+                    'path': full_path,
+                    'name': entry_name,
+                    'size': entry_size,
+                    'checksum': None,
+                    'hash_sha256': None,
+                    'modified_at': entry_mtime,
+                    'directory_id': dir_id,
+                    'is_garbage': is_garbage,
+                    'extension': ext,
+                })
+                total_files += 1
+                job.files_found += 1
+                job.bytes_total += entry_size
 
-                    if file_queue_type == 'slow' and self.slow_queue_enabled:
-                        self._create_slow_file_job(file_info, job)
-                    else:
-                        if self._batch_insert_enabled:
-                            self._add_to_batch({**file_info, 'space_id': space_id, 'directory_id': dir_id}, job.config_id)
-                        else:
-                            db.insert_file_optimized(file_info, space_id, dir_id)
-                        job.files_indexed += 1
-                        job.bytes_total += entry_size
-                        self._increment_files_processed()
+                if len(file_batch) >= 100:
+                    self._flush_file_batch(db, file_batch, space_id)
+                    file_batch = []
 
-                        if job.files_indexed % 10 == 0:
-                            logger.info(f"Fichier: {full_path} ({entry_size} octets)")
-                except Exception as e:
-                    logger.warning(f"Erreur indexation fichier {full_path}: {e}")
-                    self._increment_error_count()
-
-                if job.files_found % 10 == 0:
+            if file_batch:
+                self._flush_file_batch(db, file_batch, space_id)
+                file_batch = []
+                job.files_indexed = total_files
+                self._update_job_progress(job)
+            elif job.files_found % 10 == 0 and job.files_found > 0:
+                    job.files_indexed = total_files
                     self._update_job_progress(job)
 
-        logger.info(f"Phase B: {job.files_found} fichiers trouvés, {skipped} ignorés (inchangés), {job.files_indexed} indexés", extra={
+        if file_batch:
+            self._flush_file_batch(db, file_batch, space_id)
+
+        job.files_indexed = total_files
+        self._update_job_progress(job)
+
+        logger.info(f"Phase B: {total_files} fichiers listés", extra={
             'job_id': job.id, 'config_id': job.config_id
         })
-        return job.files_indexed
+        return total_files
+
+    def _flush_file_batch(self, db, batch: List[Dict], space_id: str):
+        if not batch:
+            return
+
+        # Dédupliquer par (space_id, path)
+        seen = set()
+        unique = []
+        for f in batch:
+            key = (space_id, f.get('path', ''))
+            if key not in seen:
+                seen.add(key)
+                unique.append(f)
+
+        if not unique:
+            return
+
+        batch.clear()
+
+        try:
+            from psycopg2.extras import execute_values
+            with db.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    values = []
+                    for f in unique:
+                        values.append((
+                            space_id,
+                            f.get('directory_id'),
+                            f.get('path', ''),
+                            f.get('name', ''),
+                            f.get('extension', ''),
+                            f.get('size', 0),
+                            None,
+                            None,
+                            f.get('modified_at'),
+                            f.get('is_garbage', False),
+                            False
+                        ))
+                    execute_values(
+                        cursor,
+                        """
+                        INSERT INTO indexed_files_optimized (
+                            space_id, directory_id, path, name, extension,
+                            size, hash_xxh64, hash_sha256, last_modified,
+                            is_garbage, is_deleted
+                        )
+                        VALUES %s
+                        ON CONFLICT (space_id, path) DO UPDATE SET
+                            directory_id = EXCLUDED.directory_id,
+                            name = EXCLUDED.name,
+                            extension = EXCLUDED.extension,
+                            size = EXCLUDED.size,
+                            last_modified = EXCLUDED.last_modified,
+                            is_garbage = EXCLUDED.is_garbage,
+                            is_deleted = false,
+                            deleted_at = NULL,
+                            updated_at = CURRENT_TIMESTAMP
+                        """,
+                        values
+                    )
+                conn.commit()
+            for f in unique:
+                logger.info(f"Ajouté fichier {f.get('path', '')} à la base")
+        except Exception as e:
+            if 'ON CONFLICT DO UPDATE command cannot affect row a second time' in str(e):
+                logger.warning("Conflit batch, fallback insertions individuelles")
+                for f in unique:
+                    try:
+                        db.insert_file_optimized(f, space_id, f.get('directory_id'))
+                        logger.info(f"Ajouté fichier {f.get('path', '')} à la base")
+                    except Exception as e2:
+                        if 'duplicate key' not in str(e2).lower():
+                            logger.warning(f"Erreur insertion fichier {f.get('path')}: {e2}")
+            else:
+                logger.warning(f"Erreur batch files: {e}")
     
+    def _phase_c_hash_files(self, space_id: str, job: IndexerJob, client, config: Dict) -> int:
+        from backend.src.database.postgres_adapter import PostgreSQLAdapter
+        from backend.src.utils.crawl_utils import calculate_xxhash
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        import os
+
+        db_config = {
+            'host': os.getenv('POSTGRES_HOST', 'postgres'),
+            'port': int(os.getenv('POSTGRES_PORT', 5432)),
+            'database': os.getenv('POSTGRES_DB', 'openindex'),
+            'user': os.getenv('POSTGRES_USER', 'openindex_user'),
+            'password': os.getenv('POSTGRES_PASSWORD', 'openindex_secure_password')
+        }
+        db = PostgreSQLAdapter(db_config)
+
+        job.phase = "C"
+
+        files = db.execute_query(
+            "SELECT id::text, path, name, size FROM indexed_files_optimized WHERE space_id = %s AND hash_xxh64 IS NULL AND is_deleted = false ORDER BY size ASC",
+            [space_id]
+        )
+        if not files:
+            logger.info("Phase C: aucun fichier à hasher")
+            return 0
+
+        fast_queue = [(f[0], f[1], f[2], f[3]) for f in files if f[3] < self.SLOW_THRESHOLD_BYTES]
+        slow_queue = [(f[0], f[1], f[2], f[3]) for f in files if f[3] >= self.SLOW_THRESHOLD_BYTES]
+        total = len(fast_queue) + len(slow_queue)
+        if total > job.files_found:
+            job.files_found = total
+        job.files_indexed = 0
+        self._update_job_progress(job)
+
+        progress_lock = threading.Lock()
+        hash_count = 0
+
+        logger.info(f"Phase C: {len(fast_queue)} rapides + {len(slow_queue)} lents = {total} fichiers à hasher")
+
+        def hash_file(file_id: str, file_path: str) -> bool:
+            try:
+                checksum = calculate_xxhash(client, file_path)
+                if checksum:
+                    db.execute_query(
+                        "UPDATE indexed_files_optimized SET hash_xxh64 = %s, updated_at = CURRENT_TIMESTAMP WHERE id::text = %s",
+                        [checksum, file_id],
+                        fetch=False
+                    )
+                    name = file_path.rsplit('/', 1)[-1] or file_path
+                    logger.info(f"Hash de {file_path} terminé : {checksum} ajouté à la base")
+                    return True
+                return False
+            except Exception as e:
+                logger.warning(f"Erreur hash {file_path}: {e}")
+                return False
+
+        def process_queue(queue, queue_name: str):
+            nonlocal hash_count
+            processed = 0
+            for file_id, path, name, size in queue:
+                if self._stop_event.is_set() or self._job_stop_event.is_set():
+                    logger.info(f"Phase C queue {queue_name} interrompue")
+                    break
+                if hash_file(file_id, path):
+                    with progress_lock:
+                        hash_count += 1
+                        processed += 1
+                        job.files_indexed += 1
+                        if hash_count % 5 == 0:
+                            self._update_job_progress(job)
+            return processed
+
+        if not slow_queue or not self.slow_queue_enabled:
+            process_queue(fast_queue, "fast")
+        else:
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                fast_fut = executor.submit(process_queue, fast_queue, "fast")
+                slow_fut = executor.submit(process_queue, slow_queue, "slow")
+                for fut in as_completed([fast_fut, slow_fut]):
+                    try:
+                        fut.result()
+                    except Exception as e:
+                        logger.error(f"Erreur dans une queue de hash: {e}")
+
+        if self._stop_event.is_set() or self._job_stop_event.is_set():
+            raise InterruptedError("Hash interrompu")
+
+        job.files_indexed = hash_count
+        self._update_job_progress(job)
+        logger.info(f"Phase C: {hash_count}/{total} fichiers hashés", extra={
+            'job_id': job.id, 'config_id': job.config_id
+        })
+        return hash_count
+
     def _create_slow_file_job(self, file_info: Dict, parent_job: IndexerJob):
         """Crée un job séparé pour un fichier >= 200Mo dans la queue lente"""
         try:
@@ -860,6 +1102,9 @@ class IndexerWorker:
                     files_found = %s,
                     files_indexed = %s,
                     bytes_total = %s,
+                    dirs_found = %s,
+                    phase = %s,
+                    phase_b_done = %s,
                     error_message = %s
                 WHERE id = %s
             """
@@ -871,6 +1116,9 @@ class IndexerWorker:
                 job.files_found,
                 job.files_indexed,
                 job.bytes_total,
+                job.dirs_found,
+                job.phase,
+                job.phase_b_done,
                 job.error_message,
                 job.id
             ])
@@ -898,7 +1146,10 @@ class IndexerWorker:
                 UPDATE indexer_jobs
                 SET files_found = %s,
                     files_indexed = %s,
-                    bytes_total = %s
+                    bytes_total = %s,
+                    dirs_found = %s,
+                    phase = %s,
+                    phase_b_done = %s
                 WHERE id = %s
             """
             
@@ -906,6 +1157,9 @@ class IndexerWorker:
                 job.files_found,
                 job.files_indexed,
                 job.bytes_total,
+                job.dirs_found,
+                job.phase,
+                job.phase_b_done,
                 job.id
             ])
             
@@ -1302,6 +1556,7 @@ class IndexerWorker:
                 'name': file_info.get('name', ''),
                 'size': file_info.get('size', 0),
                 'checksum': file_info.get('checksum'),
+                'hash_sha256': file_info.get('hash_sha256'),
                 'last_modified': file_info.get('last_modified'),
                 'modified_at': file_info.get('modified_at'),
                 'config_id': config_id,

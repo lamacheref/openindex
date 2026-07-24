@@ -97,31 +97,41 @@ class SMBClient:
                 logger.error(f"Erreur listage {remote_path}: {err_msg}")
                 return entries
             
-            # Parser la sortie de smbclient
             for line in result.stdout.split('\n'):
                 line = line.strip()
                 if not line or line.startswith('.') or 'blocks of size' in line:
                     continue
-                
-                # Format typique: "filename                     D      0  Mon Jan  1 00:00:00 2024"
+
                 parts = line.split()
-                if len(parts) >= 4:
-                    name = parts[0]
-                    is_dir = parts[1] == 'D' if len(parts) > 1 else False
-                    size_str = parts[2] if len(parts) > 2 else '0'
-                    
-                    try:
-                        size = int(size_str)
-                    except:
-                        size = 0
-                    
-                    entries.append({
-                        'name': name,
-                        'is_directory': is_dir,
-                        'size': size if not is_dir else 0,
-                        'mtime': datetime.now(),  # Simplifié
-                        'path': f"{path}/{name}".lstrip('/') if path else name
-                    })
+                if len(parts) < 7:
+                    continue
+
+                # Format: <filename...> <attr> <size> <weekday> <month> <day> <time> <year>
+                # On parse depuis la droite : année, heure, jour, mois, weekday = 5 tokens
+                # Puis taille (nombre), attr (1 lettre), tout le reste = nom
+                year = parts[-1]
+                time_ = parts[-2]
+                day = parts[-3]
+                month = parts[-4]
+                weekday = parts[-5]
+                size_str = parts[-6]
+                attr = parts[-7]
+                name = ' '.join(parts[:-7])
+
+                is_dir = attr == 'D'
+
+                try:
+                    size = int(size_str)
+                except:
+                    size = 0
+
+                entries.append({
+                    'name': name,
+                    'is_directory': is_dir,
+                    'size': size if not is_dir else 0,
+                    'mtime': datetime.now(),
+                    'path': f"{path}/{name}".lstrip('/') if path else name
+                })
             
             logger.info(f"Listé {len(entries)} entrées dans {remote_path or 'root'}")
             
@@ -204,48 +214,37 @@ def calculate_xxhash(client: SMBClient, remote_path: str, chunk_size: int = 1024
         raise RuntimeError("xxhash non disponible")
 
     try:
-        # Obtenir la taille du fichier pour validation
-        dir_path = os.path.dirname(normalize_smb_path(remote_path)) if '/' in remote_path else ''
-        file_name = os.path.basename(remote_path)
-        entries = client.list_dir(dir_path)
-        file_size = None
-        for entry in entries:
-            if entry['name'] == file_name:
-                file_size = entry.get('size', 0)
-                break
+        path = normalize_smb_path(remote_path)
+        file_name = os.path.basename(path)
 
-        if file_size is None:
-            raise ValueError("Fichier introuvable")
-
-        # Créer le hash xxHash
         hasher = xxhash.xxh64()
 
-        # Lire le fichier par chunks pour éviter de tout charger en mémoire
-        # Note: smbclient ne supporte pas le streaming direct, donc on utilise subprocess
-        # pour lire le fichier via smbclient et calculer le hash
         cmd = [
-            'smbclient',
-            remote_path,
-            '-U', f"{client.username}%",
+            'smbclient', client._share_url,
+            '-U', client.username,
             '-W', client.domain,
-            '-c', 'get -'
+            '-c', f'get {path} -'
         ]
 
-        env = os.environ.copy()
-        env['PASSWD'] = client.password
-
-        with subprocess.Popen(
+        process = subprocess.Popen(
             cmd,
+            stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=env
-        ) as process:
-            if process.stdout:
-                while True:
-                    chunk = process.stdout.read(chunk_size)
-                    if not chunk:
-                        break
-                    hasher.update(chunk)
+            stderr=subprocess.PIPE
+        )
+        process.stdin.write(f"{client.password}\n".encode())
+        process.stdin.close()
+
+        while True:
+            chunk = process.stdout.read(chunk_size)
+            if not chunk:
+                break
+            hasher.update(chunk)
+
+        process.wait(timeout=300)
+        if process.returncode != 0:
+            err = process.stderr.read().decode().strip()
+            raise RuntimeError(f"smbclient a échoué: {err}")
 
         return hasher.hexdigest()
 

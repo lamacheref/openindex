@@ -228,7 +228,7 @@ class TestPhaseABFSDirectories:
         assert count == 1
 
 
-class TestPhaseBBottomUpFiles:
+class TestPhaseBListFiles:
     @pytest.fixture
     def worker(self):
         w = IndexerWorker(poll_interval=1)
@@ -237,7 +237,7 @@ class TestPhaseBBottomUpFiles:
 
     @patch('backend.src.database.postgres_adapter.PostgreSQLAdapter')
     @patch('backend.src.crawl_utils.get_file_info')
-    def test_bottom_up_processes_by_depth_desc(self, mock_get_info, mock_db_class, worker):
+    def test_processes_by_path_asc(self, mock_get_info, mock_db_class, worker):
         mock_db = MagicMock()
         mock_db_class.return_value = mock_db
 
@@ -271,10 +271,10 @@ class TestPhaseBBottomUpFiles:
 
         config = {'id': 'c1', 'name': 'T'}
 
-        worker._phase_b_bottom_up_files(client, 'space-bu1', job, config)
+        worker._phase_b_list_files(client, 'space-bu1', job, config)
 
         dir_query = mock_db.execute_query.call_args_list[0]
-        assert 'ORDER BY depth DESC' in dir_query[0][0]
+        assert 'ORDER BY path ASC' in dir_query[0][0]
 
     @patch('backend.src.database.postgres_adapter.PostgreSQLAdapter')
     @patch('backend.src.crawl_utils.get_file_info')
@@ -299,7 +299,7 @@ class TestPhaseBBottomUpFiles:
             id='job-md', path='/root', config_id='c1', config_name='T',
             status=IndexerStatus.PENDING, created_at=datetime.now(timezone.utc))
 
-        worker._phase_b_bottom_up_files(client, 'space-md1', job, {'id': 'c1', 'name': 'T'})
+        worker._phase_b_list_files(client, 'space-md1', job, {'id': 'c1', 'name': 'T'})
 
         check_query = mock_db.execute_query.call_args_list[1]
         sql, params = check_query[0]
@@ -338,13 +338,13 @@ class TestPhaseBBottomUpFiles:
             id='job-fq', path='/small', config_id='c1', config_name='T',
             status=IndexerStatus.PENDING, created_at=datetime.now(timezone.utc))
 
-        worker._phase_b_bottom_up_files(client, 'space-fq1', job, {'id': 'c1', 'name': 'T'})
+        worker._phase_b_list_files(client, 'space-fq1', job, {'id': 'c1', 'name': 'T'})
 
         assert job.files_indexed == 1
 
     @patch('backend.src.database.postgres_adapter.PostgreSQLAdapter')
     @patch('backend.src.crawl_utils.get_file_info')
-    def test_slow_queue_dispatch(self, mock_get_info, mock_db_class, worker):
+    def test_large_file_listed_in_phase_b(self, mock_get_info, mock_db_class, worker):
         mock_db = MagicMock()
         mock_db_class.return_value = mock_db
 
@@ -355,7 +355,7 @@ class TestPhaseBBottomUpFiles:
 
         mock_get_info.return_value = {
             'path': '/big/huge.iso', 'name': 'huge.iso', 'size': 300 * 1024 * 1024,
-            'checksum': 'h2', 'modified_at': datetime.now(timezone.utc),
+            'checksum': None, 'modified_at': datetime.now(timezone.utc),
         }
 
         client = MagicMock()
@@ -367,43 +367,7 @@ class TestPhaseBBottomUpFiles:
             id='job-sq', path='/big', config_id='c1', config_name='T',
             status=IndexerStatus.PENDING, created_at=datetime.now(timezone.utc))
 
-        with patch.object(worker, '_create_slow_file_job') as mock_create_slow:
-            worker._phase_b_bottom_up_files(client, 'space-sq1', job, {'id': 'c1', 'name': 'T'})
-            mock_create_slow.assert_called_once()
-
-        assert job.files_indexed == 0
-
-    @patch('backend.src.database.postgres_adapter.PostgreSQLAdapter')
-    @patch('backend.src.crawl_utils.get_file_info')
-    def test_slow_queue_skipped_when_disabled(self, mock_get_info, mock_db_class, worker):
-        worker.slow_queue_enabled = False
-
-        mock_db = MagicMock()
-        mock_db_class.return_value = mock_db
-
-        mock_db.execute_query.side_effect = [
-            [('dir-1', '/big2', 'big2')],
-            [],
-            None,
-        ]
-
-        mock_get_info.return_value = {
-            'path': '/big2/large.iso', 'name': 'large.iso', 'size': 300 * 1024 * 1024,
-            'checksum': 'h3', 'modified_at': datetime.now(timezone.utc),
-        }
-
-        client = MagicMock()
-        client.list_dir.return_value = [
-            {'name': 'large.iso', 'is_directory': False, 'size': 300 * 1024 * 1024, 'mtime': datetime.now(timezone.utc)},
-        ]
-
-        job = IndexerJob(
-            id='job-sq2', path='/big2', config_id='c1', config_name='T',
-            status=IndexerStatus.PENDING, created_at=datetime.now(timezone.utc))
-
-        with patch.object(worker, '_create_slow_file_job') as mock_create_slow:
-            worker._phase_b_bottom_up_files(client, 'space-sq2', job, {'id': 'c1', 'name': 'T'})
-            mock_create_slow.assert_not_called()
+        worker._phase_b_list_files(client, 'space-sq1', job, {'id': 'c1', 'name': 'T'})
 
         assert job.files_indexed == 1
 
@@ -427,7 +391,7 @@ class TestPhaseBBottomUpFiles:
             id='job-skp', path='/root', config_id='c1', config_name='T',
             status=IndexerStatus.PENDING, created_at=datetime.now(timezone.utc))
 
-        worker._phase_b_bottom_up_files(client, 'space-skp1', job, {'id': 'c1', 'name': 'T'})
+        worker._phase_b_list_files(client, 'space-skp1', job, {'id': 'c1', 'name': 'T'})
 
         assert job.files_found == 1
         assert job.files_indexed == 0
@@ -435,7 +399,7 @@ class TestPhaseBBottomUpFiles:
 
     @patch('backend.src.database.postgres_adapter.PostgreSQLAdapter')
     @patch('backend.src.crawl_utils.get_file_info')
-    def test_batch_insert_when_enabled(self, mock_get_info, mock_db_class, worker):
+    def test_phase_b_batch_insert(self, mock_get_info, mock_db_class, worker):
         mock_db = MagicMock()
         mock_db_class.return_value = mock_db
 
@@ -446,7 +410,7 @@ class TestPhaseBBottomUpFiles:
 
         mock_get_info.return_value = {
             'path': '/batch/f1.txt', 'name': 'f1.txt', 'size': 100,
-            'checksum': 'h4', 'modified_at': datetime.now(timezone.utc),
+            'checksum': None, 'modified_at': datetime.now(timezone.utc),
         }
 
         client = MagicMock()
@@ -458,9 +422,9 @@ class TestPhaseBBottomUpFiles:
             id='job-bt', path='/batch', config_id='c1', config_name='T',
             status=IndexerStatus.PENDING, created_at=datetime.now(timezone.utc))
 
-        with patch.object(worker, '_add_to_batch') as mock_add_batch:
-            worker._phase_b_bottom_up_files(client, 'space-bt1', job, {'id': 'c1', 'name': 'T'})
-            mock_add_batch.assert_called_once()
+        with patch.object(worker, '_flush_file_batch') as mock_flush:
+            worker._phase_b_list_files(client, 'space-bt1', job, {'id': 'c1', 'name': 'T'})
+            mock_flush.assert_called_once()
 
         assert job.files_indexed == 1
 
@@ -477,7 +441,7 @@ class TestPhaseBBottomUpFiles:
 
         mock_get_info.return_value = {
             'path': '/garb/temp.tmp', 'name': 'temp.tmp', 'size': 50,
-            'checksum': 'h5', 'modified_at': datetime.now(timezone.utc),
+            'checksum': None, 'modified_at': datetime.now(timezone.utc),
         }
 
         client = MagicMock()
@@ -489,10 +453,11 @@ class TestPhaseBBottomUpFiles:
             id='job-gb', path='/garb', config_id='c1', config_name='T',
             status=IndexerStatus.PENDING, created_at=datetime.now(timezone.utc))
 
-        with patch.object(worker, '_add_to_batch') as mock_add:
-            worker._phase_b_bottom_up_files(client, 'space-gb1', job, {'id': 'c1', 'name': 'T'})
-            added_file = mock_add.call_args[0][0]
-            assert added_file.get('is_garbage') is True
+        with patch.object(worker, '_flush_file_batch') as mock_flush:
+            worker._phase_b_list_files(client, 'space-gb1', job, {'id': 'c1', 'name': 'T'})
+            flushed = mock_flush.call_args[0][0]
+            assert len(flushed) == 1
+            assert flushed[0].get('is_garbage') is True
 
     @patch('backend.src.database.postgres_adapter.PostgreSQLAdapter')
     @patch('backend.src.crawl_utils.get_file_info')
@@ -516,8 +481,9 @@ class TestPhaseBBottomUpFiles:
             id='job-stp', path='/', config_id='c1', config_name='T',
             status=IndexerStatus.PENDING, created_at=datetime.now(timezone.utc))
 
-        with pytest.raises(InterruptedError, match='interrompue'):
-            worker._phase_b_bottom_up_files(client, 'space-stp1', job, {'id': 'c1', 'name': 'T'})
+        with patch.object(worker, '_flush_file_batch') as mock_flush:
+            with pytest.raises(InterruptedError, match='interrompue'):
+                worker._phase_b_list_files(client, 'space-stp1', job, {'id': 'c1', 'name': 'T'})
 
     @patch('backend.src.database.postgres_adapter.PostgreSQLAdapter')
     @patch('backend.src.crawl_utils.get_file_info')
@@ -533,7 +499,7 @@ class TestPhaseBBottomUpFiles:
             id='job-nod', path='/empty', config_id='c1', config_name='T',
             status=IndexerStatus.PENDING, created_at=datetime.now(timezone.utc))
 
-        result = worker._phase_b_bottom_up_files(client, 'space-nod1', job, {'id': 'c1', 'name': 'T'})
+        result = worker._phase_b_list_files(client, 'space-nod1', job, {'id': 'c1', 'name': 'T'})
         assert result == 0
 
 

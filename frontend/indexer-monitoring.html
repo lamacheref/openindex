@@ -131,7 +131,7 @@
                         :class="{ 'active': currentView === 'jobs' }"
                         class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-600">
                     <i class="fas fa-tasks w-5 text-center"></i>
-                    <span class="font-medium">Jobs d'indexation</span>
+                    <span class="font-medium">Travaux d'Indexation</span>
                     <span x-show="pendingCount > 0" 
                           x-text="pendingCount"
                           class="ml-auto bg-amber-100 text-amber-700 text-xs font-semibold px-2 py-0.5 rounded-full"></span>
@@ -252,19 +252,38 @@
                             <div>
                                 <h3 class="font-semibold text-gray-900" x-text="currentJob?.config_name || 'Indexation en cours'"></h3>
                                 <p class="text-sm text-gray-500 mt-1" x-text="currentJob?.path"></p>
+                                <p class="text-xs text-gray-400 mt-1">
+                                    Phase <span x-text="currentJob?.phase || '-'"></span>
+                                </p>
                             </div>
                             <div class="text-right">
-                                <template x-if="currentJob?.files_found > 0">
+                                <template x-if="currentJob?.phase === 'A'">
+                                    <div>
+                                        <div class="text-sm font-medium text-blue-600 whitespace-nowrap">
+                                            <i class="fas fa-folder-open text-blue-400 mr-1"></i>
+                                            <span x-text="currentJob?.dirs_found || 0"></span> dossiers
+                                        </div>
+                                    </div>
+                                </template>
+                                <template x-if="currentJob?.phase === 'B'">
+                                    <div>
+                                        <div class="text-sm font-medium text-green-600 whitespace-nowrap">
+                                            <i class="fas fa-file text-green-400 mr-1"></i>
+                                            <span x-text="currentJob?.files_found || 0"></span> fichiers trouvés
+                                        </div>
+                                    </div>
+                                </template>
+                                <template x-if="currentJob?.phase === 'C'">
                                     <div>
                                         <div class="text-2xl font-bold text-blue-600">
                                             <span x-text="Math.round((currentJob?.files_indexed / currentJob?.files_found) * 100) || 0"></span>%
                                         </div>
                                         <p class="text-sm text-gray-500">
-                                            <span x-text="currentJob?.files_indexed || 0"></span> / <span x-text="currentJob?.files_found || 0"></span> fichiers
+                                            <span x-text="currentJob?.files_indexed || 0"></span> / <span x-text="currentJob?.files_found || 0"></span> hashés
                                         </p>
                                     </div>
                                 </template>
-                                <template x-if="!currentJob?.files_found || currentJob?.files_found === 0">
+                                <template x-if="currentJob?.status === 'running' && (!currentJob?.phase || currentJob?.phase === '')">
                                     <div>
                                         <div class="text-sm font-medium text-blue-600 whitespace-nowrap">
                                             <i class="fas fa-spinner fa-spin mr-1"></i>
@@ -274,13 +293,9 @@
                                 </template>
                             </div>
                         </div>
-                        <div class="progress-bar" x-show="currentJob?.files_found > 0">
+                        <div class="progress-bar" x-show="currentJob?.phase === 'C'">
                             <div class="progress-fill" 
                                  :style="`width: ${(currentJob?.files_indexed / currentJob?.files_found) * 100 || 0}%`"></div>
-                        </div>
-                        <div x-show="!currentJob?.files_found || currentJob?.files_found === 0" class="flex items-center gap-2 text-sm text-gray-500">
-                            <i class="fas fa-folder-open text-blue-400"></i>
-                            <span>Scan des répertoires en cours...</span>
                         </div>
                     </div>
                     
@@ -359,6 +374,7 @@
                             <thead class="bg-gray-50 border-b border-gray-100">
                                 <tr>
                                     <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Source</th>
+                                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Phase</th>
                                     <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Statut</th>
                                     <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Progression</th>
                                     <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Date</th>
@@ -373,38 +389,54 @@
                                             <div class="text-sm text-gray-500 truncate max-w-xs" x-text="job.path"></div>
                                         </td>
                                         <td class="px-6 py-4">
+                                            <div class="text-sm font-medium text-gray-900" x-text="job.phase || '-'"></div>
+                                        </td>
+                                        <td class="px-6 py-4">
                                             <span class="status-badge" 
                                                   :class="`status-${job.status}`"
                                                   x-text="formatStatus(job.status)"></span>
                                         </td>
                                         <td class="px-6 py-4">
-                                            <template x-if="job.status === 'running' && job.files_found > 0 && job.files_indexed > 0">
-                                                <div class="w-32">
+                                            <div class="space-y-0.5 text-xs">
+                                                <!-- Phase A : dossiers trouvés -->
+                                                <div class="flex items-center gap-1.5">
+                                                    <span class="w-3.5 text-center text-gray-300" x-show="job.status === 'pending'">-</span>
+                                                    <i class="fas fa-spinner fa-spin text-blue-400 w-3.5 text-center" x-show="job.status === 'running' && (!job.phase || job.phase === 'A')"></i>
+                                                    <i class="fas fa-check-circle text-green-500 w-3.5 text-center" x-show="job.phase && job.phase !== 'A' || job.status === 'completed'"></i>
+                                                    <span class="text-gray-600">
+                                                        Phase A : <span class="font-medium text-gray-800" x-text="job.status === 'pending' ? '-' : (job.dirs_found || 0)"></span> dossiers
+                                                    </span>
+                                                </div>
+                                                <!-- Phase B : fichiers trouvés -->
+                                                <div class="flex items-center gap-1.5">
+                                                    <span class="w-3.5 text-center text-gray-300" x-show="job.status === 'pending' || job.phase === 'A' || !job.phase">-</span>
+                                                    <i class="fas fa-spinner fa-spin text-green-500 w-3.5 text-center" x-show="job.status === 'running' && job.phase === 'B'"></i>
+                                                    <i class="fas fa-check-circle text-green-500 w-3.5 text-center" x-show="job.phase === 'C' || job.status === 'completed'"></i>
+                                                    <span class="text-gray-600">
+                                                        Phase B : <span class="font-medium text-gray-800" x-text="job.status === 'pending' || job.phase === 'A' || !job.phase ? '-' : (job.files_found || 0)"></span> fichiers
+                                                    </span>
+                                                </div>
+                                                <!-- Phase C : fichiers hashés -->
+                                                <div class="flex items-center gap-1.5">
+                                                    <span class="w-3.5 text-center text-gray-300" x-show="job.status === 'pending' || job.phase === 'A' || job.phase === 'B' || !job.phase">-</span>
+                                                    <i class="fas fa-spinner fa-spin text-purple-500 w-3.5 text-center" x-show="job.status === 'running' && job.phase === 'C'"></i>
+                                                    <i class="fas fa-check-circle text-green-500 w-3.5 text-center" x-show="job.status === 'completed'"></i>
+                                                    <span class="text-gray-600">
+                                                        Phase C : <span class="font-medium text-gray-800" x-text="job.status === 'pending' || job.phase === 'A' || job.phase === 'B' || !job.phase ? '-' : (job.files_indexed || 0)"></span> hashés
+                                                    </span>
+                                                </div>
+                                                <div x-show="job.bytes_total > 0" class="text-gray-400 pt-0.5">
+                                                    <span x-text="formatBytes(job.bytes_total)"></span> total
+                                                </div>
+                                            </div>
+                                            <template x-if="job.status === 'running' && job.phase === 'C'">
+                                                <div class="w-32 mt-1">
                                                     <div class="progress-bar">
                                                         <div class="progress-fill" 
-                                                             :style="`width: ${(job.files_indexed / job.files_found) * 100}%`"></div>
-                                                    </div>
-                                                    <div class="text-xs text-gray-500 mt-1">
-                                                        <span x-text="job.files_indexed"></span> / <span x-text="job.files_found"></span>
+                                                             :style="`width: ${(job.files_indexed / Math.max(job.files_found, 1)) * 100}%`"></div>
                                                     </div>
                                                 </div>
                                             </template>
-                                            <template x-if="job.status === 'running' && job.files_found > 0 && job.files_indexed === 0">
-                                                <div class="flex items-center gap-1 text-xs text-blue-500">
-                                                    <i class="fas fa-folder-open"></i>
-                                                    <span x-text="job.files_found + ' dossiers'"></span>
-                                                </div>
-                                            </template>
-                                            <template x-if="job.status === 'running' && (!job.files_found || job.files_found === 0)">
-                                                <div class="flex items-center gap-1 text-xs text-gray-500">
-                                                    <i class="fas fa-spinner fa-spin text-blue-400"></i>
-                                                    <span>Dossiers...</span>
-                                                </div>
-                                            </template>
-                                            <div x-show="job.status !== 'running'" class="text-sm text-gray-500">
-                                                <span x-text="job.files_indexed"></span> fichiers
-                                                <span x-show="job.bytes_total > 0" x-text="`(${formatBytes(job.bytes_total)})`"></span>
-                                            </div>
                                         </td>
                                         <td class="px-6 py-4 text-sm text-gray-500" x-text="formatDate(job.created_at)"></td>
                                         <td class="px-6 py-4">
@@ -657,7 +689,7 @@
                 get pageTitle() {
                     const titles = {
                         'dashboard': 'Tableau de bord',
-                        'jobs': 'Jobs d\'indexation',
+                        'jobs': 'Travaux d\'Indexation',
                         'configs': 'Sources',
                         'archive': 'Archivage',
                         'logs': 'Logs'
@@ -1271,6 +1303,16 @@
                 </button>
             </div>
         </div>
+    </div>
+
+    <!-- Légende des phases -->
+    <div class="max-w-7xl mx-auto px-6 pb-8 text-xs text-gray-400 flex items-center gap-4">
+        <span class="font-medium text-gray-500">Légende :</span>
+        <span class="text-blue-500 font-bold">A</span><span class="text-gray-500"> = Dossiers</span>
+        <span class="text-gray-300">|</span>
+        <span class="text-green-500 font-bold">B</span><span class="text-gray-500"> = Fichiers</span>
+        <span class="text-gray-300">|</span>
+        <span class="text-blue-600 font-bold">C</span><span class="text-gray-500"> = Hashage</span>
     </div>
 </body>
 </html>

@@ -1195,8 +1195,8 @@ class PostgreSQLAdapter:
                         file_info.get('name', ''),
                         ext,
                         file_info.get('size', 0),
-                        file_info.get('checksum', ''),
-                        None,
+                        file_info.get('checksum') or None,
+                        file_info.get('hash_sha256') or None,
                         file_info.get('modified_at'),
                         file_info.get('is_garbage', False),
                         False
@@ -1222,8 +1222,8 @@ class PostgreSQLAdapter:
                             f.get('name', ''),
                             ext,
                             f.get('size', 0),
-                            f.get('checksum', ''),
-                            None,
+                            f.get('checksum') or None,
+                            f.get('hash_sha256') or None,
                             f.get('modified_at'),
                             f.get('is_garbage', False),
                             False

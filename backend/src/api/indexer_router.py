@@ -44,6 +44,9 @@ class IndexerJobResponse(BaseModel):
     files_found: int = 0
     files_indexed: int = 0
     bytes_total: int = 0
+    dirs_found: int = 0
+    phase: str = ""
+    phase_b_done: bool = False
     error_message: Optional[str] = None
 
 class IndexerJobsList(BaseModel):
@@ -170,7 +173,7 @@ async def get_current_job():
         query = """
             SELECT id, path, config_id, config_name, status, created_at,
                    started_at, completed_at, files_found, files_indexed,
-                   bytes_total, error_message
+                   bytes_total, dirs_found, phase, phase_b_done, error_message
             FROM indexer_jobs
             WHERE status = 'running'
             ORDER BY started_at DESC
@@ -194,7 +197,10 @@ async def get_current_job():
                 files_found=row[8] or 0,
                 files_indexed=row[9] or 0,
                 bytes_total=row[10] or 0,
-                error_message=row[11]
+                dirs_found=row[11] or 0,
+                phase=row[12] or '',
+                phase_b_done=row[13] if len(row) > 13 else False,
+                error_message=row[14] if len(row) > 14 else None
             )
 
         # Vérifier si le worker tourne (via présence d'un job running)
@@ -235,7 +241,7 @@ async def list_indexer_jobs(
         query = f"""
             SELECT id, path, config_id, config_name, status, created_at,
                    started_at, completed_at, files_found, files_indexed,
-                   bytes_total, error_message
+                   bytes_total, dirs_found, phase, phase_b_done, error_message
             FROM indexer_jobs
             {where_clause}
             ORDER BY created_at DESC
@@ -259,7 +265,10 @@ async def list_indexer_jobs(
                 files_found=row[8] or 0,
                 files_indexed=row[9] or 0,
                 bytes_total=row[10] or 0,
-                error_message=row[11]
+                dirs_found=row[11] or 0,
+                phase=row[12] or '',
+                phase_b_done=row[13] if len(row) > 13 else False,
+                error_message=row[14] if len(row) > 14 else None
             ))
 
         # Compter le total
@@ -294,7 +303,7 @@ async def create_indexer_job(payload: IndexerJobCreate):
             VALUES (%s, %s, %s, %s, 'pending', CURRENT_TIMESTAMP)
             RETURNING id, path, config_id, config_name, status, created_at,
                       started_at, completed_at, files_found, files_indexed,
-                      bytes_total, error_message
+                      bytes_total, dirs_found, phase, phase_b_done, error_message
         """
 
         results = db.execute_query(query, [
@@ -322,7 +331,10 @@ async def create_indexer_job(payload: IndexerJobCreate):
             files_found=row[8] or 0,
             files_indexed=row[9] or 0,
             bytes_total=row[10] or 0,
-            error_message=row[11]
+            dirs_found=row[11] if len(row) > 11 else 0,
+            phase=row[12] if len(row) > 12 else '',
+            phase_b_done=row[13] if len(row) > 13 else False,
+            error_message=row[14] if len(row) > 14 else None
         )
 
     except HTTPException:
@@ -384,7 +396,7 @@ async def get_indexer_job(job_id: str):
         query = """
             SELECT id, path, config_id, config_name, status, created_at,
                    started_at, completed_at, files_found, files_indexed,
-                   bytes_total, error_message
+                   bytes_total, dirs_found, phase, phase_b_done, error_message
             FROM indexer_jobs
             WHERE id = %s
         """
@@ -407,7 +419,10 @@ async def get_indexer_job(job_id: str):
             files_found=row[8] or 0,
             files_indexed=row[9] or 0,
             bytes_total=row[10] or 0,
-            error_message=row[11]
+            dirs_found=row[11] or 0,
+            phase=row[12] or '',
+            phase_b_done=row[13] if len(row) > 13 else False,
+            error_message=row[14] if len(row) > 14 else None
         )
 
     except HTTPException:
