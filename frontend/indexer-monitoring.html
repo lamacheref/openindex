@@ -419,13 +419,16 @@
                                                         Phase B : <span class="font-medium text-gray-800" x-text="job.status === 'pending' || job.phase === 'A' || !job.phase ? '-' : (job.files_found || 0)"></span> fichiers
                                                     </span>
                                                 </div>
-                                                <!-- Phase C : fichiers hashés -->
+                                                <!-- Phase C : fichiers hashés (ou dossiers traités si Phase B) -->
                                                 <div class="flex items-center gap-1.5">
-                                                    <span class="w-3.5 text-center text-gray-300" x-show="job.status === 'pending' || job.phase === 'A' || job.phase === 'B' || !job.phase">-</span>
+                                                    <span class="w-3.5 text-center text-gray-300" x-show="job.status === 'pending' || !job.phase">-</span>
                                                     <i class="fas fa-spinner fa-spin text-purple-500 w-3.5 text-center" x-show="job.status === 'running' && job.phase === 'C'"></i>
+                                                    <i class="fas fa-spinner fa-spin text-amber-500 w-3.5 text-center" x-show="job.status === 'running' && job.phase === 'B'"></i>
                                                     <i class="fas fa-check-circle text-green-500 w-3.5 text-center" x-show="job.status === 'completed'"></i>
                                                     <span class="text-gray-600">
-                                                        Phase C : <span class="font-medium text-gray-800" x-text="job.status === 'pending' || job.phase === 'A' || job.phase === 'B' || !job.phase ? '-' : (job.files_indexed || 0)"></span> hashés
+                                                        Phase C : <span class="font-medium text-gray-800" x-text="job.status === 'pending' || !job.phase ? '-' : (job.files_indexed || 0)"></span>
+                                                        <span x-show="job.phase === 'B'">dossiers traités</span>
+                                                        <span x-show="job.phase === 'C' || job.status === 'completed'">hashés</span>
                                                     </span>
                                                 </div>
                                                 <div x-show="job.bytes_total > 0" class="text-gray-400 pt-0.5">
