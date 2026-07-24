@@ -603,9 +603,11 @@ class IndexerWorker:
             return 0
 
         total_files = 0
+        dirs_processed = 0
         file_batch = []
 
         for dir_id, dir_path, dir_name in dirs:
+            dirs_processed += 1
             if self._stop_event.is_set() or self._job_stop_event.is_set():
                 self._flush_file_batch(db, file_batch, space_id)
                 raise InterruptedError("Indexation interrompue")
@@ -670,16 +672,14 @@ class IndexerWorker:
             if file_batch:
                 self._flush_file_batch(db, file_batch, space_id)
                 file_batch = []
-                job.files_indexed = total_files
-                self._update_job_progress(job)
-            elif job.files_found % 10 == 0 and job.files_found > 0:
-                    job.files_indexed = total_files
-                    self._update_job_progress(job)
+
+            job.files_indexed = dirs_processed
+            self._update_job_progress(job)
 
         if file_batch:
             self._flush_file_batch(db, file_batch, space_id)
 
-        job.files_indexed = total_files
+        job.files_indexed = dirs_processed
         self._update_job_progress(job)
 
         logger.info(f"Phase B: {total_files} fichiers listés", extra={

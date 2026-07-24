@@ -74,7 +74,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `b98ec4cb` | 2026-07-24 | non | non | ajout version commit dans le footer sidebar |
+| `084f1ae7` | 2026-07-24 | non | non | progression temps réel Phase B via compteur dossiers traités |
+| `166e994f` | 2026-07-24 | oui | oui | ajout version commit dans le footer sidebar |
 | `9cebdec6` | 2026-07-24 | oui | oui | fix: parsing SMB (espaces/accents), frontend 3 lignes progression, dirs_found |
 | `7d4758fb` | 2026-07-23 | oui | oui | perf: avoid duplicate list_dir in get_file_info by passing entries_list |
 | `ba62f8c3` | 2026-07-23 | oui | oui | fix: update progress every 10 items in Phase B too |
@@ -123,4 +124,3 @@ pytest -q tests/
 | `11948c34` | 2026-05-18 | oui | oui | Add indexer retries table and priority 4 features |
 | `caeffa13` | 2026-05-18 | oui | oui | Merge pull request 'V5_Projet' (#1) from V5_Projet into main |
 | `b82e2d5c` | 2026-05-18 | oui | oui | Ajout du fichier OpenIndex.code-workspace pour l'environnement de développement |
-| `1b978783` | 2026-05-18 | oui | oui | Mise à jour quotidienne : modifications de l'environnement virtuel et du TODO |
