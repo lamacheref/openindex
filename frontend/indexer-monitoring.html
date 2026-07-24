@@ -167,6 +167,9 @@
                     </button>
                 </div>
             </div>
+            <div class="px-4 pb-3 text-[10px] text-gray-400 text-center border-t border-gray-100 pt-2">
+                v<span x-text="version"></span>
+            </div>
         </aside>
         
         <!-- Main Content -->
@@ -634,6 +637,7 @@
                 loading: false,
                 workerRunning: false,
                 pendingCount: 0,
+                version: '9cebdec (2026-07-24)',
                 
                 // Data
                 stats: {},
