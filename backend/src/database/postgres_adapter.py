@@ -1030,6 +1030,7 @@ class PostgreSQLAdapter:
                         is_archive,
                         include_paths,
                         exclude_paths,
+                        max_depth,
                         connection_username,
                         connection_password,
                         connection_domain,
@@ -1051,10 +1052,11 @@ class PostgreSQLAdapter:
                     "is_archive": bool(row[4]),
                     "include_paths": row[5] or [],
                     "exclude_paths": row[6] or [],
-                    "connection_username": row[7],
-                    "connection_password": row[8],
-                    "connection_domain": row[9],
-                    "created_at": row[10],
+                    "max_depth": row[7],
+                    "connection_username": row[8],
+                    "connection_password": row[9],
+                    "connection_domain": row[10],
+                    "created_at": row[11],
                 }
 
     def insert_file(self, file_info: Dict[str, Any], config_id: str) -> None:

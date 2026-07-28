@@ -1047,6 +1047,7 @@
                 },
                 
                 async startIndexing(configId) {
+                    console.log('startIndexing appelé avec configId:', configId);
                     try {
                         const res = await fetch('/api/indexer/jobs', {
                             method: 'POST',

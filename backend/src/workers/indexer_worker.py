@@ -20,7 +20,20 @@ import logging.config
 # Fichier de log dédié
 LOG_DIR = "/var/log/openindex"
 
-# Configuration du logging JSON + fichier dédié
+class PlainInfoFormatter(logging.Formatter):
+    """Formatter qui affiche INFO sans couleur, WARNING/ERROR en jaune/rouge"""
+    _RESET = '\033[0m'
+    _YELLOW = '\033[33m'
+    _RED = '\033[31m'
+
+    def format(self, record):
+        level = record.levelname
+        if record.levelno == logging.WARNING:
+            record.levelname = f"{self._YELLOW}{level}{self._RESET}"
+        elif record.levelno >= logging.ERROR:
+            record.levelname = f"{self._RED}{level}{self._RESET}"
+        return super().format(record)
+
 def setup_logging():
     """Configure le logging : JSON vers stdout + fichier lisible"""
     log_dir = LOG_DIR
@@ -39,6 +52,12 @@ def setup_logging():
                 'format': '%(asctime)s %(name)s %(levelname)s %(message)s %(job_id)s %(config_id)s %(files_processed)s %(duration)s'
             },
             'simple': {
+                '()': PlainInfoFormatter,
+                'format': '[%(asctime)s] %(levelname)s - %(message)s',
+                'datefmt': '%Y-%m-%d %H:%M:%S'
+            },
+            'colored': {
+                '()': PlainInfoFormatter,
                 'format': '[%(asctime)s] %(levelname)s - %(message)s',
                 'datefmt': '%Y-%m-%d %H:%M:%S'
             }
@@ -67,10 +86,13 @@ def setup_logging():
     try:
         logging.config.dictConfig(logging_config)
     except Exception as e:
+        console = logging.StreamHandler(sys.stdout)
+        console.setFormatter(PlainInfoFormatter(
+            fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        ))
         logging.basicConfig(
             level=logging.INFO,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            handlers=[logging.StreamHandler(sys.stdout)]
+            handlers=[console]
         )
         logger.warning(f"Logging avancé non disponible: {e}")
 
@@ -380,15 +402,16 @@ class IndexerWorker:
 
         result = db.execute_query(
             """
-            INSERT INTO smb_spaces (name, host, share, domain_zone, connection_username, connection_password, connection_domain)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (host, share) DO UPDATE SET name = EXCLUDED.name
+            INSERT INTO smb_spaces (name, host, share, remote_path, domain_zone, connection_username, connection_password, connection_domain)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (host, share, remote_path) DO UPDATE SET name = EXCLUDED.name
             RETURNING id
             """,
             [
                 config.get('name', 'Unnamed'),
                 config['host'],
                 config['share'],
+                config.get('remote_path', ''),
                 config.get('domain', 'WORKGROUP'),
                 config.get('username', ''),
                 config.get('password', ''),
@@ -427,7 +450,8 @@ class IndexerWorker:
                 logger.info(f"Phase A déjà effectuée: {existing_dirs} répertoires en base")
                 dir_count = existing_dirs
             else:
-                dir_count = self._phase_a_bfs_directories(client, remote_path, space_id, job)
+                max_depth = config.get('max_depth', 5)
+                dir_count = self._phase_a_bfs_directories(client, remote_path, space_id, job, max_depth)
             job.dirs_found = dir_count
             self._update_job_progress(job)
             logger.info(f"Phase A terminée: {dir_count} répertoires découverts", extra={
@@ -487,7 +511,7 @@ class IndexerWorker:
         )
         return result[0][0] if result else 0
 
-    def _phase_a_bfs_directories(self, client, root_path: str, space_id: str, job: IndexerJob) -> int:
+    def _phase_a_bfs_directories(self, client, root_path: str, space_id: str, job: IndexerJob, max_depth: int = 5) -> int:
         job.dirs_found = 0
         from collections import deque
         from backend.src.database.postgres_adapter import PostgreSQLAdapter
@@ -539,9 +563,11 @@ class IndexerWorker:
                         entry_name = getattr(entry, 'filename', '')
                         is_dir = getattr(entry, 'isDirectory', False)
 
-                    if is_dir:
+                    if is_dir and depth < max_depth:
                         full_path = f"{current_path}/{entry_name}" if current_path else entry_name
                         queue.append((full_path, depth + 1, current_path))
+                    elif is_dir:
+                        logger.debug(f"Profondeur max ({max_depth}) atteinte pour {current_path}/{entry_name}")
 
             except Exception as e:
                 logger.warning(f"Erreur BFS répertoire {current_path}: {e}")
@@ -930,9 +956,10 @@ class IndexerWorker:
                     'share': share,
                     'remote_path': remote_path,
                     'username': result.get('connection_username', ''),
-                    'password': result.get('connection_password', ''),  # Récupéré directement depuis la DB via postgres_adapter
+                    'password': result.get('connection_password', ''),
                     'domain': result.get('connection_domain', ''),
-                    'name': result.get('name', 'Unnamed')
+                    'name': result.get('name', 'Unnamed'),
+                    'max_depth': result.get('max_depth', 5)
                 }
             return None
             

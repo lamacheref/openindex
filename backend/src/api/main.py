@@ -20,6 +20,7 @@ import os
 import re
 import socket
 import shutil
+import sys
 import time
 import zipfile
 from contextlib import contextmanager
@@ -67,9 +68,25 @@ APP_VERSION = get_current_version()
 
 # Configuration du logging
 LOG_LEVEL = os.getenv("OPENINDEX_LOG_LEVEL", "INFO").strip().upper()
+class _PlainInfoFormatter(logging.Formatter):
+    _RESET = '\033[0m'
+    _YELLOW = '\033[33m'
+    _RED = '\033[31m'
+    def format(self, record):
+        level = record.levelname
+        if record.levelno == logging.WARNING:
+            record.levelname = f"{self._YELLOW}{level}{self._RESET}"
+        elif record.levelno >= logging.ERROR:
+            record.levelname = f"{self._RED}{level}{self._RESET}"
+        return super().format(record)
+
+_handler = logging.StreamHandler(sys.stdout)
+_handler.setFormatter(_PlainInfoFormatter(
+    fmt="%(asctime)s %(levelname)s %(name)s %(message)s"
+))
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL, logging.INFO),
-    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    handlers=[_handler]
 )
 logger = logging.getLogger("openindex.api")
 
@@ -210,6 +227,7 @@ class CrawlConfigCreate(BaseModel):
     is_archive: bool = False
     include_paths: List[str] = Field(default_factory=list)
     exclude_paths: List[str] = Field(default_factory=list)
+    max_depth: int = 5
     connection: CrawlConnectionConfig
 
     @field_validator('start_path')
@@ -231,6 +249,7 @@ class CrawlConfigUpdate(BaseModel):
     is_archive: bool = False
     include_paths: List[str] = Field(default_factory=list)
     exclude_paths: List[str] = Field(default_factory=list)
+    max_depth: int = 5
     connection: CrawlConnectionUpdate
 
     @field_validator('start_path')
@@ -247,6 +266,7 @@ class CrawlConfigPublic(BaseModel):
     is_archive: bool = False
     include_paths: List[str]
     exclude_paths: List[str]
+    max_depth: int = 5
     connection_username: str
     connection_domain: Optional[str] = None
     created_at: str
@@ -748,6 +768,7 @@ class PostgreSQLAdapter:
                 is_archive BOOLEAN NOT NULL DEFAULT FALSE,
                 include_paths TEXT[] NOT NULL DEFAULT '{}',
                 exclude_paths TEXT[] NOT NULL DEFAULT '{}',
+                max_depth INTEGER NOT NULL DEFAULT 5,
                 connection_username TEXT NOT NULL,
                 connection_password TEXT NOT NULL,
                 connection_domain TEXT,
