@@ -77,7 +77,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `db309d00` | 2026-07-29 | non | non | fix(ui): prevent empty-path 404 from hidden preview elements by checking previewModal.open |
+| `e28df3b3` | 2026-07-29 | non | non | fix(artefacts): recreate large_files/old_files/unused_files on indexed_files_optimized |
+| `0e1fc2aa` | 2026-07-29 | oui | oui | fix(ui): prevent empty-path 404 from hidden preview elements by checking previewModal.open |
 | `d6f3157d` | 2026-07-29 | oui | oui | fix(artefacts): resolve space_id and crawl_config_id separately per view |
 | `724f45b7` | 2026-07-29 | oui | oui | fix(ui): remove 'Version' prefix and 'v' duplication, display build timestamp on second line |
 | `5dd5d1ec` | 2026-07-29 | oui | oui | fix(versioning): resolve PROJECT_ROOT correctly from backend/src/core/versioning.py |
@@ -126,4 +127,3 @@ pytest -q tests/
 | `510f627c` | 2026-07-22 | oui | oui | README: URL installation GitHub (main) |
 | `8331c600` | 2026-07-22 | oui | oui | README: URL installation pointe vers main (Devel supprimée) |
 | `a2db82a6` | 2026-07-22 | oui | oui | README: URL installation Gitea (vs GitHub), suppression ref CI-CD.md |
-| `3deee6b3` | 2026-07-22 | oui | oui | Merge pull request 'T-INDEX-R02 : Refonte protocolaire de l'indexation (BFS, bottom-up, écritures optimisées)' (#2) from Devel into main |

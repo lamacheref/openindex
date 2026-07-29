@@ -465,10 +465,8 @@ async def get_artefacts_stats(space: Optional[str] = None):
     try:
         db = get_db_adapter()
         
-        space_filter_space = ""
-        space_filter_config = ""
-        params_space: List[Any] = []
-        params_config: List[Any] = []
+        space_filter = ""
+        params: List[Any] = []
         if space:
             path_match = re.match(r'^//([^/]+)/([^/]+)(?:/(.*))?$', space)
             if path_match:
@@ -476,27 +474,25 @@ async def get_artefacts_stats(space: Optional[str] = None):
                 share = path_match.group(2)
                 remote_path = path_match.group(3) or ''
                 row = db.execute_query(
-                    "SELECT s.id::text, c.id::text FROM smb_spaces s JOIN crawl_configs c ON c.start_path = %s WHERE s.host = %s AND s.share = %s AND s.remote_path = %s",
-                    [f"//{host}/{share}/{remote_path}".rstrip("/"), host, share, remote_path]
+                    "SELECT id::text FROM smb_spaces WHERE host = %s AND share = %s AND remote_path = %s",
+                    [host, share, remote_path]
                 )
                 if row:
-                    space_filter_space = " WHERE space_id = %s::uuid"
-                    params_space = [row[0][0]]
-                    space_filter_config = " WHERE crawl_config_id = %s::uuid"
-                    params_config = [row[0][1]]
+                    space_filter = " WHERE space_id = %s::uuid"
+                    params = [row[0][0]]
         
         # Statistiques pour chaque catégorie
         categories = [
-            ("duplicates", f"SELECT COUNT(*) as count, SUM(size) as total_size FROM duplicate_files{space_filter_space}", params_space),
-            ("large", f"SELECT COUNT(*) as count, SUM(size) as total_size FROM large_files{space_filter_config}", params_config),
-            ("old", f"SELECT COUNT(*) as count, SUM(size) as total_size FROM old_files{space_filter_config}", params_config),
-            ("unused", f"SELECT COUNT(*) as count, SUM(size) as total_size FROM unused_files{space_filter_config}", params_config),
-            ("garbage", f"SELECT COUNT(*) as count, SUM(size) as total_size FROM garbage_listing{space_filter_space}", params_space)
+            ("duplicates", f"SELECT COUNT(*) as count, SUM(size) as total_size FROM duplicate_files{space_filter}"),
+            ("large", f"SELECT COUNT(*) as count, SUM(size) as total_size FROM large_files{space_filter}"),
+            ("old", f"SELECT COUNT(*) as count, SUM(size) as total_size FROM old_files{space_filter}"),
+            ("unused", f"SELECT COUNT(*) as count, SUM(size) as total_size FROM unused_files{space_filter}"),
+            ("garbage", f"SELECT COUNT(*) as count, SUM(size) as total_size FROM garbage_listing{space_filter}")
         ]
         
         results = []
-        for category, query, category_params in categories:
-            stats = db.execute_query(query, category_params)
+        for category, query in categories:
+            stats = db.execute_query(query, params)
             results.append(ArtefactCategoryStats(
                 category=category,
                 count=stats[0][0],
