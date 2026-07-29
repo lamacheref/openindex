@@ -77,7 +77,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `7379cce2` | 2026-07-29 | non | non | fix(deploy): use absolute path for .env file and skip npm if missing |
+| `86932466` | 2026-07-29 | non | non | fix(versioning): resolve PROJECT_ROOT correctly from backend/src/core/versioning.py |
+| `60d88178` | 2026-07-29 | oui | oui | fix(deploy): use absolute path for .env file and skip npm if missing |
 | `d9f70e52` | 2026-07-29 | oui | oui | fix(deploy): use correct path /srv/OpenIndex and handle local stash before pull |
 | `777b4c47` | 2026-07-29 | oui | oui | fix: replace LibreOffice PDF conversion with HTML embedding for native read-only preview |
 | `15d331b5` | 2026-07-29 | oui | oui | feat: dashboard charts, preview Office/video/audio, artefacts filter, LibreOffice |
@@ -126,4 +127,3 @@ pytest -q tests/
 | `be81fda0` | 2026-07-22 | oui | oui | Merge gitea/main into Devel, résolution conflit OpenIndex.code-workspace |
 | `f2e6064b` | 2026-07-22 | oui | oui | Suppression des pipelines CI/CD (GitHub Actions, Gitea CI, CI-CD.md) — déploiement LXC |
 | `5a5e746d` | 2026-07-22 | oui | oui | README: déploiement ProxmoxVE (curl bash), état T-INDEX-R02 terminé |
-| `169dea87` | 2026-07-22 | oui | oui | T-LXC-01 installeur ProxmoxVE LXC complet |
