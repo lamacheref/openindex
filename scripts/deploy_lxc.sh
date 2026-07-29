@@ -2,8 +2,10 @@
 set -e
 
 ssh -i "$HOME/.ssh/flamachere_pro_20260511" root@192.168.110.6 "
-cd /srv/openindex
+cd /srv/OpenIndex
+git stash
 git pull
+git stash pop || true
 
 find . -name __pycache__ -exec rm -rf {} + 2>/dev/null
 
