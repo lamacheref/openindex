@@ -1867,7 +1867,7 @@ def _preview_ods(raw_bytes: bytes, title: str) -> str:
     return _render_html_document(title, f"<h1>{html.escape(title)}</h1>{body}")
 
 
-def _libreoffice_convert_to_pdf(raw_bytes: bytes, extension: str) -> Optional[bytes]:
+def _libreoffice_convert_to_html(raw_bytes: bytes, extension: str) -> Optional[str]:
     try:
         soffice = shutil.which("libreoffice") or shutil.which("soffice")
         if not soffice:
@@ -1877,14 +1877,36 @@ def _libreoffice_convert_to_pdf(raw_bytes: bytes, extension: str) -> Optional[by
             tmp_in_path = tmp_in.name
         tmp_out_dir = tempfile.mkdtemp()
         result = subprocess.run(
-            [soffice, "--headless", "--convert-to", "pdf", "--outdir", tmp_out_dir, tmp_in_path],
+            [soffice, "--headless", "--convert-to", "html:HTML", "--outdir", tmp_out_dir, tmp_in_path],
             capture_output=True, timeout=60,
         )
-        pdf_path = Path(tmp_out_dir) / (Path(tmp_in_path).stem + ".pdf")
-        pdf_bytes = pdf_path.read_bytes() if pdf_path.exists() else None
+        html_path = Path(tmp_out_dir) / (Path(tmp_in_path).stem + ".html")
+        if not html_path.exists():
+            os.unlink(tmp_in_path)
+            shutil.rmtree(tmp_out_dir, ignore_errors=True)
+            return None
+        html_content = html_path.read_text(encoding="utf-8", errors="replace")
+        # Embed images as base64 data URIs
+        out_dir = str(tmp_out_dir)
+        def _replace_img_src(match: re.Match) -> str:
+            src = match.group(1)
+            img_path = Path(out_dir) / src
+            if img_path.exists():
+                img_bytes = img_path.read_bytes()
+                mime = "image/png"
+                if src.lower().endswith((".jpg", ".jpeg")):
+                    mime = "image/jpeg"
+                elif src.lower().endswith(".gif"):
+                    mime = "image/gif"
+                elif src.lower().endswith(".svg"):
+                    mime = "image/svg+xml"
+                b64 = base64.b64encode(img_bytes).decode()
+                return f'src="data:{mime};base64,{b64}"'
+            return match.group(0)
+        html_content = re.sub(r'src="([^"]+)"', _replace_img_src, html_content)
         os.unlink(tmp_in_path)
         shutil.rmtree(tmp_out_dir, ignore_errors=True)
-        return pdf_bytes
+        return html_content
     except Exception:
         return None
 
@@ -1893,13 +1915,16 @@ def _generate_office_preview_html(path: str, raw_bytes: bytes) -> str:
     extension = (_smb_extension(path) or "").lower()
     title = _smb_name(path)
 
-    pdf_bytes = _libreoffice_convert_to_pdf(raw_bytes, extension)
-    if pdf_bytes:
-        b64 = base64.b64encode(pdf_bytes).decode()
+    html_content = _libreoffice_convert_to_html(raw_bytes, extension)
+    if html_content:
+        body_match = re.search(r'<body[^>]*>(.*?)</body>', html_content, re.DOTALL)
+        body_content = body_match.group(1) if body_match else html_content
+        style_match = re.search(r'<style[^>]*>(.*?)</style>', html_content, re.DOTALL)
+        lo_style = style_match.group(1) if style_match else ""
         return f"""<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-*{{margin:0;padding:0;box-sizing:border-box}}body{{display:flex;height:100vh;background:#f0f0f0}}
-embed{{width:100%;height:100%;border:none;border-radius:4px}}</style>
-</head><body><embed src="data:application/pdf;base64,{b64}" type="application/pdf"></body></html>"""
+*{{margin:0;padding:0;box-sizing:border-box}}body{{background:#fff;font-family:sans-serif;padding:16px;overflow-x:auto}}
+img{{max-width:100%;height:auto}}{lo_style}</style>
+</head><body>{body_content}</body></html>"""
 
     if extension in {".docx", ".doc"}:
         return _preview_docx(raw_bytes, title)
