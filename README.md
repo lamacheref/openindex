@@ -77,7 +77,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `9e1b93f1` | 2026-07-29 | non | non | fix(ui): remove 'Version' prefix and 'v' duplication, display build timestamp on second line |
+| `39d224ef` | 2026-07-29 | non | non | fix(artefacts): resolve space_id and crawl_config_id separately per view |
+| `724f45b7` | 2026-07-29 | oui | oui | fix(ui): remove 'Version' prefix and 'v' duplication, display build timestamp on second line |
 | `5dd5d1ec` | 2026-07-29 | oui | oui | fix(versioning): resolve PROJECT_ROOT correctly from backend/src/core/versioning.py |
 | `60d88178` | 2026-07-29 | oui | oui | fix(deploy): use absolute path for .env file and skip npm if missing |
 | `d9f70e52` | 2026-07-29 | oui | oui | fix(deploy): use correct path /srv/OpenIndex and handle local stash before pull |
@@ -126,4 +127,3 @@ pytest -q tests/
 | `a2db82a6` | 2026-07-22 | oui | oui | README: URL installation Gitea (vs GitHub), suppression ref CI-CD.md |
 | `3deee6b3` | 2026-07-22 | oui | oui | Merge pull request 'T-INDEX-R02 : Refonte protocolaire de l'indexation (BFS, bottom-up, écritures optimisées)' (#2) from Devel into main |
 | `be81fda0` | 2026-07-22 | oui | oui | Merge gitea/main into Devel, résolution conflit OpenIndex.code-workspace |
-| `f2e6064b` | 2026-07-22 | oui | oui | Suppression des pipelines CI/CD (GitHub Actions, Gitea CI, CI-CD.md) — déploiement LXC |
