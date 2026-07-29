@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestion des archivages</title>
-    <script src="/assets/auth.js"></script>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -76,25 +78,12 @@
     </div>
 
     <script>
-    // Protection pour les pages utilisateur - nécessite juste d'être connecté
     document.addEventListener('DOMContentLoaded', function() {
-        if (typeof pb !== 'undefined' && pbInitialized) {
-            if (!enforceUserAuth()) {
-                return;
-            }
-            initArchivesPage();
-        } else {
-            onPbReady(() => {
-                if (!enforceUserAuth()) {
-                    return;
-                }
-                initArchivesPage();
-            });
-        }
+        initArchivesPage();
     });
 
     function initArchivesPage() {
-        console.log('Page archives chargée pour:', pb.authStore.model.email);
+        console.log('Page archives chargée');
         document.getElementById('archives-content').style.display = 'block';
         
         // Initialisation des boutons

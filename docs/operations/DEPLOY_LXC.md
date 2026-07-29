@@ -6,21 +6,45 @@
 
 Déploiement de la stack OpenIndex dans un conteneur **LXC Ubuntu 24.04 minimal** sur ProxmoxVE.
 
+Deux modes :
+- **Installation automatique** (recommandée) : `scripts/install_lxc.sh` depuis l'hôte Proxmox
+- **Installation manuelle** : suivre les étapes ci-dessous
+
 Composants installés :
 - PostgreSQL 17 (base de données)
 - PocketBase (authentification)
 - FastAPI (backend API)
 - Indexeur SMB (worker + scheduler)
 - Nginx (frontend statique, port 80)
+- LibreOffice (prévisualisation documents Office)
 
 ---
 
-## 1. Création du conteneur LXC
+## 1. Installation automatique (recommandée)
 
-Sur l'hôte Proxmox (`nyx`), créer un conteneur Ubuntu 24.04 minimal :
+Depuis l'hôte **ProxmoxVE** (`nyx`) :
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/lamacheref/OpenIndex/main/scripts/install_lxc.sh)"
+```
+
+Le script crée un conteneur Ubuntu 24.04 (2 CPU, 2 Go RAM, 16 Go disque) et installe toute la stack automatiquement.
+
+Paramètres configurables (variables d'environnement) :
+- `CTID` : ID du conteneur (défaut : prochain disponible)
+- `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` : accès PostgreSQL
+- Voir `scripts/install_lxc.sh` pour la liste complète
+
+---
+
+## 2. Installation manuelle
+
+### 2.1 Création du conteneur LXC
+
+Sur l'hôte Proxmox (`nyx`) :
 
 ```
-CTID=201  # ou autre ID libre
+CTID=201
 HOSTNAME=openindex
 
 pveam download local ubuntu-24.04-standard_24.04-2_amd64.tar.zst
@@ -46,27 +70,18 @@ Récupérer l'IP :
 pct exec $CTID -- ip addr show eth0 | grep 'inet '
 ```
 
-Noter l'IP, elle sera utilisée pour la suite.
-
----
-
-## 2. Installation des services
-
-Se connecter en SSH :
+### 2.2 Prérequis système (dans le conteneur)
 
 ```bash
 ssh root@<LXC_IP>
-```
 
-### 2.1 Prérequis système
-
-```bash
 apt-get update && apt-get upgrade -y
 apt-get install -y python3 python3-pip python3-venv git curl gnupg \
-  postgresql-16 postgresql-client nginx smbclient xxd build-essential python3-dev
+  postgresql postgresql-client nginx smbclient xxd build-essential python3-dev \
+  libreoffice-core-nogui libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui
 ```
 
-### 2.2 Configuration PostgreSQL
+### 2.3 Configuration PostgreSQL
 
 ```bash
 systemctl start postgresql
@@ -75,18 +90,7 @@ sudo -u postgres psql -c "CREATE DATABASE openindex OWNER openindex_user;"
 sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE openindex TO openindex_user;"
 ```
 
-Appliquer le schéma :
-
-```bash
-# init.sql + toutes les migrations
-PGPASSWORD=openindex_secure_password psql -h localhost -U openindex_user -d openindex -f /srv/openindex/database/init.sql
-for f in /srv/openindex/database/migrations/*.sql; do
-  echo "Running $f"
-  PGPASSWORD=openindex_secure_password psql -h localhost -U openindex_user -d openindex -f "$f"
-done
-```
-
-### 2.3 Déploiement du code
+### 2.4 Déploiement du code
 
 ```bash
 mkdir -p /srv/openindex
@@ -95,28 +99,10 @@ cd /srv/openindex
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements/dev.txt xxhash
-```
-
-### 2.4 PocketBase
-
-```bash
-cd /srv/openindex
-LATEST=$(curl -s https://api.github.com/repos/pocketbase/pocketbase/releases/latest | grep tag_name | cut -d'"' -f4)
-curl -sL -o pocketbase.zip "https://github.com/pocketbase/pocketbase/releases/download/${LATEST}/pocketbase_${LATEST}_linux_amd64.zip"
-unzip -o pocketbase.zip
-rm pocketbase.zip
-chmod +x pocketbase
-```
-
-### 2.5 Frontend
-
-```bash
-cd /srv/openindex
 npm install && npm run build:frontend
-cp -r frontend/dist/* /var/www/html/
 ```
 
-### 2.6 Variables d'environnement
+### 2.5 Variables d'environnement
 
 ```bash
 cat > /srv/openindex/.env << 'EOF'
@@ -127,98 +113,93 @@ POSTGRES_USER=openindex_user
 POSTGRES_PASSWORD=openindex_secure_password
 POCKETBASE_URL=http://localhost:8090
 OPENINDEX_API_PORT=8000
+OPENINDEX_TIMEZONE=Europe/Paris
+INDEXER_POLL_INTERVAL=5
 EOF
 ```
 
+### 2.6 Services systemd
+
+Copier les services depuis `scripts/install_lxc_inner.sh` ou les créer manuellement :
+- `openindex-api.service` : uvicorn backend.src.api.main:app --port 8000
+- `openindex-indexer-worker.service` : worker d'indexation
+- `openindex-indexer-scheduler.service` : scheduler cron
+- `openindex-pocketbase.service` : PocketBase auth
+
+### 2.7 Nginx
+
+Configurer nginx avec racine `/srv/openindex/frontend` pour servir le frontend statique (voir la conf dans `install_lxc_inner.sh`).
+
 ---
 
-## 3. Démarrage
-
-```bash
-systemctl start postgresql
-/srv/openindex/pocketbase serve --http=0.0.0.0:8090 --dir=/srv/openindex/pb_data &
-```
-
----
-
-## 4. Accès
+## 3. Accès
 
 | Interface | URL |
 |---|---|
 | Frontend | `http://<LXC_IP>` |
 | API (Swagger) | `http://<LXC_IP>/api/docs` |
+| Indexer monitoring | `http://<LXC_IP>/indexer-monitoring.html` |
+| Archive monitoring | `http://<LXC_IP>/archive-monitoring.html` |
 | PocketBase admin | `http://<LXC_IP>/_/` |
 
 ---
 
-## 5. Arrêt
+## 4. Déploiement (mise à jour)
+
+Utiliser `scripts/deploy_lxc.sh` depuis la machine de développement :
 
 ```bash
-# Stopper les services manuellement
-pkill -f uvicorn
-pkill -f indexer_worker
-pkill -f pocketbase
-
-# Ou stopper le conteneur
-pct stop $CTID
+./scripts/deploy_lxc.sh
 ```
+
+Ce script :
+1. `git pull` sur le LXC
+2. Met à jour les dépendances Python
+3. Rebuild le frontend
+4. Applique les migrations SQL
+5. Redémarre les services
 
 ---
 
-## 6. Mise à jour
+## 5. Recovery
 
-```bash
-cd /srv/openindex
-git pull origin main
-source .venv/bin/activate
-pip install --upgrade -r requirements/dev.txt xxhash
-npm install && npm run build:frontend
-for f in database/migrations/*.sql; do
-  PGPASSWORD=openindex_secure_password psql -h localhost -U openindex_user -d openindex -f "$f"
-done
-# Redémarrer les services
-```
-
----
-
-## 7. Recovery
-
-### 7.1 Backup PostgreSQL
+### 5.1 Backup PostgreSQL
 
 ```bash
 pg_dump -U openindex_user -d openindex > /srv/openindex/backups/openindex_$(date +%Y%m%d_%H%M%S).sql
 ```
 
-### 7.2 Restore PostgreSQL
+### 5.2 Restore PostgreSQL
 
 ```bash
-PGPASSWORD=openindex_secure_password psql -h localhost -U openindex_user -d openindex < backup_file.sql
+PGPASSWORD=$(grep POSTGRES_PASSWORD /srv/openindex/.env | cut -d= -f2) \
+  psql -h localhost -U openindex_user -d openindex < backup_file.sql
 ```
 
-### 7.3 Conteneur inaccessible
+### 5.3 Conteneur inaccessible
 
-Si le LXC ne répond plus, depuis l'hôte Proxmox :
+Depuis l'hôte Proxmox :
 
 ```bash
-pct exec $CTID -- bash -c "systemctl restart postgresql"
-pct exec $CTID -- bash -c "cd /srv/openindex && source .venv/bin/activate && nohup uvicorn backend.src.api.main:app --host 0.0.0.0 --port 8000 &"
+pct exec $CTID -- bash -c "systemctl restart postgresql openindex-api openindex-indexer-worker openindex-indexer-scheduler openindex-pocketbase nginx"
 ```
 
 ---
 
-## 8. Organisation des fichiers
+## 6. Organisation des fichiers
 
 ```
 /srv/openindex/
 ├── .env                  # Variables d'environnement
-├── OpenIndex/            # Code source (déployé)
-│   ├── backend/src/
-│   ├── frontend/
-│   ├── database/
-│   │   ├── init.sql
-│   │   └── migrations/
-│   ├── scripts/
-│   └── tests/
-├── pb_data/              # Données PocketBase
-└── pocketbase            # Binaire PocketBase
+├── backend/              # Code backend Python
+│   └── src/
+│       ├── api/          # FastAPI endpoints
+│       └── workers/      # Indexeur, archive, scheduler
+├── frontend/             # Assets frontend (index.html, etc.)
+├── database/
+│   ├── init.sql
+│   └── migrations/
+├── scripts/              # Outils de déploiement
+├── tests/                # Tests
+└── .venv/                # Environnement virtuel Python
 ```

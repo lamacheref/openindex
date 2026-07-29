@@ -404,7 +404,13 @@ class IndexerWorker:
             """
             INSERT INTO smb_spaces (name, host, share, remote_path, domain_zone, connection_username, connection_password, connection_domain)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (host, share, remote_path) DO UPDATE SET name = EXCLUDED.name
+            ON CONFLICT (host, share, remote_path) DO UPDATE SET
+                name = EXCLUDED.name,
+                domain_zone = EXCLUDED.domain_zone,
+                connection_username = EXCLUDED.connection_username,
+                connection_password = EXCLUDED.connection_password,
+                connection_domain = EXCLUDED.connection_domain,
+                updated_at = CURRENT_TIMESTAMP
             RETURNING id
             """,
             [

@@ -22,6 +22,9 @@ import socket
 import shutil
 import sys
 import time
+import base64
+import subprocess
+import tempfile
 import zipfile
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -587,35 +590,129 @@ class PostgreSQLAdapter:
         return rows[0][0]
 
     def get_statistics(self, space: Optional[str] = None) -> Dict[str, Any]:
+        space_id = self._resolve_space_id_from_path(space) if space else None
+
+        file_query = """
+            SELECT COUNT(*),
+                   COALESCE(SUM(CASE WHEN is_duplicate THEN 1 ELSE 0 END), 0),
+                   COALESCE(SUM(CASE WHEN NOT is_duplicate AND NOT is_deleted THEN size ELSE 0 END), 0)
+            FROM indexed_files_optimized
+            WHERE NOT is_deleted
+        """
+        dir_query = "SELECT COUNT(*) FROM directories"
+        file_params: List[Any] = []
+        dir_params: List[Any] = []
+
+        if space_id:
+            file_query += " AND space_id::text = %s"
+            file_params.append(space_id)
+            dir_query += " WHERE space_id::text = %s"
+            dir_params.append(space_id)
+
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(file_query, file_params)
+                file_row = cursor.fetchone() or (0, 0, 0)
+                cursor.execute(dir_query, dir_params)
+                dir_row = cursor.fetchone() or (0,)
+
+        return {
+            "total_files": file_row[0] or 0,
+            "total_directories": dir_row[0] or 0,
+            "total_size": file_row[2] or 0,
+            "duplicate_files": file_row[1] or 0,
+            "crawl_duration": None,
+        }
+
+    def get_files_by_type(self, space: Optional[str] = None) -> List[Dict[str, Any]]:
+        space_id = self._resolve_space_id_from_path(space) if space else None
         query = """
             SELECT
-                COUNT(*) as total_files,
-                SUM(CASE WHEN is_directory = TRUE THEN 1 ELSE 0 END) as total_directories,
-                COALESCE(SUM(CASE WHEN is_directory = FALSE THEN size ELSE 0 END), 0) as total_size,
-                SUM(CASE WHEN is_duplicate = TRUE THEN 1 ELSE 0 END) as duplicate_files
-            FROM files
+              CASE
+                WHEN LTRIM(LOWER(extension), '.') IN ('jpg','jpeg','png','gif','bmp','webp','svg','ico','tiff','tif') THEN 'images'
+                WHEN LTRIM(LOWER(extension), '.') IN ('pdf','doc','docx','xls','xlsx','xlsm','ppt','pptx','odt','ods','odp','txt','csv','rtf','md','log') THEN 'documents'
+                WHEN LTRIM(LOWER(extension), '.') IN ('zip','rar','7z','tar','gz','bz2','xz','zst','tgz') THEN 'archives'
+                WHEN LTRIM(LOWER(extension), '.') IN ('mp4','avi','mkv','mov','wmv','flv','webm') THEN 'vidéos'
+                WHEN LTRIM(LOWER(extension), '.') IN ('mp3','wav','flac','ogg','aac','wma') THEN 'audio'
+                WHEN LTRIM(LOWER(extension), '.') IN ('py','js','ts','html','htm','css','php','java','c','cpp','h','sql','sh','yaml','json','xml','yml','rb','go','rs','db') THEN 'code'
+                ELSE 'autres'
+              END as category,
+              COUNT(*) as count,
+              COALESCE(SUM(CASE WHEN NOT is_duplicate AND NOT is_deleted THEN size ELSE 0 END), 0) as total_size
+            FROM indexed_files_optimized
+            WHERE NOT is_deleted
         """
         params: List[Any] = []
-        if space:
-            config_id = self.resolve_space_config_id(space)
-            if config_id:
-                query += " WHERE crawl_config_id::text = %s"
-                params.append(config_id)
-            else:
-                query += " WHERE path LIKE %s"
-                params.append(f"{space}%")
+        if space_id:
+            query += " AND space_id::text = %s"
+            params.append(space_id)
+        query += " GROUP BY category ORDER BY total_size DESC"
 
         with self.get_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(query, params)
-                row = cursor.fetchone() or (0, 0, 0, 0)
-                return {
-                    "total_files": row[0] or 0,
-                    "total_directories": row[1] or 0,
-                    "total_size": row[2] or 0,
-                    "duplicate_files": row[3] or 0,
-                    "crawl_duration": None,
-                }
+                rows = cursor.fetchall()
+
+        return [
+            {"category": r[0], "count": r[1] or 0, "total_size": r[2] or 0}
+            for r in rows
+        ]
+
+    def get_hash_progress(self, space: Optional[str] = None) -> Dict[str, Any]:
+        space_id = self._resolve_space_id_from_path(space) if space else None
+
+        file_query = """
+            SELECT
+              COUNT(*) as total,
+              COUNT(CASE WHEN hash_xxh64 IS NOT NULL AND hash_xxh64 != '' THEN 1 END) as hashed
+            FROM indexed_files_optimized
+            WHERE NOT is_deleted
+        """
+        scan_query = """
+            SELECT MAX(started_at)
+            FROM indexer_jobs ij
+            JOIN crawl_configs cc ON cc.id = ij.config_id
+        """
+        file_params: List[Any] = []
+        scan_params: List[Any] = []
+
+        if space_id:
+            file_query += " AND space_id::text = %s"
+            file_params.append(space_id)
+            scan_query += " WHERE cc.start_path = %s"
+            scan_params.append(space)
+
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(file_query, file_params)
+                row = cursor.fetchone()
+                cursor.execute(scan_query, scan_params)
+                scan_row = cursor.fetchone()
+
+        return {
+            "total": row[0] or 0,
+            "hashed": row[1] or 0,
+            "last_hash_scan": scan_row[0].isoformat() if scan_row and scan_row[0] else None,
+        }
+
+    def _resolve_space_id_from_path(self, path: str) -> Optional[str]:
+        path_match = re.match(r'^//([^/]+)/([^/]+)(?:/(.*))?$', path) if path else None
+        if path_match:
+            rows = self.execute_query(
+                "SELECT id::text FROM smb_spaces WHERE host = %s AND share = %s AND remote_path = %s",
+                [path_match.group(1), path_match.group(2), path_match.group(3) or '']
+            )
+            return rows[0][0] if rows else None
+
+        parts = path.replace('//', '').split('/') if path else []
+        if len(parts) >= 2:
+            remote_path = '/'.join(parts[2:]) if len(parts) > 2 else ''
+            rows = self.execute_query(
+                "SELECT id::text FROM smb_spaces WHERE host = %s AND share = %s AND remote_path = %s",
+                [parts[0], parts[1], remote_path]
+            )
+            return rows[0][0] if rows else None
+        return None
 
     def get_indexed_file_checksum(self, file_path: str) -> Optional[str]:
         rows = self.execute_query(
@@ -688,66 +785,73 @@ class PostgreSQLAdapter:
 
     def get_spaces(self) -> List[Dict[str, Any]]:
         self.ensure_crawl_tables()
+        # Backfill: ensure every crawl_config has a matching smb_spaces entry
+        all_configs = self.execute_query(
+            """
+            SELECT id::text, name, domain_zone, start_path, is_archive,
+                   include_paths, exclude_paths,
+                   connection_username, connection_password, connection_domain,
+                   created_at::text
+            FROM crawl_configs
+            """
+        )
+        for row in all_configs:
+            self._sync_smb_space({
+                "id": row[0],
+                "name": row[1],
+                "domain_zone": row[2],
+                "start_path": row[3],
+                "is_archive": bool(row[4]),
+                "include_paths": row[5] or [],
+                "exclude_paths": row[6] or [],
+                "connection_username": row[7],
+                "connection_password": row[8],
+                "connection_domain": row[9],
+                "created_at": row[10],
+            })
         config_rows = self.execute_query(
             """
-            SELECT
-                c.id::text,
-                c.name,
-                c.start_path,
-                c.is_archive,
-                COUNT(f.id),
-                COALESCE(SUM(CASE WHEN f.is_directory = FALSE THEN f.size ELSE 0 END), 0)
-            FROM crawl_configs c
-            LEFT JOIN files f ON f.crawl_config_id = c.id
-            GROUP BY c.id, c.name, c.start_path, c.is_archive
-            ORDER BY c.name ASC, c.created_at DESC
+            SELECT id::text, name, start_path, is_archive
+            FROM crawl_configs
+            ORDER BY name ASC, created_at DESC
             """
         )
-        if config_rows:
-            return [
-                {
-                    "config_id": row[0],
-                    "name": row[1],
-                    "path_prefix": row[2],
-                    "is_archive": bool(row[3]),
-                    "file_count": row[4] or 0,
-                    "total_size": row[5] or 0,
-                }
-                for row in config_rows
-            ]
+        if not config_rows:
+            return []
 
-        paths = self.execute_query(
+        space_stats_rows = self.execute_query(
             """
-            SELECT path, size, is_directory
-            FROM files
-            WHERE path IS NOT NULL
+            SELECT s.id::text, s.host, s.share, s.remote_path,
+                   COUNT(f.id)::bigint,
+                   COALESCE(SUM(CASE WHEN NOT f.is_duplicate AND NOT f.is_deleted THEN f.size ELSE 0 END), 0)::bigint
+            FROM smb_spaces s
+            LEFT JOIN indexed_files_optimized f ON f.space_id = s.id AND NOT f.is_deleted
+            GROUP BY s.id, s.host, s.share, s.remote_path
             """
         )
-        spaces: Dict[str, Dict[str, Any]] = {}
+        space_stats = {}
+        for row in space_stats_rows:
+            key = (row[1], row[2], row[3])
+            space_stats[key] = {"file_count": row[4], "total_size": row[5]}
 
-        for row in paths:
-            path = row[0]
-            if not path:
-                continue
-
-            prefix = extract_space_prefix(path)
-            if not prefix:
-                continue
-
-            if prefix not in spaces:
-                spaces[prefix] = {
-                    "config_id": None,
-                    "name": prefix.replace("/", "").replace("\\", "") or prefix,
-                    "path_prefix": prefix,
-                    "is_archive": False,
-                    "file_count": 0,
-                    "total_size": 0,
-                }
-            spaces[prefix]["file_count"] += 1
-            if not bool(row[2]):
-                spaces[prefix]["total_size"] += int(row[1] or 0)
-
-        return sorted(spaces.values(), key=lambda item: item["name"].lower())
+        result = []
+        for row in config_rows:
+            start_path = row[2] or ''
+            path_match = re.match(r'^//([^/]+)/([^/]+)(?:/(.*))?$', start_path) if start_path else None
+            if path_match:
+                key = (path_match.group(1), path_match.group(2), path_match.group(3) or '')
+                stats = space_stats.get(key, {"file_count": 0, "total_size": 0})
+            else:
+                stats = {"file_count": 0, "total_size": 0}
+            result.append({
+                "config_id": row[0],
+                "name": row[1],
+                "path_prefix": start_path,
+                "is_archive": bool(row[3]),
+                "file_count": stats["file_count"],
+                "total_size": stats["total_size"],
+            })
+        return result
 
 
     def ensure_crawl_tables(self) -> None:
@@ -981,6 +1085,8 @@ class PostgreSQLAdapter:
     def get_crawl_config_for_path(self, file_path: str) -> Optional[Dict[str, Any]]:
         if not file_path:
             return None
+        # Normaliser le chemin pour correspondre au format stocké (forward slashes)
+        db_path = file_path.replace("\\", "/")
         rows = self.execute_query(
             """
             SELECT
@@ -1000,16 +1106,20 @@ class PostgreSQLAdapter:
             ORDER BY LENGTH(start_path) DESC, created_at DESC
             LIMIT 1
             """,
-            [file_path],
+            [db_path],
         )
         if not rows:
             return None
         row = rows[0]
+        start_path = row[3]
+        path_match = re.match(r'^//([^/]+)/([^/]+)(?:/(.*))?$', start_path) if start_path else None
+        connection_server = path_match.group(1) if path_match else ''
         return {
             "id": row[0],
             "name": row[1],
             "domain_zone": row[2],
-            "start_path": row[3],
+            "start_path": start_path,
+            "connection_server": connection_server,
             "is_archive": bool(row[4]),
             "include_paths": row[5] or [],
             "exclude_paths": row[6] or [],
@@ -1018,6 +1128,75 @@ class PostgreSQLAdapter:
             "connection_domain": row[9],
             "created_at": row[10],
         }
+
+    def _sync_smb_space(self, config: Dict[str, Any]) -> None:
+        """Upsert smb_spaces depuis une config crawl_config."""
+        start_path = config.get('start_path', '')
+        path_match = re.match(r'^//([^/]+)/([^/]+)(?:/(.*))?$', start_path) if start_path else None
+        if path_match:
+            host = path_match.group(1)
+            share = path_match.group(2)
+            remote_path = path_match.group(3) or ''
+        else:
+            parts = start_path.replace('//', '').split('/')
+            host = parts[0] if len(parts) > 0 else ''
+            share = parts[1] if len(parts) > 1 else ''
+            remote_path = '/'.join(parts[2:]) if len(parts) > 2 else ''
+
+        if not host or not share:
+            return
+
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO smb_spaces (name, host, share, remote_path, domain_zone, connection_username, connection_password, connection_domain)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (host, share, remote_path) DO UPDATE SET
+                        name = EXCLUDED.name,
+                        domain_zone = EXCLUDED.domain_zone,
+                        connection_username = EXCLUDED.connection_username,
+                        connection_password = EXCLUDED.connection_password,
+                        connection_domain = EXCLUDED.connection_domain,
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    [
+                        config.get('name', 'Unnamed'),
+                        host,
+                        share,
+                        remote_path,
+                        config.get('domain_zone', 'WORKGROUP'),
+                        config.get('connection_username', ''),
+                        config.get('connection_password', ''),
+                        config.get('connection_domain', '') or config.get('domain_zone', ''),
+                    ],
+                )
+            conn.commit()
+
+    def _unsync_smb_space(self, config: Dict[str, Any]) -> None:
+        """Supprime l'entrée smb_spaces correspondant à une config."""
+        start_path = config.get('start_path', '')
+        path_match = re.match(r'^//([^/]+)/([^/]+)(?:/(.*))?$', start_path) if start_path else None
+        if path_match:
+            host = path_match.group(1)
+            share = path_match.group(2)
+            remote_path = path_match.group(3) or ''
+        else:
+            parts = start_path.replace('//', '').split('/')
+            host = parts[0] if len(parts) > 0 else ''
+            share = parts[1] if len(parts) > 1 else ''
+            remote_path = '/'.join(parts[2:]) if len(parts) > 2 else ''
+
+        if not host or not share:
+            return
+
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "DELETE FROM smb_spaces WHERE host = %s AND share = %s AND remote_path = %s",
+                    [host, share, remote_path],
+                )
+            conn.commit()
 
     def create_crawl_config(self, payload: CrawlConfigCreate) -> Dict[str, Any]:
         query = """
@@ -1052,7 +1231,7 @@ class PostgreSQLAdapter:
                 row = cursor.fetchone()
             conn.commit()
 
-        return {
+        config = {
             "id": row[0],
             "name": row[1],
             "domain_zone": row[2],
@@ -1064,8 +1243,11 @@ class PostgreSQLAdapter:
             "connection_domain": row[8],
             "created_at": row[9],
         }
+        self._sync_smb_space(config)
+        return config
 
     def update_crawl_config(self, config_id: str, payload: CrawlConfigUpdate) -> Optional[Dict[str, Any]]:
+        old_config = self.get_crawl_config_by_id(config_id)
         with self.get_connection() as conn:
             with conn.cursor() as cursor:
                 if payload.connection.password:
@@ -1136,7 +1318,7 @@ class PostgreSQLAdapter:
         if not row:
             return None
 
-        return {
+        config = {
             "id": row[0],
             "name": row[1],
             "domain_zone": row[2],
@@ -1148,10 +1330,15 @@ class PostgreSQLAdapter:
             "connection_domain": row[8],
             "created_at": row[9],
         }
+        if old_config and old_config.get('start_path') != payload.start_path:
+            self._unsync_smb_space(old_config)
+        self._sync_smb_space(config)
+        return config
 
     def delete_crawl_config(self, config_id: str) -> bool:
         """Supprime une configuration de crawl par son ID"""
         try:
+            config = self.get_crawl_config_by_id(config_id)
             with self.get_connection() as conn:
                 with conn.cursor() as cursor:
                     cursor.execute(
@@ -1160,6 +1347,8 @@ class PostgreSQLAdapter:
                     )
                     result = cursor.fetchone()
                     conn.commit()
+                    if result and config:
+                        self._unsync_smb_space(config)
                     return result is not None
         except Exception as e:
             logger.error(f"Erreur lors de la suppression de la config {config_id}: {e}")
@@ -1497,6 +1686,15 @@ def _normalize_smb_path(path: str) -> str:
     return normalized.rstrip("\\") or normalized
 
 
+def _fix_smb_encoding(name: str) -> str:
+    try:
+        if any(0x80 <= ord(c) <= 0x9f for c in name):
+            return name.encode("latin-1").decode("cp850")
+    except Exception:
+        pass
+    return name
+
+
 def _join_smb_path(base_path: str, name: str) -> str:
     base = _normalize_smb_path(base_path).rstrip("\\")
     child = (name or "").strip("\\/")
@@ -1669,9 +1867,40 @@ def _preview_ods(raw_bytes: bytes, title: str) -> str:
     return _render_html_document(title, f"<h1>{html.escape(title)}</h1>{body}")
 
 
+def _libreoffice_convert_to_pdf(raw_bytes: bytes, extension: str) -> Optional[bytes]:
+    try:
+        soffice = shutil.which("libreoffice") or shutil.which("soffice")
+        if not soffice:
+            return None
+        with tempfile.NamedTemporaryFile(suffix=extension, delete=False) as tmp_in:
+            tmp_in.write(raw_bytes)
+            tmp_in_path = tmp_in.name
+        tmp_out_dir = tempfile.mkdtemp()
+        result = subprocess.run(
+            [soffice, "--headless", "--convert-to", "pdf", "--outdir", tmp_out_dir, tmp_in_path],
+            capture_output=True, timeout=60,
+        )
+        pdf_path = Path(tmp_out_dir) / (Path(tmp_in_path).stem + ".pdf")
+        pdf_bytes = pdf_path.read_bytes() if pdf_path.exists() else None
+        os.unlink(tmp_in_path)
+        shutil.rmtree(tmp_out_dir, ignore_errors=True)
+        return pdf_bytes
+    except Exception:
+        return None
+
+
 def _generate_office_preview_html(path: str, raw_bytes: bytes) -> str:
     extension = (_smb_extension(path) or "").lower()
     title = _smb_name(path)
+
+    pdf_bytes = _libreoffice_convert_to_pdf(raw_bytes, extension)
+    if pdf_bytes:
+        b64 = base64.b64encode(pdf_bytes).decode()
+        return f"""<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+*{{margin:0;padding:0;box-sizing:border-box}}body{{display:flex;height:100vh;background:#f0f0f0}}
+embed{{width:100%;height:100%;border:none;border-radius:4px}}</style>
+</head><body><embed src="data:application/pdf;base64,{b64}" type="application/pdf"></body></html>"""
+
     if extension in {".docx", ".doc"}:
         return _preview_docx(raw_bytes, title)
     if extension == ".odt":
@@ -1755,9 +1984,9 @@ def _read_smb_file_bytes(
     normalized_path = _normalize_smb_path(file_path)
     last_error: Optional[Exception] = None
     
-    # Si config fournie, configurer une session temporaire
+    # Si config fournie, enregistrer une session temporaire
     if config:
-        _configure_smb_session(config)
+        _smb_register_session_for_config(config)
     
     for attempt in range(retries + 1):
         try:
@@ -1779,6 +2008,23 @@ def _get_config_for_path_or_404(file_path: str) -> Dict[str, Any]:
     if not config:
         raise HTTPException(status_code=404, detail="Aucune configuration SMB ne couvre ce chemin")
     return config
+
+
+def _smb_register_session_for_config(config: Dict[str, Any]) -> None:
+    _require_smbclient()
+    start_path = config.get("start_path", "")
+    path_match = re.match(r'^//([^/]+)/([^/]+)', start_path) if start_path else None
+    host = path_match.group(1) if path_match else ""
+    username = config.get("connection_username") or ""
+    password = config.get("connection_password") or ""
+    domain = config.get("connection_domain") or config.get("domain_zone") or ""
+    if host:
+        smbclient.register_session(
+            host,
+            username=f"{domain}\\{username}" if domain and username else username,
+            password=password,
+            connection_timeout=10,
+        )
 
 
 def _ensure_parent_directories(target_directory_path: str) -> None:
@@ -1977,7 +2223,20 @@ async def get_live_explorer_items(
         normalized_root = _normalize_smb_path(root)
         normalized_current_path = _normalize_smb_path(current_path or root)
         config = _get_config_for_path_or_404(normalized_current_path)
-        _configure_smb_session(config)
+
+        start_path = config.get("start_path", "")
+        path_match = re.match(r'^//([^/]+)/([^/]+)', start_path) if start_path else None
+        host = path_match.group(1) if path_match else ""
+        username = config.get("connection_username") or ""
+        password = config.get("connection_password") or ""
+        domain = config.get("connection_domain") or config.get("domain_zone") or ""
+        if host:
+            smbclient.register_session(
+                host,
+                username=f"{domain}\\{username}" if domain and username else username,
+                password=password,
+                connection_timeout=10,
+            )
 
         entries = smbclient.listdir(normalized_current_path)
         items: List[ExplorerItem] = []
@@ -1985,10 +2244,11 @@ async def get_live_explorer_items(
         for entry_name in entries:
             if entry_name in {".", ".."}:
                 continue
+            entry_name = _fix_smb_encoding(entry_name)
             child_path = _join_smb_path(normalized_current_path, entry_name)
             try:
                 stat_info = smbclient.stat(child_path)
-                is_directory = stat_info.st_file_attributes & 0x10 if hasattr(stat_info, 'st_file_attributes') else False
+                is_directory = bool(stat_info.st_file_attributes & 0x10) if hasattr(stat_info, 'st_file_attributes') else False
                 items.append(ExplorerItem(
                     path=child_path,
                     name=entry_name,
@@ -2030,77 +2290,79 @@ async def get_explorer_items(
         normalized_root = _normalize_smb_path(root)
         normalized_current_path = _normalize_smb_path(current_path or root)
 
-        where_clause = "starts_with(path, %s)"
-        params: List[Any] = [normalized_current_path]
-        config_id = db.resolve_space_config_id(normalized_root) if hasattr(db, "resolve_space_config_id") else None
-        if config_id:
-            where_clause += " AND (crawl_config_id::text = %s OR crawl_config_id IS NULL)"
-            params.append(config_id)
+        # Use forward-slash version for parsing
+        fs_root = root.replace("\\", "/")
+        fs_current = (current_path or root).replace("\\", "/")
 
-        rows = db.execute_query(
-            f"""
-            SELECT
-                path,
-                name,
-                size,
-                last_modified,
-                is_directory,
-                crawl_config_id::text,
-                created_at,
-                CASE
-                    WHEN checksum IS NULL OR is_directory = TRUE THEN 0
-                    ELSE (
-                        SELECT COUNT(*)
-                        FROM files AS duplicates
-                        WHERE duplicates.checksum = files.checksum
-                          AND duplicates.path <> files.path
-                          AND duplicates.is_directory = FALSE
-                    )
-                END AS duplicate_count
-            FROM files
-            WHERE {where_clause}
-            ORDER BY is_directory DESC, name ASC
-            LIMIT %s
-            """,
-            params + [limit],
+        path_match = re.match(r'^//([^/]+)/([^/]+)(?:/(.*))?$', fs_root) if fs_root else None
+        host = path_match.group(1) if path_match else ''
+        share = path_match.group(2) if path_match else ''
+        remote_path = path_match.group(3) or '' if path_match else ''
+
+        space_rows = db.execute_query(
+            "SELECT id::text FROM smb_spaces WHERE host = %s AND share = %s AND remote_path = %s",
+            [host, share, remote_path],
         )
+        space_id = space_rows[0][0] if space_rows else None
 
-        items_by_path: Dict[str, ExplorerItem] = {}
-        for row in rows:
-            raw_path = row[0]
-            if not raw_path:
-                continue
-            normalized_path = _normalize_smb_path(raw_path)
-            if normalized_path == normalized_current_path:
-                continue
-            relative = normalized_path[len(normalized_current_path):].lstrip("\\")
-            if not relative:
-                continue
-            child_name = relative.split("\\", 1)[0]
-            child_path = _join_smb_path(normalized_current_path, child_name)
-            existing = items_by_path.get(child_path)
-            is_directory = bool(row[4]) or ("\\" in relative)
-            if existing and existing.is_directory:
-                continue
-            items_by_path[child_path] = ExplorerItem(
-                path=child_path,
-                name=child_name,
-                is_directory=is_directory,
-                size=None if is_directory else row[2],
-                last_modified=row[3],
-                created_at=row[6],
-                extension=None if is_directory else _smb_extension(child_path),
-                crawl_config_id=row[5],
-                has_duplicates=bool((row[7] or 0) > 0),
-                duplicate_count=int(row[7] or 0),
+        prefix = f"//{host}/{share}/"
+        rel_path = fs_current.removeprefix(prefix) if fs_current else remote_path
+        if not rel_path:
+            rel_path = remote_path or ''
+
+        items: List[ExplorerItem] = []
+
+        if space_id:
+            dir_rows = db.execute_query(
+                """
+                SELECT path, name
+                FROM directories
+                WHERE space_id::text = %s AND parent_path = %s
+                ORDER BY name ASC
+                LIMIT %s
+                """,
+                [space_id, rel_path, limit],
             )
+            for row in dir_rows:
+                child_path = _join_smb_path(normalized_current_path, row[1])
+                items.append(ExplorerItem(
+                    path=child_path,
+                    name=row[1],
+                    is_directory=True,
+                    crawl_config_id=space_id,
+                ))
 
-        return sorted(
-            items_by_path.values(),
-            key=lambda item: (not item.is_directory, item.name.lower()),
-        )
-    except HTTPException:
-        raise
+            remaining = limit - len(items)
+            if remaining > 0:
+                dir_id_rows = db.execute_query(
+                    "SELECT id::text FROM directories WHERE space_id::text = %s AND path = %s",
+                    [space_id, rel_path],
+                )
+                if dir_id_rows:
+                    dir_id = dir_id_rows[0][0]
+                    file_rows = db.execute_query(
+                        """
+                        SELECT path, name, size, last_modified, created_at, hash_xxh64
+                        FROM indexed_files_optimized
+                        WHERE space_id::text = %s AND directory_id::text = %s AND NOT is_deleted
+                        ORDER BY name ASC
+                        LIMIT %s
+                        """,
+                        [space_id, dir_id, remaining],
+                    )
+                    for row in file_rows:
+                        child_path = _join_smb_path(normalized_current_path, row[1])
+                        items.append(ExplorerItem(
+                            path=child_path,
+                            name=row[1],
+                            is_directory=False,
+                            size=row[2],
+                            last_modified=row[3],
+                            created_at=row[4],
+                            crawl_config_id=space_id,
+                            has_duplicates=bool(row[5]),
+                        ))
+        return items
     except Exception as e:
         logger.error(f"Erreur get_explorer_items: {e}")
         raise HTTPException(status_code=500, detail="Erreur lors du chargement de l'explorateur")
@@ -2111,7 +2373,7 @@ async def get_file_content(path: str, download: bool = False):
     try:
         normalized_path = _normalize_smb_path(path)
         config = _get_config_for_path_or_404(normalized_path)
-        _configure_smb_session(config)
+        _smb_register_session_for_config(config)
         media_type = _guess_media_type(normalized_path)
         filename = _smb_name(normalized_path) or "document"
         payload = _read_smb_file_bytes(normalized_path)
@@ -2136,7 +2398,7 @@ async def get_file_preview(path: str):
     try:
         normalized_path = _normalize_smb_path(path)
         config = _get_config_for_path_or_404(normalized_path)
-        _configure_smb_session(config)
+        _smb_register_session_for_config(config)
         payload = _read_smb_file_bytes(normalized_path)
         html_document = _generate_office_preview_html(normalized_path, payload)
         return HTMLResponse(content=html_document)
@@ -2340,6 +2602,39 @@ async def archive_file(payload: ArchiveFileRequest):
         raise HTTPException(status_code=500, detail="Erreur lors de l'archivage du fichier")
 
 
+class DeleteFileRequest(BaseModel):
+    path: str
+
+
+@app.post("/api/file/delete")
+async def delete_file(payload: DeleteFileRequest):
+    """Supprime un fichier SMB"""
+    try:
+        normalized_path = _normalize_smb_path(payload.path)
+        config = _get_config_for_path_or_404(normalized_path)
+
+        start_path = config.get("start_path", "")
+        path_match = re.match(r'^//([^/]+)/([^/]+)', start_path) if start_path else None
+        host = path_match.group(1) if path_match else ""
+        username = config.get("connection_username") or ""
+        password = config.get("connection_password") or ""
+        domain = config.get("connection_domain") or config.get("domain_zone") or ""
+        if host:
+            smbclient.register_session(
+                host,
+                username=f"{domain}\\{username}" if domain and username else username,
+                password=password,
+            )
+
+        smbclient.remove(normalized_path)
+        return {"status": "deleted", "path": normalized_path}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur delete_file: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la suppression du fichier")
+
+
 @app.get("/api/smb-mounts")
 async def get_smb_mounts():
     """Liste les montages SMB actifs avec leur temps d'inactivité."""
@@ -2452,6 +2747,26 @@ async def get_crawl_stats(space: Optional[str] = None):
     except Exception as e:
         logger.error(f"Erreur get_stats: {e}")
         raise HTTPException(status_code=500, detail="Erreur lors de la récupération des statistiques")
+
+
+@app.get("/api/stats/files-by-type")
+async def get_stats_files_by_type(space: Optional[str] = None):
+    try:
+        db = get_db_adapter()
+        return db.get_files_by_type(space=space)
+    except Exception as e:
+        logger.error(f"Erreur get_files_by_type: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la récupération des types de fichiers")
+
+
+@app.get("/api/stats/hash-progress")
+async def get_stats_hash_progress(space: Optional[str] = None):
+    try:
+        db = get_db_adapter()
+        return db.get_hash_progress(space=space)
+    except Exception as e:
+        logger.error(f"Erreur get_hash_progress: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la récupération du statut du hashage")
 
 
 @app.get("/api/duplicates")
@@ -4115,7 +4430,7 @@ class ArchiveQueueMonitoring(BaseModel):
 
 def get_scheduler():
     """Factory pour obtenir l'instance du scheduler"""
-    from backend.src.archive_scheduler import ArchiveScheduler
+    from backend.src.workers.archive_scheduler import ArchiveScheduler
     return ArchiveScheduler()
 
 

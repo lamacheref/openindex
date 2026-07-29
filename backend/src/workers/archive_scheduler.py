@@ -12,8 +12,8 @@ from dataclasses import dataclass
 from typing import Optional, List, Dict, Any, Tuple
 from croniter import croniter
 
-from backend.src.postgres_adapter import PostgreSQLAdapter
-from backend.src.logging_config import OpenIndexLogger
+from backend.src.database.postgres_adapter import PostgreSQLAdapter
+from backend.src.core.logging_config import OpenIndexLogger
 
 
 @dataclass
@@ -64,7 +64,6 @@ class ArchiveScheduler:
         }
         
         self.adapter = PostgreSQLAdapter(self.postgres_config)
-        self.adapter.initialize_database()
         
         # Logging
         self.logger_manager = OpenIndexLogger(log_dir="logs", app_name="archive_scheduler")

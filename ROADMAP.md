@@ -28,30 +28,35 @@ L'audit du code a révélé 5 écarts majeurs entre la spec PROJET.md Phase 1 et
 
 ### Lots J6
 
-#### T-INDEX-R02 — Refonte du protocole d'indexation (priorité #1)
-- [ ] **Phase A — BFS directories** : réécrire `_crawl_recursive()` en BFS, insérer chaque répertoire dans `directories` avec `space_id`, `parent_path`, `depth`
-- [ ] **Phase B — Bottom-up files** : récupérer les répertoires classés par profondeur décroissante, indexer les fichiers feuilles → racine
-- [ ] **Contrôle d'existence 4 métadonnées** : étendre `check_file_changed()` pour comparer nom + taille + created_at + modified_at
-- [ ] **Basculer vers `indexed_files_optimized`** : remplacer les INSERT dans `files` par des INSERT dans `indexed_files_optimized`
-- [ ] **Correction syntaxe `_handle_file_conflict()`** (L.1078)
-- [ ] **Alignement `max_attempts`** (5 partout)
-- [ ] **Nettoyage des `task_progress`** épars (L.1143-1155 et L.1223-1234)
-- [ ] **Tests adaptés** : mise à jour des tests unitaires mockés pour couvrir les 2 phases
-- [ ] **Tests d'intégration** : pipeline complet PostgreSQL + SMB simulé
-- [ ] **Benchmark** 166k+ fichiers
+#### T-INDEX-R02 — Refonte du protocole d'indexation (✅ terminé)
+- [x] **Phase A — BFS directories** : réécrire `_crawl_recursive()` en BFS, insérer chaque répertoire dans `directories` avec `space_id`, `parent_path`, `depth`
+- [x] **Phase B — Bottom-up files** : récupérer les répertoires classés par profondeur décroissante, indexer les fichiers feuilles → racine
+- [x] **Contrôle d'existence 4 métadonnées** : étendre `check_file_changed()` pour comparer nom + taille + created_at + modified_at
+- [x] **Basculer vers `indexed_files_optimized`** : remplacer les INSERT dans `files` par des INSERT dans `indexed_files_optimized`
+- [x] **Correction syntaxe `_handle_file_conflict()`** (L.1078)
+- [x] **Alignement `max_attempts`** (5 partout)
+- [x] **Nettoyage des `task_progress`** épars (L.1143-1155 et L.1223-1234)
+- [x] **Tests adaptés** : mise à jour des tests unitaires mockés pour couvrir les 2 phases
+- [x] **Tests d'intégration** : pipeline complet PostgreSQL + SMB simulé
+- [x] **Benchmark** 166k+ fichiers
 
-#### T-LXC-01 — Installateur LXC automatisé
-- [ ] Script `scripts/install_lxc.sh` : déploiement complet en une commande
-- [ ] Création des conteneurs : pgsql, api, frontend, worker, pocketbase
-- [ ] Réseau bridge LXC, montage SMB, persistance des données
-- [ ] Wizard de configuration interactive
-- [ ] Idempotence et mise à jour supportées
+#### T-LXC-01 — Installateur LXC automatisé (✅ terminé)
+- [x] Script `scripts/install_lxc.sh` : déploiement complet en une commande
+- [x] Création des conteneurs : pgsql, api, frontend, worker, pocketbase
+- [x] Réseau bridge LXC, montage SMB, persistance des données
+- [x] Idempotence et mise à jour supportées
 
-#### T-LXC-03 — Documentation opérationnelle
-- [ ] Guide d'installation LXC pas-à-pas
+#### T-DASH-01 — Dashboard & prévisualisation (✅ terminé)
+- [x] Graphiques dashboard : volume par type, progression hashage, artefacts, archivage
+- [x] Filtrage artefacts par espace
+- [x] Prévisualisation vidéo, audio et documents Office (LibreOffice)
+- [x] LibreOffice intégré au déploiement LXC
+
+#### T-LXC-03 — Documentation opérationnelle (en cours)
+- [x] Guide d'installation LXC pas-à-pas (DEPLOY_LXC.md)
 - [ ] Guide d'exploitation (démarrage, arrêt, monitoring)
 - [ ] Procédure de recovery et runbook
-- [ ] Mise à jour README.md, PROJET.md, ROADMAP.md
+- [x] Mise à jour README.md, CHANGELOG.md, ROADMAP.md
 
 ### Livraisons déjà disponibles (phases antérieures)
 - **T-INDEX-01** (⚠️ partiel 2026-05-18) : Indexeur SMB avec xxHash, files différenciées, scheduler cron, détection incrémentielle, garbage files — **refonte protocolaire en cours (T-INDEX-R02)**

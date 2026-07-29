@@ -129,15 +129,36 @@ async def get_indexer_stats():
 
         query = """
             SELECT
-                COUNT(*) FILTER (WHERE status = 'pending') as pending_count,
-                COUNT(*) FILTER (WHERE status = 'running') as running_count,
-                COUNT(*) FILTER (WHERE status = 'completed') as completed_count,
-                COUNT(*) FILTER (WHERE status = 'failed') as failed_count,
-                COALESCE(SUM(files_indexed) FILTER (WHERE status = 'completed'), 0) as total_files_indexed,
-                COALESCE(SUM(bytes_total) FILTER (WHERE status = 'completed'), 0) as total_bytes_indexed,
-                MAX(created_at) as last_job_created,
-                MAX(completed_at) FILTER (WHERE status = 'completed') as last_completion
-            FROM indexer_jobs
+                (
+                    SELECT COUNT(*) FROM crawl_runs WHERE LOWER(status) = 'queued'
+                ) + (
+                    SELECT COUNT(*) FROM indexer_jobs WHERE LOWER(status) IN ('pending', 'queued')
+                ) as pending_count,
+                (
+                    SELECT COUNT(*) FROM crawl_runs WHERE LOWER(status) IN ('running', 'in_progress')
+                ) + (
+                    SELECT COUNT(*) FROM indexer_jobs WHERE LOWER(status) = 'running'
+                ) as running_count,
+                (
+                    SELECT COUNT(*) FROM crawl_runs WHERE LOWER(status) = 'completed'
+                ) + (
+                    SELECT COUNT(*) FROM indexer_jobs WHERE LOWER(status) = 'completed'
+                ) as completed_count,
+                (
+                    SELECT COUNT(*) FROM crawl_runs WHERE LOWER(status) = 'failed'
+                ) + (
+                    SELECT COUNT(*) FROM indexer_jobs WHERE LOWER(status) = 'failed'
+                ) as failed_count,
+                (SELECT COUNT(*) FROM indexed_files_optimized WHERE NOT is_deleted AND NOT is_duplicate) as total_files_indexed,
+                (SELECT COALESCE(SUM(size), 0) FROM indexed_files_optimized WHERE NOT is_deleted AND NOT is_duplicate) as total_bytes_indexed,
+                COALESCE(
+                    (SELECT MAX(triggered_at) FROM crawl_runs),
+                    (SELECT MAX(created_at) FROM indexer_jobs)
+                ) as last_job_created,
+                COALESCE(
+                    (SELECT MAX(triggered_at) FROM crawl_runs WHERE LOWER(status) = 'completed'),
+                    (SELECT MAX(completed_at) FROM indexer_jobs WHERE LOWER(status) = 'completed')
+                ) as last_completion
         """
 
         results = db.execute_query(query)

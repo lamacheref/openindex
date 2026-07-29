@@ -5,9 +5,10 @@ Endpoints pour filtrer et gérer les fichiers problématiques
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Any, List, Optional
 from datetime import datetime
 import logging
+import re
 
 # Configuration du logging
 logger = logging.getLogger("openindex.api.artefacts")
@@ -49,7 +50,7 @@ class ArtefactCategoryResponse(BaseModel):
 def get_db_adapter():
     """Retourne l'adaptateur de base de données"""
     try:
-        from backend.src.postgres_adapter import PostgreSQLAdapter
+        from backend.src.database.postgres_adapter import PostgreSQLAdapter
         import os
         
         # Configuration PostgreSQL depuis les variables d'environnement
@@ -398,10 +399,65 @@ async def get_unused_files(
         raise HTTPException(status_code=500, detail=f"Erreur: {e}")
 
 
+@router.get("/garbage", response_model=ArtefactCategoryResponse)
+async def get_garbage_files(
+    limit: int = Query(100, description="Nombre maximum de fichiers à retourner"),
+    offset: int = Query(0, description="Offset pour la pagination")
+):
+    """
+    Liste les fichiers poubelles (temporaires, Thumbs.db, fichiers Office, etc.)
+    """
+    try:
+        db = get_db_adapter()
+
+        query = """
+            SELECT id, path, name, size, checksum, last_modified, created_at
+            FROM garbage_listing
+            ORDER BY size DESC, path ASC
+            LIMIT %s OFFSET %s
+        """
+        files = db.execute_query(query, (limit, offset))
+
+        stats_query = """
+            SELECT COUNT(*) as count, COALESCE(SUM(size), 0) as total_size
+            FROM garbage_listing
+        """
+        stats = db.execute_query(stats_query)[0]
+
+        formatted_files = [
+            ArtefactFile(
+                id=f[0],
+                path=f[1],
+                name=f[2],
+                size=f[3],
+                checksum=f[4],
+                last_modified=f[5],
+            )
+            for f in files
+        ]
+
+        return ArtefactCategoryResponse(
+            category="garbage",
+            files=formatted_files,
+            stats=ArtefactCategoryStats(
+                category="garbage",
+                count=stats[0],
+                total_size=stats[1] or 0
+            )
+        )
+
+    except Exception as e:
+        logger.error(f"Erreur get_garbage_files: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {e}")
+
+
 @router.get("/stats", response_model=List[ArtefactCategoryStats])
-async def get_artefacts_stats():
+async def get_artefacts_stats(space: Optional[str] = None):
     """
     Récupère les statistiques pour toutes les catégories d'artefacts
+    
+    Args:
+        space: Chemin SMB de l'espace pour filtrer les résultats (optionnel)
     
     Returns:
         Liste des statistiques pour chaque catégorie (doublons, gros fichiers, anciens, inutilisés)
@@ -409,21 +465,38 @@ async def get_artefacts_stats():
     try:
         db = get_db_adapter()
         
+        space_filter = ""
+        params: List[Any] = []
+        if space:
+            path_match = re.match(r'^//([^/]+)/([^/]+)(?:/(.*))?$', space)
+            if path_match:
+                host = path_match.group(1)
+                share = path_match.group(2)
+                remote_path = path_match.group(3) or ''
+                row = db.execute_query(
+                    "SELECT id::text FROM smb_spaces WHERE host = %s AND share = %s AND remote_path = %s",
+                    [host, share, remote_path]
+                )
+                if row:
+                    space_filter = " WHERE space_id = %s::uuid"
+                    params = [row[0][0]]
+        
         # Statistiques pour chaque catégorie
         categories = [
-            ("duplicates", "SELECT COUNT(*) as count, SUM(size) as total_size FROM duplicate_files"),
-            ("large", "SELECT COUNT(*) as count, SUM(size) as total_size FROM large_files"),
-            ("old", "SELECT COUNT(*) as count, SUM(size) as total_size FROM old_files"),
-            ("unused", "SELECT COUNT(*) as count, SUM(size) as total_size FROM unused_files")
+            ("duplicates", f"SELECT COUNT(*) as count, SUM(size) as total_size FROM duplicate_files{space_filter}"),
+            ("large", f"SELECT COUNT(*) as count, SUM(size) as total_size FROM large_files{space_filter}"),
+            ("old", f"SELECT COUNT(*) as count, SUM(size) as total_size FROM old_files{space_filter}"),
+            ("unused", f"SELECT COUNT(*) as count, SUM(size) as total_size FROM unused_files{space_filter}"),
+            ("garbage", f"SELECT COUNT(*) as count, SUM(size) as total_size FROM garbage_listing{space_filter}")
         ]
         
         results = []
         for category, query in categories:
-            stats = db.execute_query(query)[0]
+            stats = db.execute_query(query, params)
             results.append(ArtefactCategoryStats(
                 category=category,
-                count=stats[0],
-                total_size=stats[1] or 0
+                count=stats[0][0],
+                total_size=stats[0][1] or 0
             ))
         
         return results

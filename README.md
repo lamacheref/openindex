@@ -10,13 +10,14 @@ Crée un conteneur LXC Ubuntu 24.04 (2 CPU, 2 Go RAM, 16 Go disque) avec P
 
 ## État actuel
 
-**Phase J6 — Refonte protocolaire de l'indexeur terminée (T-INDEX-R02 ✅).**
+**Phase J6 — Déploiement LXC & Dashboard opérationnel (v0.6.100).**
 
-L'indexeur implémente désormais le protocole 2 phases : BFS des répertoires → bottom-up des fichiers, avec contrôle d'existence sur 4 métadonnées (nom + taille + date création + date modification) et écriture dans la table `indexed_files_optimized`.
+L'indexeur 2 phases (BFS → bottom-up) est validé et déployé sur le LXC Proxmox (`nyx`). La console opératoire est enrichie de tableaux de bord (volume par type, progression hashage, artefacts, archivage) et la prévisualisation supporte désormais vidéo, audio et documents Office (LibreOffice).
 
 Ce qui reste :
-- ✅ **Tests unitaires** — 90 tests (Phase A/B, Priority 4, indexer worker) passés
-- ⏳ **Déploiement LXC** — validation en cours sur Proxmox
+- ✅ **Tests unitaires** — 90 tests passés
+- ✅ **Déploiement LXC** — validation sur nyx, 3 espaces SMB (SEPM, SMIDEN, Archives_SEM)
+- ⏳ **Hashage des fichiers** — crawl en cours (large volume SEPM)
 - ❌ Gestion des raccourcis/symlinks — hors périmètre Phase 1
 
 ## Fonctionnalités
@@ -31,7 +32,9 @@ Ce qui reste :
 - **Archivage SMB** : queue de jobs persistants, transfer worker avec retry
 - **Authentification** : PocketBase, JWT, routes protégées
 - **Monitoring temps réel** : métriques, health checks, WebSocket
-- **API REST** : 20+ endpoints
+- **API REST** : 25+ endpoints
+- **Dashboard** : Volume par type, progression hashage, artefacts, archivage
+- **Prévisualisation fichiers** : Image, vidéo, audio, documents Office (LibreOffice)
 
 ## Accès
 
@@ -74,7 +77,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `2bc62e32` | 2026-07-28 | non | non | refonte complète interface + fix espaces SMB multi-sources |
+| `f73b51ff` | 2026-07-29 | non | non | feat: dashboard charts, preview Office/video/audio, artefacts filter, LibreOffice |
+| `6c610980` | 2026-07-28 | oui | oui | refonte complète interface + fix espaces SMB multi-sources |
 | `70dcf8a3` | 2026-07-24 | oui | oui | affiche dossiers traités pendant Phase B sur 3e ligne |
 | `a208d822` | 2026-07-24 | oui | oui | progression temps réel Phase B via compteur dossiers traités |
 | `166e994f` | 2026-07-24 | oui | oui | ajout version commit dans le footer sidebar |
@@ -123,4 +127,3 @@ pytest -q tests/
 | `773fa3b2` | 2026-07-22 | oui | oui | T-INDEX-R02 finalisation 1d : logs, filtres space_id, PROJET.md à jour |
 | `a7aadd06` | 2026-07-22 | oui | oui | T-INDEX-R02 refonte protocole indexeur (P0 + P1a/b/c) |
 | `941c4f0e` | 2026-07-22 | oui | oui | Phase J6: réorientation LXC + validation indexeur |
-| `11948c34` | 2026-05-18 | oui | oui | Add indexer retries table and priority 4 features |

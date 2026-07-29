@@ -100,7 +100,8 @@ apt-get install -y \
   nginx \
   postgresql postgresql-client \
   smbclient cifs-utils \
-  unzip openssl
+  unzip openssl \
+  libreoffice-core-nogui libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui
 apt-get -y upgrade
 
 msg_info "Setting up PostgreSQL"

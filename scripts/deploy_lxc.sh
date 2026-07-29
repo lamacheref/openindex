@@ -2,20 +2,26 @@
 set -e
 
 ssh -i "$HOME/.ssh/flamachere_pro_20260511" root@192.168.110.6 "
-cd /srv/OpenIndex
+cd /srv/openindex
 git pull
 
 find . -name __pycache__ -exec rm -rf {} + 2>/dev/null
 
-# Créer le dossier de logs
-mkdir -p /var/log/openindex
+# Mettre à jour les dépendances Python
+source .venv/bin/activate
+pip install --upgrade -r requirements/dev.txt xxhash
 
-# Copier les fichiers frontend vers le dossier servi par nginx
-cp frontend/index.html /var/www/html/index.html
-cp frontend/indexer-monitoring.html /var/www/html/indexer-monitoring.html
-cp frontend/archive-monitoring.html /var/www/html/archive-monitoring.html
-cp frontend/assets/* /var/www/html/assets/ 2>/dev/null || true
+# Rebuilder le frontend
+npm install --omit=dev 2>/dev/null || true
+npm run build:frontend
+
+# Appliquer les migrations
+for f in database/migrations/*.sql; do
+  echo \"Running \$f\"
+  PGPASSWORD=\$(grep POSTGRES_PASSWORD .env | cut -d= -f2) psql -h localhost -U \$(grep POSTGRES_USER .env | cut -d= -f2) -d \$(grep POSTGRES_DB .env | cut -d= -f2) -f \"\$f\" 2>/dev/null || true
+done
 
 # Redémarrer les services
-systemctl restart openindex-api openindex-indexer-worker
+systemctl daemon-reload
+systemctl restart openindex-api openindex-indexer-worker openindex-indexer-scheduler
 "

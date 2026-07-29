@@ -40,3 +40,9 @@
 - ✅ Nouveau design identique à `indexer-monitoring.html`
 - ✅ 4 vues : Dashboard, Explorateur, Artefacts, Recherche
 - ✅ API frontend corrigées pour correspondre au backend
+
+### Dashboard & prévisualisation (réalisé)
+- ✅ Graphiques dashboard : volume par type (tableau), hashage (barre %), artefacts (tableau), archivage
+- ✅ Filtre artefacts par espace (paramètre `space`)
+- ✅ Prévisualisation vidéo, audio et documents Office (LibreOffice)
+- ✅ LibreOffice installé sur le LXC de production

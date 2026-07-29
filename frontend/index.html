@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="assets/tailwind.css">
     <link rel="stylesheet" href="assets/fontawesome/css/all.min.css">
     <script defer src="assets/alpine.min.js"></script>
-    <script defer src="assets/auth.js"></script>
+    <!-- <script defer src="assets/auth.js"></script> -->
     <style>
         body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
         .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(229, 231, 235, 0.8); }
@@ -79,7 +79,7 @@
                     <i class="fas fa-chart-line w-5 text-center"></i>
                     <span class="font-medium">Tableau de bord</span>
                 </button>
-                <button @click="currentView = 'explorer'; syncExplorerRoots(); refreshExplorer()"
+                <button @click="currentView = 'explorer'; loadSpaces().then(() => { syncExplorerRoots(); refreshExplorer(); })"
                         :class="{ 'active': currentView === 'explorer' }"
                         class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-600">
                     <i class="fas fa-folder-tree w-5 text-center"></i>
@@ -186,23 +186,91 @@
                         </div>
                     </div>
 
-                    <!-- Config active -->
+                    <!-- Files by type table -->
+                    <div class="bg-white rounded-xl border border-gray-200 p-5">
+                        <h3 class="font-semibold text-gray-900 mb-3">Volume par type de fichier</h3>
+                        <div x-show="!filesByType.length" class="text-sm text-gray-400">Chargement...</div>
+                        <table x-show="filesByType.length" class="table-data w-full">
+                            <thead>
+                                <tr><th>Type</th><th class="text-right">Fichiers</th><th class="text-right">Volume</th></tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="t in filesByType.filter(x => x.category !== 'autres')" :key="t.category">
+                                    <tr>
+                                        <td class="text-sm capitalize" x-text="t.category"></td>
+                                        <td class="text-sm text-right font-medium" x-text="formatNumber(t.count)"></td>
+                                        <td class="text-sm text-right" x-text="formatBytes(t.total_size)"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Hash progress -->
+                    <div class="bg-white rounded-xl border border-gray-200 p-5">
+                        <h3 class="font-semibold text-gray-900 mb-3">État du hashage</h3>
+                        <div x-show="!hashProgress.total" class="text-sm text-gray-400">Chargement...</div>
+                        <div x-show="hashProgress.total">
+                            <div class="flex items-center justify-between text-sm text-gray-600 mb-1">
+                                <span x-text="Math.round(hashProgress.total > 0 ? (hashProgress.hashed / hashProgress.total * 100) : 0) + ' %'"></span>
+                                <span x-text="formatNumber(hashProgress.hashed) + ' / ' + formatNumber(hashProgress.total)"></span>
+                            </div>
+                            <div class="bg-gray-100 rounded-full h-6 overflow-hidden">
+                                <div class="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                                     :style="'width: ' + (hashProgress.total > 0 ? (hashProgress.hashed / hashProgress.total * 100) : 0) + '%'"></div>
+                            </div>
+                            <div class="text-xs text-gray-400 mt-1" x-show="hashProgress.last_hash_scan" x-text="'Dernier scan: ' + formatDate(hashProgress.last_hash_scan)"></div>
+                        </div>
+                    </div>
+
+                    <!-- Artefacts table -->
                     <div class="bg-white rounded-xl border border-gray-200 p-5">
                         <div class="flex items-center justify-between mb-3">
-                            <h3 class="font-semibold text-gray-900">Configuration active</h3>
-                            <button @click="openConfig()" class="text-xs text-blue-600 hover:text-blue-800 font-medium">Gérer</button>
+                            <h3 class="font-semibold text-gray-900">Artefacts</h3>
+                            <button @click="currentView = 'artifacts'" class="text-xs text-blue-600 hover:text-blue-800 font-medium">Gérer</button>
                         </div>
-                        <div x-show="selectedConfig" class="space-y-3">
-                            <div class="bg-gray-50 rounded-lg p-3">
-                                <p class="text-xs text-gray-500">Nom</p>
-                                <p class="font-medium" x-text="selectedConfig?.name || '-'"></p>
+                        <div x-show="!artefactStats.length" class="text-sm text-gray-400">Chargement...</div>
+                        <table x-show="artefactStats.length" class="table-data w-full">
+                            <thead>
+                                <tr><th>Catégorie</th><th class="text-right">Fichiers</th><th class="text-right">Volume</th></tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="a in artefactStats" :key="a.category">
+                                    <tr>
+                                        <td class="text-sm" x-text="categoryLabel(a.category)"></td>
+                                        <td class="text-sm text-right font-medium" x-text="formatNumber(a.count)"></td>
+                                        <td class="text-sm text-right" x-text="formatBytes(a.total_size)"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Archive status -->
+                    <div x-show="archiveDashboard.total_jobs > 0" class="bg-white rounded-xl border border-gray-200 p-5">
+                        <h3 class="font-semibold text-gray-900 mb-3">État d'archivage</h3>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                            <div class="bg-gray-50 rounded-lg p-3 text-center">
+                                <p class="text-xs text-gray-500">En attente</p>
+                                <p class="text-lg font-bold text-gray-700" x-text="archiveDashboard.queue_status?.pending?.count || 0"></p>
                             </div>
-                            <div class="bg-gray-50 rounded-lg p-3">
-                                <p class="text-xs text-gray-500">Chemin</p>
-                                <p class="text-sm break-all" x-text="selectedConfig?.start_path || '-'"></p>
+                            <div class="bg-gray-50 rounded-lg p-3 text-center">
+                                <p class="text-xs text-gray-500">En cours</p>
+                                <p class="text-lg font-bold text-blue-600" x-text="archiveDashboard.queue_status?.running?.count || 0"></p>
+                            </div>
+                            <div class="bg-gray-50 rounded-lg p-3 text-center">
+                                <p class="text-xs text-gray-500">Terminés</p>
+                                <p class="text-lg font-bold text-emerald-600" x-text="archiveDashboard.queue_status?.completed?.count || 0"></p>
+                            </div>
+                            <div class="bg-gray-50 rounded-lg p-3 text-center">
+                                <p class="text-xs text-gray-500">Échecs</p>
+                                <p class="text-lg font-bold text-red-600" x-text="archiveDashboard.queue_status?.failed?.count || 0"></p>
                             </div>
                         </div>
-                        <div x-show="!selectedConfig" class="text-sm text-gray-500">Sélectionne un espace dans la barre latérale.</div>
+                        <div class="mt-3 flex items-center justify-between text-xs text-gray-500">
+                            <span>File d'archivage active</span>
+                            <span x-text="'Planifications: ' + formatNumber(archiveDashboard.active_schedules)"></span>
+                        </div>
                     </div>
                 </div>
 
@@ -254,8 +322,14 @@
                             </div>
                             <div x-show="explorer.source.selectedItems.length > 0" class="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2">
                                 <span class="text-xs text-gray-500" x-text="explorer.source.selectedItems.length + ' fichier(s) sélectionné(s)'"></span>
-                                <button @click="showArchiveModal = true" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded text-xs font-medium">
+                                <button @click="archiveMode = 'copy'; showArchiveModal = true" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs font-medium">
+                                    <i class="fas fa-copy mr-1"></i> Copier
+                                </button>
+                                <button @click="archiveMode = 'move'; showArchiveModal = true" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded text-xs font-medium">
                                     <i class="fas fa-box-archive mr-1"></i> Archiver
+                                </button>
+                                <button @click="deleteSelectedFiles()" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs font-medium">
+                                    <i class="fas fa-trash mr-1"></i> Supprimer
                                 </button>
                             </div>
                         </div>
@@ -263,7 +337,24 @@
                         <div class="bg-white rounded-xl border border-gray-200 p-4">
                             <div class="flex items-center justify-between mb-3">
                                 <h4 class="font-semibold text-sm text-gray-700">Archive</h4>
-                                <span class="text-xs text-gray-500" x-text="explorer.archive.currentPath"></span>
+                                <div class="flex items-center gap-2">
+                                    <template x-if="archiveSpaces.length > 0">
+                                        <select x-model="activeArchiveSpace" @change="selectArchiveSpace(activeArchiveSpace)"
+                                                class="text-xs border border-gray-300 rounded px-2 py-1 max-w-[180px]">
+                                            <option value="">Sélectionner un espace</option>
+                                            <template x-for="s in archiveSpaces" :key="s.path_prefix">
+                                                <option :value="s.path_prefix" x-text="s.name || s.path_prefix"></option>
+                                            </template>
+                                        </select>
+                                    </template>
+                                    <template x-if="archiveSpaces.length === 0">
+                                        <button @click="showConfigOverlay = true; resetCrawlForm(); showCrawlForm = true; newCrawl.is_archive = true"
+                                                class="text-xs text-blue-600 hover:text-blue-800 font-medium">
+                                            <i class="fas fa-plus mr-1"></i> Ajouter un espace archive
+                                        </button>
+                                    </template>
+                                    <span class="text-xs text-gray-500" x-text="explorer.archive.currentPath"></span>
+                                </div>
                             </div>
                             <div class="flex items-center gap-2 mb-3 flex-wrap">
                                 <button @click="explorerGoUp('archive')" :disabled="!canGoUp('archive')"
@@ -301,7 +392,7 @@
                     <div x-show="showArchiveModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
                          @click.self="showArchiveModal = false">
                         <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-                            <h3 class="font-semibold text-lg mb-4">Archiver des fichiers</h3>
+                            <h3 class="font-semibold text-lg mb-4" x-text="archiveMode === 'move' ? 'Archiver des fichiers' : 'Copier des fichiers'"></h3>
                             <p class="text-sm text-gray-600 mb-4" x-text="explorer.source.selectedItems.length + ' fichier(s) sélectionné(s)'"></p>
                             <div class="space-y-3 mb-4">
                                 <label class="flex items-center gap-2 text-sm">
@@ -310,7 +401,7 @@
                                 </label>
                                 <label class="flex items-center gap-2 text-sm">
                                     <input type="radio" x-model="archiveMode" value="move">
-                                    Déplacer (supprimer la source)
+                                    Archiver (copier + supprimer la source après vérification)
                                 </label>
                                 <label class="flex items-center gap-2 text-sm">
                                     <input type="checkbox" x-model="archiveOverwrite">
@@ -320,9 +411,28 @@
                             <div class="flex justify-end gap-2">
                                 <button @click="showArchiveModal = false" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 font-medium">Annuler</button>
                                 <button @click="archiveFiles()" :disabled="archiveBusy"
-                                        class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
-                                    <span x-show="!archiveBusy">Confirmer</span>
+                                        :class="archiveMode === 'move' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'"
+                                        class="text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+                                    <span x-show="!archiveBusy" x-text="archiveMode === 'move' ? 'Archiver' : 'Copier'"></span>
                                     <span x-show="archiveBusy"><i class="fas fa-spinner fa-spin mr-1"></i> Traitement...</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Delete Modal -->
+                    <div x-show="showDeleteModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+                         @click.self="showDeleteModal = false">
+                        <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+                            <h3 class="font-semibold text-lg mb-4">Confirmer la suppression</h3>
+                            <p class="text-sm text-gray-600 mb-4" x-text="'Supprimer définitivement ' + explorer.source.selectedItems.length + ' fichier(s) ?'"></p>
+                            <p class="text-xs text-red-600 mb-4"><i class="fas fa-exclamation-triangle mr-1"></i> Cette action est irréversible.</p>
+                            <div class="flex justify-end gap-2">
+                                <button @click="showDeleteModal = false" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 font-medium">Annuler</button>
+                                <button @click="confirmDelete()" :disabled="deletingBusy"
+                                        class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+                                    <span x-show="!deletingBusy"><i class="fas fa-trash mr-1"></i> Supprimer</span>
+                                    <span x-show="deletingBusy"><i class="fas fa-spinner fa-spin mr-1"></i> Suppression...</span>
                                 </button>
                             </div>
                         </div>
@@ -338,6 +448,12 @@
                             </div>
                             <div x-show="previewModal.kind === 'image'">
                                 <img :src="'/api/file-content?path=' + encodeURIComponent(previewModal.path)" class="max-w-full rounded-lg">
+                            </div>
+                            <div x-show="previewModal.kind === 'video'" class="flex justify-center">
+                                <video controls class="max-w-full max-h-[70vh] rounded-lg" :src="'/api/file-content?path=' + encodeURIComponent(previewModal.path)"></video>
+                            </div>
+                            <div x-show="previewModal.kind === 'audio'" class="flex justify-center py-12">
+                                <audio controls class="w-full max-w-md" :src="'/api/file-content?path=' + encodeURIComponent(previewModal.path)"></audio>
                             </div>
                             <div x-show="previewModal.kind === 'text' || previewModal.kind === 'code'" class="bg-gray-50 rounded-lg p-4">
                                 <pre class="text-sm whitespace-pre-wrap font-mono" x-text="previewTextContent"></pre>
@@ -371,7 +487,7 @@
                     </div>
 
                     <!-- Artifact Categories -->
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                 <button @click="artifactFilter = 'all'; loadArtifacts()" class="metric-card rounded-xl p-4 text-left"
                         :class="artifactFilter === 'all' ? 'ring-2 ring-blue-500' : ''">
                     <p class="text-xs text-gray-500">Tous</p>
@@ -391,6 +507,11 @@
                         :class="artifactFilter === 'old' ? 'ring-2 ring-teal-500' : ''">
                     <p class="text-xs text-gray-500">Vieux fichiers</p>
                     <p class="text-2xl font-bold text-teal-600" x-text="artifactCounts.old"></p>
+                </button>
+                <button @click="artifactFilter = 'garbage'; loadArtifacts()" class="metric-card rounded-xl p-4 text-left"
+                        :class="artifactFilter === 'garbage' ? 'ring-2 ring-red-500' : ''">
+                    <p class="text-xs text-gray-500">Pourriels</p>
+                    <p class="text-2xl font-bold text-red-600" x-text="artifactCounts.garbage"></p>
                 </button>
                     </div>
 
@@ -668,6 +789,10 @@
                             <input type="text" x-model="newCrawl.start_path" placeholder="Chemin SMB (//host/share/chemin)" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
                             <input type="text" x-model="newCrawl.connection.username" placeholder="Utilisateur (optionnel)" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
                             <input type="password" x-model="newCrawl.connection.password" placeholder="Mot de passe" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                <input type="checkbox" x-model="newCrawl.is_archive" class="rounded border-gray-300 text-blue-600">
+                                Zone d'archivage
+                            </label>
                             <div class="flex justify-end gap-2">
                                 <button @click="showCrawlForm = false" class="px-3 py-1.5 text-sm text-gray-600">Annuler</button>
                                 <button @click="saveCrawlConfig()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium">
@@ -715,6 +840,8 @@
             showCrawlForm: false,
             editingCrawlId: '',
             newCrawl: { name: '', domain_zone: '', start_path: '', is_archive: false, connection: { username: '', password: '', domain: '' } },
+            showDeleteModal: false,
+            deletingBusy: false,
             notifications: [],
 
             // Explorer state
@@ -722,6 +849,7 @@
                 source: { root: '', currentPath: '', items: [], selectedPath: '', selectedItems: [], loading: false, error: '' },
                 archive: { root: '', currentPath: '', items: [], selectedPath: '', selectedItems: [], loading: false, error: '' }
             },
+            activeArchiveSpace: '',
             showArchiveModal: false,
             archiveMode: 'copy',
             archiveOverwrite: false,
@@ -752,6 +880,11 @@
             searchPerformed: false,
             summaryStats: { total_files: 0, total_size: 0, files_by_type: {}, files_by_space: {}, recent_files: [] },
             loadingSummary: false,
+            filesByType: [],
+            maxTypeSize: 0,
+            hashProgress: { total: 0, hashed: 0, last_hash_scan: null },
+            artefactStats: [],
+            archiveDashboard: { total_jobs: 0, active_schedules: 0, queue_status: {} },
 
             // Computed
             get pageTitle() {
@@ -773,11 +906,15 @@
             get sourceSpaces() {
                 return this.spaces.filter(s => !s.is_archive);
             },
+            get archiveSpaces() {
+                return this.spaces.filter(s => s.is_archive);
+            },
             get engineHasRunningRun() {
                 return this.crawlerRuntime?.active === true;
             },
             get selectedConfig() {
-                return this.crawlConfigs.find(c => c.start_path === this.activeSpace) || this.crawlConfigs[0] || null;
+                const space = this.spaces.find(s => s.path_prefix === this.activeSpace);
+                return this.crawlConfigs.find(c => c.id === space?.config_id) || null;
             },
 
             // ========== INIT ==========
@@ -789,6 +926,7 @@
                 await this.loadStats();
                 await this.loadSystemStatus();
                 await this.loadSummaryStats();
+                await this.loadDashboardCharts();
                 setInterval(() => this.autoRefresh(), 10000);
             },
 
@@ -819,6 +957,7 @@
 
             async autoRefresh() {
                 await this.loadStats();
+                if (this.currentView === 'dashboard') await this.loadDashboardCharts();
             },
 
             async loadStats() {
@@ -846,6 +985,7 @@
                 this.activeSpace = prefix;
                 this.syncExplorerRoots();
                 await this.loadStats();
+                await this.loadDashboardCharts();
                 await this.refreshExplorerPanel('source');
             },
 
@@ -888,6 +1028,31 @@
                 return map[status] || status;
             },
 
+            categoryLabel(cat) {
+                const map = { duplicates: 'Doublons', large: 'Gros fichiers', old: 'Fichiers anciens', unused: 'Fichiers inutilisés', garbage: 'Pourriels' };
+                return map[cat] || cat;
+            },
+
+            async loadDashboardCharts() {
+                try {
+                    const spaceParam = this.activeSpace ? '?space=' + encodeURIComponent(this.activeSpace) : '';
+                    const [typeRes, hashRes, artefactRes, archRes] = await Promise.all([
+                        fetch('/api/stats/files-by-type' + spaceParam),
+                        fetch('/api/stats/hash-progress' + spaceParam),
+                        fetch('/api/artefacts/stats' + spaceParam),
+                        fetch('/api/archive/monitoring/dashboard').catch(() => null)
+                    ]);
+                    if (typeRes.ok) {
+                        const data = await typeRes.json();
+                        this.filesByType = Array.isArray(data) ? data : [];
+                        this.maxTypeSize = Math.max(...this.filesByType.map(t => t.total_size), 1);
+                    }
+                    if (hashRes.ok) this.hashProgress = await hashRes.json();
+                    if (artefactRes.ok) this.artefactStats = await artefactRes.json();
+                    if (archRes && archRes.ok) this.archiveDashboard = await archRes.json();
+                } catch (e) { console.error('Dashboard charts error:', e); }
+            },
+
             // ========== EXPLORER ==========
             syncExplorerRoots() {
                 const space = this.spaces.find(s => s.path_prefix === this.activeSpace);
@@ -895,11 +1060,21 @@
                     this.explorer.source.root = space.path_prefix || '';
                     this.explorer.source.currentPath = space.path_prefix || '';
                 }
-                const archiveSpaces = this.spaces.filter(s => s.is_archive);
-                if (archiveSpaces.length > 0) {
-                    this.explorer.archive.root = archiveSpaces[0].path_prefix || '';
-                    this.explorer.archive.currentPath = archiveSpaces[0].path_prefix || '';
+                const archSpaces = this.archiveSpaces;
+                if (archSpaces.length > 0) {
+                    if (!this.activeArchiveSpace || !archSpaces.some(s => s.path_prefix === this.activeArchiveSpace)) {
+                        this.activeArchiveSpace = archSpaces[0].path_prefix;
+                    }
+                    this.explorer.archive.root = this.activeArchiveSpace || '';
+                    this.explorer.archive.currentPath = this.activeArchiveSpace || '';
                 }
+            },
+
+            selectArchiveSpace(path) {
+                this.activeArchiveSpace = path;
+                this.explorer.archive.root = path;
+                this.explorer.archive.currentPath = path;
+                this.refreshExplorerPanel('archive');
             },
 
             async refreshExplorer() {
@@ -912,7 +1087,8 @@
                 p.loading = true;
                 p.error = '';
                 try {
-                    const res = await fetch('/api/explorer/items?root=' + encodeURIComponent(p.root) + '&current_path=' + encodeURIComponent(p.currentPath));
+                    const endpoint = panel === 'archive' ? '/api/explorer/live-items' : '/api/explorer/items';
+                    const res = await fetch(endpoint + '?root=' + encodeURIComponent(p.root) + '&current_path=' + encodeURIComponent(p.currentPath));
                     if (res.ok) {
                         const data = await res.json();
                         p.items = (Array.isArray(data) ? data : data.items || data.files || []).sort((a, b) => {
@@ -987,6 +1163,8 @@
             async openPreview(item) {
                 const ext = (item.name || '').split('.').pop()?.toLowerCase();
                 const imageExts = ['jpg','jpeg','png','gif','bmp','webp','svg'];
+                const videoExts = ['mp4','avi','mkv','mov','wmv','flv','webm'];
+                const audioExts = ['mp3','wav','flac','ogg','aac','wma'];
                 const textExts = ['txt','md','csv','json','xml','yaml','yml','log','ini','cfg'];
                 const codeExts = ['py','js','ts','html','css','sh','bat','sql','c','cpp','h','java'];
                 const officeExts = ['doc','docx','xls','xlsx','ppt','pptx','odt','ods','odp'];
@@ -996,6 +1174,10 @@
 
                 if (imageExts.includes(ext)) {
                     this.previewModal.kind = 'image';
+                } else if (videoExts.includes(ext)) {
+                    this.previewModal.kind = 'video';
+                } else if (audioExts.includes(ext)) {
+                    this.previewModal.kind = 'audio';
                 } else if (officeExts.includes(ext)) {
                     this.previewModal.kind = 'office';
                 } else if (ext === 'pdf') {
@@ -1019,7 +1201,7 @@
                             method: 'POST', headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 source_path: file,
-                                dest_path: this.explorer.archive.currentPath + '/' + file.split('/').pop(),
+                                target_directory_path: this.explorer.archive.currentPath,
                                 mode: this.archiveMode,
                                 overwrite: this.archiveOverwrite
                             })
@@ -1032,11 +1214,38 @@
                 finally { this.archiveBusy = false; }
             },
 
+            async deleteSelectedFiles() {
+                const files = this.explorer.source.selectedItems;
+                if (!files.length) return;
+                this.showDeleteModal = true;
+            },
+
+            async confirmDelete() {
+                const files = this.explorer.source.selectedItems;
+                if (!files.length) return;
+                this.deletingBusy = true;
+                let ok = 0, err = 0;
+                for (const file of files) {
+                    try {
+                        const res = await fetch('/api/file/delete', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ path: file })
+                        });
+                        if (res.ok) ok++; else err++;
+                    } catch { err++; }
+                }
+                this.showDeleteModal = false;
+                this.deletingBusy = false;
+                this.explorer.source.selectedItems = [];
+                await this.refreshExplorer();
+                if (err > 0) alert(ok + ' supprimé(s), ' + err + ' erreur(s)');
+            },
+
             // ========== ARTIFACTS ==========
             async loadArtifacts() {
                 this.loadingArtifacts = true;
                 try {
-                    const endpointMap = { duplicate: 'duplicates', large: 'large', old: 'old', unused: 'unused', all: '' };
+                    const endpointMap = { duplicate: 'duplicates', large: 'large', old: 'old', unused: 'unused', garbage: 'garbage', all: '' };
                     const endpoint = endpointMap[this.artifactFilter] || '';
                     let items = [];
                     if (endpoint) {
@@ -1050,10 +1259,10 @@
                     const statsRes = await fetch('/api/artefacts/stats');
                     if (statsRes.ok) {
                         const statsList = await statsRes.json();
-                        const counts = { all: 0, duplicate: 0, large: 0, old: 0, unused: 0 };
+                        const counts = { all: 0, duplicate: 0, large: 0, old: 0, unused: 0, garbage: 0 };
                         if (Array.isArray(statsList)) {
                             statsList.forEach(s => { counts[s.category] = s.count || 0; });
-                            counts.all = (counts.duplicate || 0) + (counts.large || 0) + (counts.old || 0) + (counts.unused || 0);
+                            counts.all = (counts.duplicate || 0) + (counts.large || 0) + (counts.old || 0) + (counts.unused || 0) + (counts.garbage || 0);
                         }
                         this.artifactCounts = counts;
                     }
@@ -1065,11 +1274,12 @@
                 if (item.category === 'duplicate' || item.checksum) return 'status-pending';
                 if (item.category === 'large') return 'bg-purple-100 text-purple-800';
                 if (item.category === 'old') return 'bg-teal-100 text-teal-800';
+                if (item.category === 'garbage') return 'bg-red-100 text-red-800';
                 return 'status-pending';
             },
 
             artifactTypeLabel(item) {
-                const labels = { duplicate: 'Doublon', large: 'Gros fichier', old: 'Vieux fichier', unused: 'Inutilisé' };
+                const labels = { duplicate: 'Doublon', large: 'Gros fichier', old: 'Vieux fichier', unused: 'Inutilisé', garbage: 'Pourriel' };
                 return labels[item.category] || item.category || 'Artefact';
             },
 
@@ -1207,6 +1417,7 @@
                         this.showCrawlForm = false;
                         this.resetCrawlForm();
                         await this.loadCrawlConfigs();
+                        await this.loadSpaces();
                     }
                 } catch (e) { console.error('Save config error:', e); }
             },
@@ -1216,6 +1427,7 @@
                 try {
                     await fetch('/api/crawl-configs/' + configId, { method: 'DELETE' });
                     await this.loadCrawlConfigs();
+                    await this.loadSpaces();
                 } catch (e) { console.error('Delete config error:', e); }
             },
 

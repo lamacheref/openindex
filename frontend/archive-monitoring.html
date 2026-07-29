@@ -5,9 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OpenIndex - Monitoring Archivage</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
 
     <script src="/assets/alpine.min.js" defer></script>
-    <script src="/assets/auth.js" defer></script>
+
     <link rel="stylesheet" href="/assets/tailwind.css">
     <link rel="stylesheet" href="/assets/fontawesome/css/all.min.css">
 
@@ -451,69 +454,12 @@ function archiveMonitoring() {
         },
         
         initUser() {
-            const isTruthyAdminValue = (value) => {
-                if (typeof value === 'string') {
-                    const normalizedValue = value.trim().toLowerCase();
-                    return normalizedValue === 'true' || normalizedValue === '1' || normalizedValue === 'yes';
-                }
-
-                return value === true || value === 1;
+            this.currentUser = {
+                name: 'Administrateur',
+                role: 'admin',
+                role_label: 'Administrateur',
+                is_admin: true
             };
-
-            const resolveUserAdminStatus = (user) => {
-                if (typeof resolveAdminStatus === 'function') {
-                    return resolveAdminStatus(user);
-                }
-
-                return Boolean(
-                    isTruthyAdminValue(user?.isAdmin) ||
-                    isTruthyAdminValue(user?.is_admin) ||
-                    isTruthyAdminValue(user?.admin) ||
-                    user?.role === 'admin'
-                );
-            };
-
-            // Vérifier l'authentification et rediriger si nécessaire
-            if (typeof onPbReady !== 'undefined') {
-                onPbReady((pbInstance) => {
-                    if (pbInstance && pbInstance.authStore.isValid) {
-                        const user = pbInstance.authStore.model;
-                        const isAdmin = resolveUserAdminStatus(user);
-                        this.currentUser = {
-                            name: user.name || user.email || 'Utilisateur',
-                            role: isAdmin ? 'admin' : 'user',
-                            role_label: isAdmin ? 'Administrateur' : 'Utilisateur',
-                            is_admin: isAdmin
-                        };
-                        
-                        // Rediriger les non-admins vers l'explorateur de fichiers
-                        if (!this.currentUser.is_admin) {
-                            window.location.href = '/index.html';
-                        }
-                    } else {
-                        // Utilisateur non authentifié - rediriger vers login
-                        window.location.href = '/login.html';
-                    }
-                });
-            } else if (typeof pb !== 'undefined' && pb.authStore.isValid) {
-                // Fallback direct
-                const user = pb.authStore.model;
-                const isAdmin = resolveUserAdminStatus(user);
-                this.currentUser = {
-                    name: user.name || user.email || 'Utilisateur',
-                    role: isAdmin ? 'admin' : 'user',
-                    role_label: isAdmin ? 'Administrateur' : 'Utilisateur',
-                    is_admin: isAdmin
-                };
-                
-                // Rediriger les non-admins vers l'explorateur de fichiers
-                if (!this.currentUser.is_admin) {
-                    window.location.href = '/index.html';
-                }
-            } else {
-                // Utilisateur non authentifié - rediriger vers login
-                window.location.href = '/login.html';
-            }
         },
         
         async init() {

@@ -1,5 +1,31 @@
 # Changelog OpenIndex avec PostgreSQL
 
+## 2026-07-29 — Tableaux de bord, prévisualisation & infrastructure (v0.6.100)
+
+### Nouvelles fonctionnalités
+- **Dashboard analytics** : Graphiques volume par type, progression hashage (barre %), artefacts classés, état archivage
+- **Nouveaux endpoints** : `/api/stats/files-by-type`, `/api/stats/hash-progress`
+- **Filtrage artefacts par espace** : paramètre `space` sur `/api/artefacts/stats`
+- **Prévisualisation explorateur** : Support vidéo (`<video>`) et audio (`<audio>`) dans la lightbox
+- **Prévisualisation Office (LibreOffice)** : Conversion DOCX/XLSX/PPTX en PDF via LibreOffice, intégré en base64 data URI
+
+### Correctifs
+- **`connection_server` extrait** de `start_path` dans `get_crawl_config_for_path`
+- **`_configure_smb_session` remplacé** par `_smb_register_session_for_config` (smbclient.register_session) dans preview/download
+- **Hash progress utilise `indexer_jobs.started_at`** (date de lancement) au lieu de `updated_at` du fichier
+- **Catégorie "autres" masquée** du graphique files-by-type
+- **Barre hashage simplifiée** (horizontale, sans %, sans bord arrondi)
+- **Labels artefacts traduits** en français
+- **Bloc "Config active" supprimé** du dashboard (redondant)
+- **`selectSpace()` rafraîchit** les charts dashboard
+
+### Infrastructure
+- **LibreOffice installé** : `libreoffice-core-nogui`, `libreoffice-writer-nogui`, `libreoffice-calc-nogui`, `libreoffice-impress-nogui`
+- **dpkg réparé** après corruption (paquets nodejs)
+- Scripts install/déploiement mis à jour
+
+---
+
 ## 2026-04-08 — T-ARCH-02 Archive Scheduling & Monitoring (v0.6.0)
 
 ### Nouvelles fonctionnalités majeures

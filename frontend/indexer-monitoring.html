@@ -150,6 +150,12 @@
                     <i class="fas fa-terminal w-5 text-center"></i>
                     <span class="font-medium">Logs</span>
                 </button>
+                <div class="border-t border-gray-100 my-2"></div>
+                <a href="index.html"
+                   class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-600 hover:bg-gray-100">
+                    <i class="fas fa-gauge-high w-5 text-center"></i>
+                    <span class="font-medium">Console principale</span>
+                </a>
             </nav>
             
             <!-- Status Worker -->
@@ -666,7 +672,8 @@
                     remote_path: '',
                     username: '',
                     password: '',
-                    domain: ''
+                    domain: '',
+                    is_archive: false
                 },
                 showDeleteConfirmModal: false,
                 configToDelete: null,
@@ -684,7 +691,8 @@
                     remote_path: '',
                     username: '',
                     password: '',
-                    domain: ''
+                    domain: '',
+                    is_archive: false
                 },
                 
                 // Logs
@@ -898,7 +906,7 @@
                                 password: this.newConfig.password || '',
                                 domain: this.newConfig.domain || ''
                             },
-                            is_archive: false,
+                            is_archive: this.newConfig.is_archive || false,
                             include_paths: [],
                             exclude_paths: []
                         };
@@ -974,7 +982,8 @@
                         remote_path: '',
                         username: '',
                         password: '',
-                        domain: ''
+                        domain: '',
+                        is_archive: false
                     };
                 },
                 
@@ -990,7 +999,8 @@
                         remote_path: pathMatch && pathMatch[3] ? pathMatch[3] : '',
                         username: config.connection_username || '',
                         password: '', // Ne pas pré-remplir le mot de passe pour sécurité
-                        domain: config.connection_domain || config.domain_zone || ''
+                        domain: config.connection_domain || config.domain_zone || '',
+                        is_archive: !!config.is_archive
                     };
                     this.showEditConfigModal = true;
                 },
@@ -1011,7 +1021,7 @@
                                 password: this.editConfigData.password,
                                 domain: this.editConfigData.domain || ''
                             },
-                            is_archive: false,
+                            is_archive: this.editConfigData.is_archive || false,
                             include_paths: [],
                             exclude_paths: []
                         };
@@ -1223,6 +1233,10 @@
                     <input type="text" x-model="editConfigData.domain" placeholder="ex: WORKGROUP ou MONDOMAINE"
                            class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                 </div>
+                <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input type="checkbox" x-model="editConfigData.is_archive" class="rounded border-gray-300 text-blue-600">
+                    Zone d'archivage
+                </label>
             </div>
             <div class="px-6 py-4 bg-gray-50 flex justify-end gap-3">
                 <button @click="cancelEditConfig()" class="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium">
@@ -1295,6 +1309,10 @@
                     <input type="text" x-model="newConfig.domain" placeholder="ex: WORKGROUP ou MONDOMAINE (optionnel)"
                            class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                 </div>
+                <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input type="checkbox" x-model="newConfig.is_archive" class="rounded border-gray-300 text-blue-600">
+                    Zone d'archivage
+                </label>
                 <div class="bg-blue-50 rounded-lg p-3 text-sm">
                     <p class="text-blue-800"><i class="fas fa-info-circle mr-1"></i> Cette source sera utilisée pour indexer les fichiers SMB.</p>
                 </div>
