@@ -77,7 +77,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `e28df3b3` | 2026-07-29 | non | non | fix(artefacts): recreate large_files/old_files/unused_files on indexed_files_optimized |
+| `5053f2e7` | 2026-07-29 | non | non | fix(artefacts): drop unused_files (no last_accessed in indexed_files), migrate large/old to space_id |
+| `198f502a` | 2026-07-29 | oui | oui | fix(artefacts): recreate large_files/old_files/unused_files on indexed_files_optimized |
 | `0e1fc2aa` | 2026-07-29 | oui | oui | fix(ui): prevent empty-path 404 from hidden preview elements by checking previewModal.open |
 | `d6f3157d` | 2026-07-29 | oui | oui | fix(artefacts): resolve space_id and crawl_config_id separately per view |
 | `724f45b7` | 2026-07-29 | oui | oui | fix(ui): remove 'Version' prefix and 'v' duplication, display build timestamp on second line |
@@ -126,4 +127,3 @@ pytest -q tests/
 | `663366ff` | 2026-07-22 | oui | oui | Restore scripts/versioning.py + fix pre-commit exécutable |
 | `510f627c` | 2026-07-22 | oui | oui | README: URL installation GitHub (main) |
 | `8331c600` | 2026-07-22 | oui | oui | README: URL installation pointe vers main (Devel supprimée) |
-| `a2db82a6` | 2026-07-22 | oui | oui | README: URL installation Gitea (vs GitHub), suppression ref CI-CD.md |

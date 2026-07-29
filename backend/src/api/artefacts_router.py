@@ -486,18 +486,20 @@ async def get_artefacts_stats(space: Optional[str] = None):
             ("duplicates", f"SELECT COUNT(*) as count, SUM(size) as total_size FROM duplicate_files{space_filter}"),
             ("large", f"SELECT COUNT(*) as count, SUM(size) as total_size FROM large_files{space_filter}"),
             ("old", f"SELECT COUNT(*) as count, SUM(size) as total_size FROM old_files{space_filter}"),
-            ("unused", f"SELECT COUNT(*) as count, SUM(size) as total_size FROM unused_files{space_filter}"),
             ("garbage", f"SELECT COUNT(*) as count, SUM(size) as total_size FROM garbage_listing{space_filter}")
         ]
         
         results = []
         for category, query in categories:
-            stats = db.execute_query(query, params)
-            results.append(ArtefactCategoryStats(
-                category=category,
-                count=stats[0][0],
-                total_size=stats[0][1] or 0
-            ))
+            try:
+                stats = db.execute_query(query, params)
+                results.append(ArtefactCategoryStats(
+                    category=category,
+                    count=stats[0][0] if stats else 0,
+                    total_size=stats[0][1] or 0 if stats else 0
+                ))
+            except Exception:
+                results.append(ArtefactCategoryStats(category=category, count=0, total_size=0))
         
         return results
         
