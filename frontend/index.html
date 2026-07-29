@@ -115,9 +115,11 @@
                 <div class="bg-gray-50 rounded-lg p-3 text-center text-xs">
                     <p class="font-semibold text-gray-700">
                         <a :href="systemStatus.repository_url" target="_blank"
-                           x-text="`v${systemStatus.app_version} (${systemStatus.commit_hash})`"></a>
+                           x-text="`v${systemStatus.app_version} (${systemStatus.env_type})`"></a>
                     </p>
-                    <p class="text-gray-400 mt-0.5" x-text="systemStatus.license_owner"></p>
+                    <p class="text-gray-400 mt-0.5">
+                        <span x-text="systemStatus.build_timestamp"></span>
+                    </p>
                 </div>
             </div>
         </aside>

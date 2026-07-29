@@ -77,7 +77,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `86932466` | 2026-07-29 | non | non | fix(versioning): resolve PROJECT_ROOT correctly from backend/src/core/versioning.py |
+| `9e1b93f1` | 2026-07-29 | non | non | fix(ui): remove 'Version' prefix and 'v' duplication, display build timestamp on second line |
+| `5dd5d1ec` | 2026-07-29 | oui | oui | fix(versioning): resolve PROJECT_ROOT correctly from backend/src/core/versioning.py |
 | `60d88178` | 2026-07-29 | oui | oui | fix(deploy): use absolute path for .env file and skip npm if missing |
 | `d9f70e52` | 2026-07-29 | oui | oui | fix(deploy): use correct path /srv/OpenIndex and handle local stash before pull |
 | `777b4c47` | 2026-07-29 | oui | oui | fix: replace LibreOffice PDF conversion with HTML embedding for native read-only preview |
@@ -126,4 +127,3 @@ pytest -q tests/
 | `3deee6b3` | 2026-07-22 | oui | oui | Merge pull request 'T-INDEX-R02 : Refonte protocolaire de l'indexation (BFS, bottom-up, écritures optimisées)' (#2) from Devel into main |
 | `be81fda0` | 2026-07-22 | oui | oui | Merge gitea/main into Devel, résolution conflit OpenIndex.code-workspace |
 | `f2e6064b` | 2026-07-22 | oui | oui | Suppression des pipelines CI/CD (GitHub Actions, Gitea CI, CI-CD.md) — déploiement LXC |
-| `5a5e746d` | 2026-07-22 | oui | oui | README: déploiement ProxmoxVE (curl bash), état T-INDEX-R02 terminé |

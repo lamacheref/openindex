@@ -324,6 +324,8 @@ class SystemStatus(BaseModel):
     app_version: str
     commit_hash: str
     build_date: str
+    build_timestamp: str = ""
+    env_type: str = "DEV"
     timezone: str
     license_label: str
     license_owner: str
@@ -3470,26 +3472,21 @@ def _extract_large_file_metrics(raw_log_lines: List[str]) -> Dict[str, int]:
 
 
 def _build_system_status_payload() -> SystemStatus:
-    # Lire la version depuis le fichier VERSION
     try:
         from backend.src.versioning import get_current_version
         version_from_file = get_current_version()
     except ImportError:
         version_from_file = "0.4.19"
-    
-    # Format: "Version ${cat VERSION} (LOCAL|DEV|PREPROD|PROD) Build: ${date +"%Y%m%d_%H%M%S"} $(TZ)"
-    env_type = os.getenv("OPENINDEX_ENV_TYPE", "DEV")  # LOCAL|DEV|PREPROD|PROD
-    build_date = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    env_type = os.getenv("OPENINDEX_ENV_TYPE", "DEV")
+    build_timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     timezone_name = os.getenv("OPENINDEX_TIMEZONE") or os.getenv("TZ") or "UTC"
-    
-    # Si une version est spécifiquement définie via OPENINDEX_APP_VERSION,
-    # utiliser cette version directement sans formatage supplémentaire
-    # Cela permet aux tests de fonctionner correctement
+
     if os.getenv("OPENINDEX_APP_VERSION"):
-        version = version_from_file  # version_from_file contient déjà la valeur de OPENINDEX_APP_VERSION
+        version = version_from_file
     else:
-        version = f"Version {version_from_file} ({env_type}) Build: {build_date} {timezone_name}"
-    
+        version = version_from_file
+
     commit_hash = os.getenv("OPENINDEX_BUILD_COMMIT", "dev")
     build_date_iso = os.getenv("OPENINDEX_BUILD_DATE", datetime.now().date().isoformat())
     repository_url = os.getenv("OPENINDEX_REPOSITORY_URL", "https://github.com/lamacheref/openindex")
@@ -3503,6 +3500,8 @@ def _build_system_status_payload() -> SystemStatus:
 
     return SystemStatus(
         app_version=version,
+        env_type=env_type,
+        build_timestamp=build_timestamp,
         commit_hash=commit_hash,
         build_date=build_date_iso,
         timezone=timezone_name,

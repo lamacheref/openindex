@@ -175,6 +175,9 @@
             </div>
             <div class="px-4 pb-3 text-[10px] text-gray-400 text-center border-t border-gray-100 pt-2">
                 v<span x-text="version"></span>
+                <template x-if="buildTimestamp">
+                    <br><span x-text="buildTimestamp"></span>
+                </template>
             </div>
         </aside>
         
@@ -646,7 +649,8 @@
                 loading: false,
                 workerRunning: false,
                 pendingCount: 0,
-                version: '9cebdec (2026-07-24)',
+                version: '0.6.110 (DEV)',
+                buildTimestamp: '20260729161208',
                 
                 // Data
                 stats: {},
@@ -724,6 +728,14 @@
                 
                 // Methods
                 async init() {
+                    try {
+                        const res = await fetch('/api/system/status');
+                        if (res.ok) {
+                            const s = await res.json();
+                            this.version = s.env_type ? `${s.app_version} (${s.env_type})` : s.app_version;
+                            this.buildTimestamp = s.build_timestamp || '';
+                        }
+                    } catch (e) {}
                     await this.refreshData();
                     setInterval(() => this.refreshData(), 5000);
                     setInterval(() => {
