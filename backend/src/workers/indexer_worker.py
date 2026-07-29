@@ -822,8 +822,7 @@ class IndexerWorker:
         fast_queue = [(f[0], f[1], f[2], f[3]) for f in files if f[3] < self.SLOW_THRESHOLD_BYTES]
         slow_queue = [(f[0], f[1], f[2], f[3]) for f in files if f[3] >= self.SLOW_THRESHOLD_BYTES]
         total = len(fast_queue) + len(slow_queue)
-        if total > job.files_found:
-            job.files_found = total
+        job.files_found = total
         job.files_indexed = 0
         self._update_job_progress(job)
 

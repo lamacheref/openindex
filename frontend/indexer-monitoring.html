@@ -173,11 +173,16 @@
                     </button>
                 </div>
             </div>
-            <div class="px-4 pb-3 text-[10px] text-gray-400 text-center border-t border-gray-100 pt-2">
-                v<span x-text="version"></span>
-                <template x-if="buildTimestamp">
-                    <br><span x-text="buildTimestamp"></span>
-                </template>
+            <div class="px-4 pb-3 pt-2 text-center border-t border-gray-100">
+                <div class="bg-gray-50 rounded-lg p-3 text-center text-xs">
+                    <p class="font-semibold text-gray-700">
+                        <a :href="repositoryUrl" target="_blank"
+                           x-text="`v${version} (${envType})`"></a>
+                    </p>
+                    <p class="text-gray-400 mt-0.5">
+                        <span x-text="buildTimestamp"></span>
+                    </p>
+                </div>
             </div>
         </aside>
         
@@ -258,6 +263,23 @@
                         </div>
                     </div>
                     
+                    <!-- Hash progress global -->
+                    <div class="bg-white rounded-xl border border-gray-200 p-5">
+                        <h3 class="font-semibold text-gray-900 mb-3">État du hashage</h3>
+                        <div x-show="!hashProgress.total" class="text-sm text-gray-400">Chargement...</div>
+                        <div x-show="hashProgress.total">
+                            <div class="flex items-center justify-between text-sm text-gray-600 mb-1">
+                                <span x-text="Math.round(hashProgress.total > 0 ? (hashProgress.hashed / hashProgress.total * 100) : 0) + ' %'"></span>
+                                <span x-text="formatNumber(hashProgress.hashed) + ' / ' + formatNumber(hashProgress.total)"></span>
+                            </div>
+                            <div class="bg-gray-100 rounded-full h-6 overflow-hidden">
+                                <div class="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                                     :style="'width: ' + (hashProgress.total > 0 ? (hashProgress.hashed / hashProgress.total * 100) : 0) + '%'"></div>
+                            </div>
+                            <div class="text-xs text-gray-400 mt-1" x-show="hashProgress.last_hash_scan" x-text="'Dernier scan: ' + formatDate(hashProgress.last_hash_scan)"></div>
+                        </div>
+                    </div>
+
                     <!-- Current Job Progress -->
                     <div x-show="currentJob" class="bg-white rounded-xl border border-gray-200 p-6">
                         <div class="flex items-center justify-between mb-4">
@@ -649,11 +671,14 @@
                 loading: false,
                 workerRunning: false,
                 pendingCount: 0,
-                version: '0.6.110 (DEV)',
+                version: '0.6.110',
+                envType: 'DEV',
+                repositoryUrl: '#',
                 buildTimestamp: '20260729161208',
                 
                 // Data
                 stats: {},
+                hashProgress: { total: 0, hashed: 0, last_hash_scan: null },
                 currentJob: null,
                 recentJobs: [],
                 allJobs: [],
@@ -732,7 +757,9 @@
                         const res = await fetch('/api/system/status');
                         if (res.ok) {
                             const s = await res.json();
-                            this.version = s.env_type ? `${s.app_version} (${s.env_type})` : s.app_version;
+                            this.version = s.app_version || this.version;
+                            this.envType = s.env_type || this.envType;
+                            this.repositoryUrl = s.repository_url || this.repositoryUrl;
                             this.buildTimestamp = s.build_timestamp || '';
                         }
                     } catch (e) {}
@@ -752,6 +779,12 @@
                         const statsRes = await fetch('/api/indexer/stats');
                         if (statsRes.ok) {
                             this.stats = await statsRes.json();
+                        }
+                        
+                        // Récupérer la progression du hashage
+                        const hashRes = await fetch('/api/stats/hash-progress');
+                        if (hashRes.ok) {
+                            this.hashProgress = await hashRes.json();
                         }
                         
                         // Récupérer le job en cours
