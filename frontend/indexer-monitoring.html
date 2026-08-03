@@ -516,7 +516,7 @@
                                     <div class="flex items-center gap-3">
                                         <div class="w-12 h-12 rounded-xl flex items-center justify-center"
                                              :class="config.is_archive ? 'bg-gradient-to-br from-amber-500 to-amber-600' : 'bg-gradient-to-br from-blue-500 to-blue-600'">
-                                            <i :class="config.is_archive ? 'fas fa-archive text-white' : 'fas fa-server text-white'"></i>
+                                            <i :class="config.is_archive ? 'fas fa-box-archive text-white' : 'fas fa-server text-white'"></i>
                                         </div>
                                         <div>
                                             <div class="flex items-center gap-2">
@@ -555,7 +555,7 @@
                                         <span class="truncate" x-text="config.connection_domain"></span>
                                     </div>
                                     <div x-show="config.linked_archive_config_id" class="flex items-center gap-2 text-gray-600">
-                                        <i class="fas fa-archive w-4 text-center text-gray-400"></i>
+                                        <i class="fas fa-box-archive w-4 text-center text-gray-400"></i>
                                         <span class="truncate" x-text="(configs.find(a => a.id === config.linked_archive_config_id) || {}).name || 'Archive liée'"></span>
                                     </div>
                                 </div>
@@ -576,7 +576,7 @@
                 <!-- ARCHIVE VIEW -->
                 <div x-show="currentView === 'archive'" class="text-center py-20">
                     <div class="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <i class="fas fa-archive text-gray-400 text-3xl"></i>
+                        <i class="fas fa-box-archive text-gray-400 text-3xl"></i>
                     </div>
                     <h3 class="text-lg font-semibold text-gray-900 mb-2">Gestion de l'archivage</h3>
                     <p class="text-gray-500 mb-6">Accédez à la file d'attente d'archivage</p>
