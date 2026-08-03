@@ -514,11 +514,18 @@
                             <div class="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition-shadow">
                                 <div class="flex items-start justify-between mb-3">
                                     <div class="flex items-center gap-3">
-                                        <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center">
-                                            <i class="fas fa-server text-white"></i>
+                                        <div class="w-12 h-12 rounded-xl flex items-center justify-center"
+                                             :class="config.is_archive ? 'bg-gradient-to-br from-amber-500 to-amber-600' : 'bg-gradient-to-br from-blue-500 to-blue-600'">
+                                            <i :class="config.is_archive ? 'fas fa-archive text-white' : 'fas fa-server text-white'"></i>
                                         </div>
                                         <div>
-                                            <h4 class="font-semibold text-gray-900" x-text="config.name"></h4>
+                                            <div class="flex items-center gap-2">
+                                                <h4 class="font-semibold text-gray-900" x-text="config.name"></h4>
+                                                <span x-show="config.is_archive"
+                                                      class="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                                                    Archive
+                                                </span>
+                                            </div>
                                             <p class="text-sm text-gray-500" x-text="config.domain_zone"></p>
                                         </div>
                                     </div>

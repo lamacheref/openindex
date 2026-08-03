@@ -77,7 +77,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `c99c2dd2` | 2026-08-03 | non | non | fix(smb): fall back to domain_zone when connection_domain is empty (archive server auth) |
+| `61bf6c20` | 2026-08-03 | non | non | feat(ui): distinct color and badge for archive zones vs sources in configured sources view |
+| `0bee0901` | 2026-08-03 | oui | oui | fix(smb): fall back to domain_zone when connection_domain is empty (archive server auth) |
 | `9cbbd6c9` | 2026-08-03 | oui | oui | fix(smb): use 'or WORKGROUP' fallback for domain_zone when connection_domain is NULL (resolves smb_spaces NOT NULL violation) |
 | `638cc394` | 2026-08-03 | oui | oui | feat(archive): link an archive space to a source config; auto-select archive when source space is active |
 | `b5d9ea5e` | 2026-07-29 | oui | oui | fix(ui): remove duplicate hash percentage from current job phase C to avoid confusion with global hash card |
@@ -126,4 +127,3 @@ pytest -q tests/
 | `5e0301d1` | 2026-07-22 | oui | oui | fix integration tests: use UUID for space_id |
 | `c87adf6f` | 2026-07-22 | oui | oui | add integration DB tests (real PG) |
 | `8f1300fc` | 2026-07-22 | oui | oui | fix tests Priority 4 + docs T-LXC-03 + update TODO |
-| `fe209a30` | 2026-07-22 | oui | oui | fix install: embed inner script, pass env vars, idempotent PG |
