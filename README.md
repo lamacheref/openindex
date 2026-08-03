@@ -77,7 +77,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `d0a57e74` | 2026-07-29 | non | non | fix(ui): remove duplicate hash percentage from current job phase C to avoid confusion with global hash card |
+| `9c824da5` | 2026-08-03 | non | non | feat(archive): link an archive space to a source config; auto-select archive when source space is active |
+| `b5d9ea5e` | 2026-07-29 | oui | oui | fix(ui): remove duplicate hash percentage from current job phase C to avoid confusion with global hash card |
 | `695e115a` | 2026-07-29 | oui | oui | fix(hash): use global DB hash progress in indexer-monitoring dashboard; fix Phase C files_found to match actual hash target |
 | `89de0f4c` | 2026-07-29 | oui | oui | fix(artefacts): drop unused_files (no last_accessed in indexed_files), migrate large/old to space_id |
 | `198f502a` | 2026-07-29 | oui | oui | fix(artefacts): recreate large_files/old_files/unused_files on indexed_files_optimized |
@@ -126,4 +127,3 @@ pytest -q tests/
 | `fe209a30` | 2026-07-22 | oui | oui | fix install: embed inner script, pass env vars, idempotent PG |
 | `59986ec0` | 2026-07-22 | oui | oui | fix install 404: inner script + tests Phase A/B |
 | `c49e443d` | 2026-07-22 | oui | oui | feat: ajout historique des commits dans README + post-commit hook |
-| `663366ff` | 2026-07-22 | oui | oui | Restore scripts/versioning.py + fix pre-commit exécutable |

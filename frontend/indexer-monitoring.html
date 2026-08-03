@@ -547,6 +547,10 @@
                                         <i class="fas fa-building w-4 text-center text-gray-400"></i>
                                         <span class="truncate" x-text="config.connection_domain"></span>
                                     </div>
+                                    <div x-show="config.linked_archive_config_id" class="flex items-center gap-2 text-gray-600">
+                                        <i class="fas fa-archive w-4 text-center text-gray-400"></i>
+                                        <span class="truncate" x-text="(configs.find(a => a.id === config.linked_archive_config_id) || {}).name || 'Archive liée'"></span>
+                                    </div>
                                 </div>
                                 
                                 <div class="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
@@ -700,7 +704,8 @@
                     username: '',
                     password: '',
                     domain: '',
-                    is_archive: false
+                    is_archive: false,
+                    linked_archive_config_id: ''
                 },
                 showDeleteConfirmModal: false,
                 configToDelete: null,
@@ -719,7 +724,8 @@
                     username: '',
                     password: '',
                     domain: '',
-                    is_archive: false
+                    is_archive: false,
+                    linked_archive_config_id: ''
                 },
                 
                 // Logs
@@ -747,6 +753,10 @@
                         const matchesStatus = !this.statusFilter || job.status === this.statusFilter;
                         return matchesFilter && matchesStatus;
                     });
+                },
+                
+                get archiveConfigs() {
+                    return this.configs.filter(c => c.is_archive);
                 },
                 
                 // Methods
@@ -950,6 +960,7 @@
                                 domain: this.newConfig.domain || ''
                             },
                             is_archive: this.newConfig.is_archive || false,
+                            linked_archive_config_id: this.newConfig.linked_archive_config_id || null,
                             include_paths: [],
                             exclude_paths: []
                         };
@@ -1026,7 +1037,8 @@
                         username: '',
                         password: '',
                         domain: '',
-                        is_archive: false
+                        is_archive: false,
+                        linked_archive_config_id: ''
                     };
                 },
                 
@@ -1043,7 +1055,8 @@
                         username: config.connection_username || '',
                         password: '', // Ne pas pré-remplir le mot de passe pour sécurité
                         domain: config.connection_domain || config.domain_zone || '',
-                        is_archive: !!config.is_archive
+                        is_archive: !!config.is_archive,
+                        linked_archive_config_id: config.linked_archive_config_id || ''
                     };
                     this.showEditConfigModal = true;
                 },
@@ -1065,6 +1078,7 @@
                                 domain: this.editConfigData.domain || ''
                             },
                             is_archive: this.editConfigData.is_archive || false,
+                            linked_archive_config_id: this.editConfigData.linked_archive_config_id || null,
                             include_paths: [],
                             exclude_paths: []
                         };
@@ -1280,6 +1294,16 @@
                     <input type="checkbox" x-model="editConfigData.is_archive" class="rounded border-gray-300 text-blue-600">
                     Zone d'archivage
                 </label>
+                <div x-show="!editConfigData.is_archive">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Espace d'archivage associé</label>
+                    <select x-model="editConfigData.linked_archive_config_id"
+                            class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white">
+                        <option value="">Aucun (optionnel)</option>
+                        <template x-for="arc in archiveConfigs" :key="arc.id">
+                            <option :value="arc.id" x-text="arc.name"></option>
+                        </template>
+                    </select>
+                </div>
             </div>
             <div class="px-6 py-4 bg-gray-50 flex justify-end gap-3">
                 <button @click="cancelEditConfig()" class="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium">
@@ -1356,6 +1380,16 @@
                     <input type="checkbox" x-model="newConfig.is_archive" class="rounded border-gray-300 text-blue-600">
                     Zone d'archivage
                 </label>
+                <div x-show="!newConfig.is_archive">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Espace d'archivage associé</label>
+                    <select x-model="newConfig.linked_archive_config_id"
+                            class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white">
+                        <option value="">Aucun (optionnel)</option>
+                        <template x-for="arc in archiveConfigs" :key="arc.id">
+                            <option :value="arc.id" x-text="arc.name"></option>
+                        </template>
+                    </select>
+                </div>
                 <div class="bg-blue-50 rounded-lg p-3 text-sm">
                     <p class="text-blue-800"><i class="fas fa-info-circle mr-1"></i> Cette source sera utilisée pour indexer les fichiers SMB.</p>
                 </div>

@@ -977,7 +977,11 @@
                         const data = await res.json();
                         this.spaces = Array.isArray(data) ? data : [];
                         if (!this.activeSpace && this.sourceSpaces.length > 0) {
-                            this.activeSpace = this.sourceSpaces[0].path_prefix;
+                            const first = this.sourceSpaces[0];
+                            this.activeSpace = first.path_prefix;
+                            if (first.linked_archive_space) {
+                                this.activeArchiveSpace = first.linked_archive_space;
+                            }
                         }
                     }
                 } catch (e) { console.error('Spaces error:', e); }
@@ -985,10 +989,15 @@
 
             async selectSpace(prefix) {
                 this.activeSpace = prefix;
+                const space = this.spaces.find(s => s.path_prefix === prefix);
+                if (space && space.linked_archive_space) {
+                    this.activeArchiveSpace = space.linked_archive_space;
+                }
                 this.syncExplorerRoots();
                 await this.loadStats();
                 await this.loadDashboardCharts();
                 await this.refreshExplorerPanel('source');
+                await this.refreshExplorerPanel('archive');
             },
 
             async loadCrawlConfigs() {
@@ -1061,6 +1070,9 @@
                 if (space) {
                     this.explorer.source.root = space.path_prefix || '';
                     this.explorer.source.currentPath = space.path_prefix || '';
+                    if (space.linked_archive_space && space.linked_archive_space !== this.activeArchiveSpace) {
+                        this.activeArchiveSpace = space.linked_archive_space;
+                    }
                 }
                 const archSpaces = this.archiveSpaces;
                 if (archSpaces.length > 0) {

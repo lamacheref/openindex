@@ -194,6 +194,8 @@ class SpaceInfo(BaseModel):
     total_size: int = 0
     config_id: Optional[str] = None
     is_archive: bool = False
+    linked_archive_config_id: Optional[str] = None
+    linked_archive_space: Optional[str] = None
 
 
 class WebSocketMessage(BaseModel):
@@ -231,6 +233,7 @@ class CrawlConfigCreate(BaseModel):
     include_paths: List[str] = Field(default_factory=list)
     exclude_paths: List[str] = Field(default_factory=list)
     max_depth: int = 5
+    linked_archive_config_id: Optional[str] = None
     connection: CrawlConnectionConfig
 
     @field_validator('start_path')
@@ -253,6 +256,7 @@ class CrawlConfigUpdate(BaseModel):
     include_paths: List[str] = Field(default_factory=list)
     exclude_paths: List[str] = Field(default_factory=list)
     max_depth: int = 5
+    linked_archive_config_id: Optional[str] = None
     connection: CrawlConnectionUpdate
 
     @field_validator('start_path')
@@ -270,6 +274,7 @@ class CrawlConfigPublic(BaseModel):
     include_paths: List[str]
     exclude_paths: List[str]
     max_depth: int = 5
+    linked_archive_config_id: Optional[str] = None
     connection_username: str
     connection_domain: Optional[str] = None
     created_at: str
@@ -813,9 +818,12 @@ class PostgreSQLAdapter:
             })
         config_rows = self.execute_query(
             """
-            SELECT id::text, name, start_path, is_archive
-            FROM crawl_configs
-            ORDER BY name ASC, created_at DESC
+            SELECT c.id::text, c.name, c.start_path, c.is_archive,
+                   c.linked_archive_config_id,
+                   la.start_path AS linked_archive_path
+            FROM crawl_configs c
+            LEFT JOIN crawl_configs la ON la.id = c.linked_archive_config_id
+            ORDER BY c.name ASC, c.created_at DESC
             """
         )
         if not config_rows:
@@ -850,6 +858,8 @@ class PostgreSQLAdapter:
                 "name": row[1],
                 "path_prefix": start_path,
                 "is_archive": bool(row[3]),
+                "linked_archive_config_id": row[4],
+                "linked_archive_space": row[5],
                 "file_count": stats["file_count"],
                 "total_size": stats["total_size"],
             })
@@ -978,6 +988,28 @@ class PostgreSQLAdapter:
                         )
                         self.logger.info("Colonne is_archive ajoutée à crawl_configs via ensure_crawl_tables")
                     
+                    # Vérifier si la colonne linked_archive_config_id existe déjà sur crawl_configs
+                    cursor.execute(
+                        """
+                        SELECT EXISTS (
+                            SELECT 1 
+                            FROM information_schema.columns 
+                            WHERE table_name = 'crawl_configs' 
+                            AND column_name = 'linked_archive_config_id'
+                        )
+                        """
+                    )
+                    has_linked_archive = cursor.fetchone()[0]
+                    
+                    if not has_linked_archive:
+                        cursor.execute(
+                            """
+                            ALTER TABLE crawl_configs
+                            ADD COLUMN linked_archive_config_id UUID REFERENCES crawl_configs(id) ON DELETE SET NULL
+                            """
+                        )
+                        self.logger.info("Colonne linked_archive_config_id ajoutée à crawl_configs via ensure_crawl_tables")
+                    
                     # Créer l'index si nécessaire
                     cursor.execute(
                         "CREATE INDEX IF NOT EXISTS idx_files_crawl_config_id ON files(crawl_config_id)"
@@ -1025,6 +1057,7 @@ class PostgreSQLAdapter:
                    is_archive,
                    include_paths, exclude_paths,
                    connection_username, connection_domain,
+                   linked_archive_config_id,
                    created_at::text
             FROM crawl_configs
             ORDER BY created_at DESC
@@ -1041,7 +1074,8 @@ class PostgreSQLAdapter:
                 "exclude_paths": row[6] or [],
                 "connection_username": row[7],
                 "connection_domain": row[8],
-                "created_at": row[9],
+                "linked_archive_config_id": row[9],
+                "created_at": row[10],
             }
             for row in rows
         ]
@@ -1060,6 +1094,7 @@ class PostgreSQLAdapter:
                 connection_username,
                 connection_password,
                 connection_domain,
+                linked_archive_config_id,
                 created_at::text
             FROM crawl_configs
             WHERE id::text = %s
@@ -1081,7 +1116,8 @@ class PostgreSQLAdapter:
             "connection_username": row[7],
             "connection_password": row[8],
             "connection_domain": row[9],
-            "created_at": row[10],
+            "linked_archive_config_id": row[10],
+            "created_at": row[11],
         }
 
     def get_crawl_config_for_path(self, file_path: str) -> Optional[Dict[str, Any]]:
@@ -1102,6 +1138,7 @@ class PostgreSQLAdapter:
                 connection_username,
                 connection_password,
                 connection_domain,
+                linked_archive_config_id,
                 created_at::text
             FROM crawl_configs
             WHERE starts_with(%s, start_path)
@@ -1128,7 +1165,8 @@ class PostgreSQLAdapter:
             "connection_username": row[7],
             "connection_password": row[8],
             "connection_domain": row[9],
-            "created_at": row[10],
+            "linked_archive_config_id": row[10],
+            "created_at": row[11],
         }
 
     def _sync_smb_space(self, config: Dict[str, Any]) -> None:
@@ -1206,12 +1244,14 @@ class PostgreSQLAdapter:
                 name, domain_zone, start_path,
                 is_archive,
                 include_paths, exclude_paths,
+                linked_archive_config_id,
                 connection_username, connection_password, connection_domain
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id::text, name, domain_zone, start_path, is_archive,
                       include_paths, exclude_paths,
                       connection_username, connection_domain,
+                      linked_archive_config_id,
                       created_at::text
         """
         with self.get_connection() as conn:
@@ -1225,6 +1265,7 @@ class PostgreSQLAdapter:
                         payload.is_archive,
                         payload.include_paths,
                         payload.exclude_paths,
+                        payload.linked_archive_config_id or None,
                         payload.connection.username,
                         payload.connection.password,
                         payload.connection.domain,
@@ -1243,7 +1284,8 @@ class PostgreSQLAdapter:
             "exclude_paths": row[6] or [],
             "connection_username": row[7],
             "connection_domain": row[8],
-            "created_at": row[9],
+            "linked_archive_config_id": row[9],
+            "created_at": row[10],
         }
         self._sync_smb_space(config)
         return config
@@ -1262,6 +1304,7 @@ class PostgreSQLAdapter:
                             is_archive = %s,
                             include_paths = %s,
                             exclude_paths = %s,
+                            linked_archive_config_id = %s,
                             connection_username = %s,
                             connection_password = %s,
                             connection_domain = %s
@@ -1269,6 +1312,7 @@ class PostgreSQLAdapter:
                         RETURNING id::text, name, domain_zone, start_path, is_archive,
                                   include_paths, exclude_paths,
                                   connection_username, connection_domain,
+                                  linked_archive_config_id,
                                   created_at::text
                         """,
                         [
@@ -1278,6 +1322,7 @@ class PostgreSQLAdapter:
                             payload.is_archive,
                             payload.include_paths,
                             payload.exclude_paths,
+                            payload.linked_archive_config_id or None,
                             payload.connection.username,
                             payload.connection.password,
                             payload.connection.domain,
@@ -1294,12 +1339,14 @@ class PostgreSQLAdapter:
                             is_archive = %s,
                             include_paths = %s,
                             exclude_paths = %s,
+                            linked_archive_config_id = %s,
                             connection_username = %s,
                             connection_domain = %s
                         WHERE id::text = %s
                         RETURNING id::text, name, domain_zone, start_path, is_archive,
                                   include_paths, exclude_paths,
                                   connection_username, connection_domain,
+                                  linked_archive_config_id,
                                   created_at::text
                         """,
                         [
@@ -1309,6 +1356,7 @@ class PostgreSQLAdapter:
                             payload.is_archive,
                             payload.include_paths,
                             payload.exclude_paths,
+                            payload.linked_archive_config_id or None,
                             payload.connection.username,
                             payload.connection.domain,
                             config_id,
@@ -1330,7 +1378,8 @@ class PostgreSQLAdapter:
             "exclude_paths": row[6] or [],
             "connection_username": row[7],
             "connection_domain": row[8],
-            "created_at": row[9],
+            "linked_archive_config_id": row[9],
+            "created_at": row[10],
         }
         if old_config and old_config.get('start_path') != payload.start_path:
             self._unsync_smb_space(old_config)
