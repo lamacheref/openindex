@@ -60,7 +60,7 @@ class DummyDB:
         if "current_artefact_filters" in query:
             return [(1024, 730)]
 
-        if "FROM indexed_files_optimized f" in query:
+        if "AS is_large" in query:
             large_threshold_bytes = (params[0] if params else 1024 * 1024 * 1024)
             return [
                 # path, name, size, last_modified, created_at, hash_xxh64, is_garbage, is_duplicate, is_large, is_old
@@ -69,10 +69,10 @@ class DummyDB:
                 ("/share/docs/big.iso", "big.iso", 2_147_483_648, "2026-02-27T10:00:00Z", "2026-02-27T10:00:00Z", "bighash", False, False, True, False),
             ]
 
-        if "FROM directories" in query and "parent_path" in query:
+        if "FROM directories d" in query and "parent_path" in query:
             return []
 
-        if "FROM directories" in query and "path = %s" in query:
+        if "FROM directories" in query and "id::text" in query:
             return [("dir-uuid",)]
 
         if "FROM smb_spaces WHERE host" in query:

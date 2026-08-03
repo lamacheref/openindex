@@ -42,6 +42,7 @@
         .explorer-item.flag-large { background: #eff6ff; box-shadow: inset 3px 0 0 #2563eb; }
         .explorer-item.flag-old { background: #fffbeb; box-shadow: inset 3px 0 0 #d97706; }
         .explorer-item.flag-garbage { background: #f9fafb; box-shadow: inset 3px 0 0 #9ca3af; }
+        .explorer-item.flag-dirty { background: #f8fafc; box-shadow: inset 3px 0 0 #cbd5e1; }
         .flag-badge { display: inline-flex; align-items: center; font-size: 0.625rem; font-weight: 700; padding: 0.0625rem 0.375rem; border-radius: 9999px; line-height: 1.25rem; }
         .flag-badge.duplicate { background: #fee2e2; color: #b91c1c; }
         .flag-badge.large { background: #dbeafe; color: #1d4ed8; }
@@ -298,6 +299,7 @@
                         <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-blue-100 border border-blue-300"></span> Gros fichier</span>
                         <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-amber-100 border border-amber-300"></span> Ancien</span>
                         <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-gray-100 border border-gray-300"></span> Indésirable</span>
+                        <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-gray-200 border border-gray-300"></span> Dossier avec fichiers signalés</span>
                     </div>
                     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
                         <!-- Source Panel -->
@@ -328,15 +330,19 @@
                                     <div class="explorer-item"
                                          :class="{
                                             'selected': explorer.source.selectedPath === item.path,
-                                            'flag-duplicate': item.is_duplicate,
-                                            'flag-large': item.is_large && !item.is_duplicate,
-                                            'flag-old': item.is_old && !item.is_duplicate && !item.is_large,
-                                            'flag-garbage': item.is_garbage && !item.is_duplicate && !item.is_large && !item.is_old
+                                            'flag-dirty': item.is_directory && item.has_flagged_files,
+                                            'flag-duplicate': !item.is_directory && item.is_duplicate,
+                                            'flag-large': !item.is_directory && item.is_large && !item.is_duplicate,
+                                            'flag-old': !item.is_directory && item.is_old && !item.is_duplicate && !item.is_large,
+                                            'flag-garbage': !item.is_directory && item.is_garbage && !item.is_duplicate && !item.is_large && !item.is_old
                                          }"
                                          @click="explorerSelect('source', item)"
                                          @dblclick="explorerOpen('source', item)">
                                         <i class="w-5 text-center" :class="item.is_directory ? 'fas fa-folder text-amber-500' : 'fas fa-file text-gray-400'"></i>
                                         <span class="flex-1 truncate text-sm" x-text="item.name"></span>
+                                        <template x-if="item.is_directory">
+                                            <span class="flag-badge garbage" x-show="item.has_flagged_files">Contient des fichiers signalés</span>
+                                        </template>
                                         <template x-if="!item.is_directory">
                                             <span class="flag-badge duplicate" x-show="item.is_duplicate">Doublon</span>
                                             <span class="flag-badge large" x-show="item.is_large && !item.is_duplicate">Gros</span>

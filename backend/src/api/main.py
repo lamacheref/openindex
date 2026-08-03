@@ -162,6 +162,7 @@ class ExplorerItem(BaseModel):
     is_large: bool = False
     is_old: bool = False
     is_garbage: bool = False
+    has_flagged_files: bool = False
 
 
 class ArchiveFileRequest(BaseModel):
@@ -2393,15 +2394,37 @@ async def get_explorer_items(
         items: List[ExplorerItem] = []
 
         if space_id:
+            try:
+                pref_rows = db.execute_query(
+                    "SELECT large_file_threshold_mb, old_file_threshold_days FROM current_artefact_filters"
+                )
+                if pref_rows:
+                    large_threshold_mb = pref_rows[0][0]
+                    old_threshold_days = pref_rows[0][1]
+                else:
+                    large_threshold_mb = 1024
+                    old_threshold_days = 730
+            except Exception:
+                large_threshold_mb = 1024
+                old_threshold_days = 730
+            large_threshold_bytes = large_threshold_mb * 1024 * 1024
+
             dir_rows = db.execute_query(
                 """
-                SELECT path, name
-                FROM directories
-                WHERE space_id::text = %s AND parent_path = %s
-                ORDER BY name ASC
+                SELECT d.path, d.name,
+                       EXISTS (
+                           SELECT 1 FROM indexed_files_optimized fi
+                           WHERE fi.directory_id = d.id AND NOT fi.is_deleted
+                             AND (fi.is_duplicate OR fi.is_garbage
+                                  OR fi.size > %s
+                                  OR fi.last_modified < CURRENT_TIMESTAMP - make_interval(days => %s))
+                       ) AS has_flagged_files
+                FROM directories d
+                WHERE d.space_id::text = %s AND d.parent_path = %s
+                ORDER BY d.name ASC
                 LIMIT %s
                 """,
-                [space_id, rel_path, limit],
+                [large_threshold_bytes, old_threshold_days, space_id, rel_path, limit],
             )
             for row in dir_rows:
                 child_path = _join_smb_path(normalized_current_path, row[1])
@@ -2410,6 +2433,7 @@ async def get_explorer_items(
                     name=row[1],
                     is_directory=True,
                     crawl_config_id=space_id,
+                    has_flagged_files=bool(row[2]),
                 ))
 
             remaining = limit - len(items)
@@ -2420,19 +2444,6 @@ async def get_explorer_items(
                 )
                 if dir_id_rows:
                     dir_id = dir_id_rows[0][0]
-                    try:
-                        pref_rows = db.execute_query(
-                            "SELECT large_file_threshold_mb, old_file_threshold_days FROM current_artefact_filters"
-                        )
-                        if pref_rows:
-                            large_threshold_mb = pref_rows[0][0]
-                            old_threshold_days = pref_rows[0][1]
-                        else:
-                            large_threshold_mb = 1024
-                            old_threshold_days = 730
-                    except Exception:
-                        large_threshold_mb = 1024
-                        old_threshold_days = 730
                     file_rows = db.execute_query(
                         """
                         SELECT f.path, f.name, f.size, f.last_modified, f.created_at, f.hash_xxh64,
@@ -2448,7 +2459,7 @@ async def get_explorer_items(
                         ORDER BY f.name ASC
                         LIMIT %s
                         """,
-                        [large_threshold_mb * 1024 * 1024, old_threshold_days, space_id, dir_id, remaining],
+                        [large_threshold_bytes, old_threshold_days, space_id, dir_id, remaining],
                     )
                     for row in file_rows:
                         child_path = _join_smb_path(normalized_current_path, row[1])
