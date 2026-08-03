@@ -962,7 +962,7 @@ class IndexerWorker:
                     'remote_path': remote_path,
                     'username': result.get('connection_username', ''),
                     'password': result.get('connection_password', ''),
-                    'domain': result.get('connection_domain') or '',
+                    'domain': result.get('connection_domain') or result.get('domain_zone') or '',
                     'name': result.get('name', 'Unnamed'),
                     'max_depth': result.get('max_depth', 5)
                 }
