@@ -77,9 +77,10 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `e2e67c38` | 2026-08-03 | non | non | feat(live-explorer): surligner les pourriels/gros/anciens dans le panneau Archive SMB live |
-| `71ecfeec` | 2026-08-03 | non | non | feat(ui): gris clair sur les dossiers contenant des fichiers signalés (doublons/gros/anciens/indesirables) |
-| `6736eff6` | 2026-08-03 | non | non | feat(ui): surligner les lignes de l'explorateur (doublons/gros/anciens/pourriels) + icone archive locale |
+| `4227840b` | 2026-08-03 | non | non | fix(backend): add missing versioning.get_current_version shim (tracked) |
+| `2b3ea4c6` | 2026-08-03 | oui | oui | feat(live-explorer): surligner les pourriels/gros/anciens dans le panneau Archive SMB live |
+| `71ecfeec` | 2026-08-03 | oui | oui | feat(ui): gris clair sur les dossiers contenant des fichiers signalés (doublons/gros/anciens/indesirables) |
+| `6736eff6` | 2026-08-03 | oui | oui | feat(ui): surligner les lignes de l'explorateur (doublons/gros/anciens/pourriels) + icone archive locale |
 | `2dedbad0` | 2026-08-03 | oui | oui | fix(ui): use fa-box-archive (FA6) instead of deprecated fa-archive for archive zones icons |
 | `f540bcbd` | 2026-08-03 | oui | oui | feat(ui): distinct color and badge for archive zones vs sources in configured sources view |
 | `0bee0901` | 2026-08-03 | oui | oui | fix(smb): fall back to domain_zone when connection_domain is empty (archive server auth) |
@@ -126,4 +127,3 @@ pytest -q tests/
 | `cf310d30` | 2026-07-22 | oui | oui | fix: correct import path crawl_utils (utils.crawl_utils) |
 | `03df7049` | 2026-07-22 | oui | oui | fix: normalize UNC start_path in backend (strip duplicate slashes) |
 | `e9b8161f` | 2026-07-22 | oui | oui | fix: start_path triple slash, use local tailwind.css |
-| `d8fd155e` | 2026-07-22 | oui | oui | fix: add GET /api/indexer/jobs/{job_id}, update benchmark script for Phase A/B |
