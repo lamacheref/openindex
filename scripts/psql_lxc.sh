@@ -4,8 +4,10 @@
 # ---------------------------------------------------------------------------
 # Le client `psql` n’étant pas installé sur les machines de dev, ce wrapper
 # exécute la requête SQL **directement sur le serveur LXC** (`192.168.110.6`)
-# via SSH, en utilisant le **jeu de clés SSH** commun à `deploy_lxc.sh`
+# via SSH, en utilisant la **même clé SSH** que `deploy_lxc.sh`
 # (`~/.ssh/flamachere_pro_20260511`).
+#
+# Documentation pleine page : docs/operations/PSQL_LXC.md
 #
 # Principe :
 #   1. un ssh préalable lit `POSTGRES_USER/DB/PASSWORD/HOST/PORT` depuis

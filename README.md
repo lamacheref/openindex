@@ -77,12 +77,13 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `86a3398a` | 2026-08-03 | non | non | docs(ops): document scripts/psql_lxc.sh in DEPLOY_LXC (read-only DB access dev->LXC) |
-| `e4322503` | 2026-08-03 | non | oui | docs(psql_lxc): document wrapper, env vars, examples and read-only usage note |
-| `376646d8` | 2026-08-03 | non | oui | feat(dev): add scripts/psql_lxc.sh SSH wrapper to query the LXC database directly (read-only) |
-| `2130204b` | 2026-08-03 | non | oui | fix(api): /api/duplicates uses indexed_files_optimized + hash_xxh64 (was: dead 'files' table) |
-| `40174039` | 2026-08-03 | non | oui | fix(deploy): make deploy_lxc.sh robust (clean reset, rsync frontend to /var/www/html) |
-| `c7cc1386` | 2026-08-03 | non | oui | fix(backend): add missing versioning.get_current_version shim (tracked) |
+| `794633ff` | 2026-08-03 | non | non | docs(ops): split psql_lxc.sh usage into its own doc file; clean up DEPLOY_LXC numbering |
+| `bd689a75` | 2026-08-03 | oui | oui | docs(ops): document scripts/psql_lxc.sh in DEPLOY_LXC (read-only DB access dev->LXC) |
+| `e4322503` | 2026-08-03 | oui | oui | docs(psql_lxc): document wrapper, env vars, examples and read-only usage note |
+| `376646d8` | 2026-08-03 | oui | oui | feat(dev): add scripts/psql_lxc.sh SSH wrapper to query the LXC database directly (read-only) |
+| `2130204b` | 2026-08-03 | oui | oui | fix(api): /api/duplicates uses indexed_files_optimized + hash_xxh64 (was: dead 'files' table) |
+| `40174039` | 2026-08-03 | oui | oui | fix(deploy): make deploy_lxc.sh robust (clean reset, rsync frontend to /var/www/html) |
+| `c7cc1386` | 2026-08-03 | oui | oui | fix(backend): add missing versioning.get_current_version shim (tracked) |
 | `2b3ea4c6` | 2026-08-03 | oui | oui | feat(live-explorer): surligner les pourriels/gros/anciens dans le panneau Archive SMB live |
 | `71ecfeec` | 2026-08-03 | oui | oui | feat(ui): gris clair sur les dossiers contenant des fichiers signalés (doublons/gros/anciens/indesirables) |
 | `6736eff6` | 2026-08-03 | oui | oui | feat(ui): surligner les lignes de l'explorateur (doublons/gros/anciens/pourriels) + icone archive locale |
@@ -126,4 +127,3 @@ pytest -q tests/
 | `8ff7e798` | 2026-07-22 | oui | oui | fix: keep files_found=0 during Phase A, show discovery text in UI |
 | `79f8e12d` | 2026-07-22 | oui | oui | fix: show live progress during Phase A dir discovery, reset at Phase B start |
 | `afad2e87` | 2026-07-22 | oui | oui | fix: pass domain to SMBClient in worker |
-| `33de4985` | 2026-07-22 | oui | oui | chore: debug connect method |

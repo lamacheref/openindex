@@ -161,34 +161,7 @@ Ce script :
 
 ---
 
-## 5. Interroger la base de données (dev -> LXC)
-
-Le poste de dev ne possède pas forcément le client `psql` installé. Utilisez le
-wrapper `scripts/psql_lxc.sh`, qui exécute la requête **sur le LXC via SSH**
-(lecture seule recommandée) en réutilisant la clé SSH de `deploy_lxc.sh` :
-
-```bash
-./scripts/psql_lxc.sh -c "SELECT count(*) FROM indexed_files_optimized;"
-echo "SELECT count(*) FROM indexed_files_optimized WHERE is_garbage;" | ./scripts/psql_lxc.sh
-./scripts/psql_lxc.sh <<'SQL'
-  SELECT name, is_duplicate, is_garbage, size, hash_xxh64
-  FROM indexed_files_optimized
-  WHERE name ILIKE '%rib%'
-  ORDER BY is_garbage NULLS LAST
-  LIMIT 10;
-SQL
-```
-
-Variables d’environnement (facultatives) : `PSQL_LXC_KEY`, `PSQL_LXC_HOST`,
-`PSQL_LXC_USER`.
-
-> ⚠️ Conservez un usage **lecture seule** (`SELECT`). Toute mutation (`UPDATE`,
-> `DELETE`, `DROP`) impose au préalable un `pg_dump` complet et l’approbation
-> formelle (règle sécurité DB du AGENTS.md).
-
----
-
-## 6. Recovery
+## 5. Recovery
 
 ### 5.1 Backup PostgreSQL
 
