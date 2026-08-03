@@ -2906,22 +2906,26 @@ async def get_duplicates(space: Optional[str] = None):
     try:
         db = get_db_adapter()
         query = """
-            SELECT f1.id, f1.path, f1.name, f1.size, f1.checksum,
+            SELECT f1.id, f1.path, f1.name, f1.size, f1.hash_xxh64,
                    f1.last_modified, f1.created_at, f1.updated_at,
                    f2.path as duplicate_of_path
-            FROM files f1
-            JOIN files f2 ON f1.checksum = f2.checksum AND f1.id != f2.id
-            WHERE f1.is_duplicate = 1
+            FROM indexed_files_optimized f1
+            JOIN indexed_files_optimized f2
+              ON f1.hash_xxh64 = f2.hash_xxh64 AND f1.space_id = f2.space_id
+             AND f1.size = f2.size AND f1.id != f2.id
+             AND f1.is_duplicate = TRUE AND f2.is_deleted = FALSE
+             AND f1.is_deleted = FALSE
+            WHERE f1.is_duplicate = TRUE
         """
         params: List[Any] = []
         if space:
             config_id = db.resolve_space_config_id(space) if hasattr(db, "resolve_space_config_id") else None
             if config_id:
-                query += " AND f1.crawl_config_id::text = ?"
+                query += " AND f1.space_id::text = %s"
                 params.append(config_id)
             else:
-                query += " AND f1.path LIKE ?"
-                params.append(f"{space}%")
+                query += " AND f1.path LIKE %s"
+                params.append(f"%{space}%")
         query += " ORDER BY f1.size DESC"
         results = db.execute_query(query, params)
         return [
