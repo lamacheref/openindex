@@ -1205,10 +1205,10 @@ class PostgreSQLAdapter:
                         host,
                         share,
                         remote_path,
-                        config.get('domain_zone', 'WORKGROUP'),
-                        config.get('connection_username', ''),
-                        config.get('connection_password', ''),
-                        config.get('connection_domain', '') or config.get('domain_zone', ''),
+                        config.get('domain_zone') or 'WORKGROUP',
+                        config.get('connection_username') or '',
+                        config.get('connection_password') or '',
+                        config.get('connection_domain') or config.get('domain_zone') or '',
                     ],
                 )
             conn.commit()

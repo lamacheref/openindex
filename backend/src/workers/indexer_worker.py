@@ -418,10 +418,10 @@ class IndexerWorker:
                 config['host'],
                 config['share'],
                 config.get('remote_path', ''),
-                config.get('domain', 'WORKGROUP'),
+                config.get('domain') or 'WORKGROUP',
                 config.get('username', ''),
                 config.get('password', ''),
-                config.get('domain', '')
+                config.get('domain') or ''
             ]
         )
         return result[0][0] if result else ''
@@ -962,7 +962,7 @@ class IndexerWorker:
                     'remote_path': remote_path,
                     'username': result.get('connection_username', ''),
                     'password': result.get('connection_password', ''),
-                    'domain': result.get('connection_domain', ''),
+                    'domain': result.get('connection_domain') or '',
                     'name': result.get('name', 'Unnamed'),
                     'max_depth': result.get('max_depth', 5)
                 }
