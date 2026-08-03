@@ -77,8 +77,9 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `cfe29927` | 2026-08-03 | non | non | docs(psql_lxc): document wrapper, env vars, examples and read-only usage note |
-| `376646d8` | 2026-08-03 | non | non | feat(dev): add scripts/psql_lxc.sh SSH wrapper to query the LXC database directly (read-only) |
+| `86a3398a` | 2026-08-03 | non | non | docs(ops): document scripts/psql_lxc.sh in DEPLOY_LXC (read-only DB access dev->LXC) |
+| `e4322503` | 2026-08-03 | non | oui | docs(psql_lxc): document wrapper, env vars, examples and read-only usage note |
+| `376646d8` | 2026-08-03 | non | oui | feat(dev): add scripts/psql_lxc.sh SSH wrapper to query the LXC database directly (read-only) |
 | `2130204b` | 2026-08-03 | non | oui | fix(api): /api/duplicates uses indexed_files_optimized + hash_xxh64 (was: dead 'files' table) |
 | `40174039` | 2026-08-03 | non | oui | fix(deploy): make deploy_lxc.sh robust (clean reset, rsync frontend to /var/www/html) |
 | `c7cc1386` | 2026-08-03 | non | oui | fix(backend): add missing versioning.get_current_version shim (tracked) |
@@ -126,4 +127,3 @@ pytest -q tests/
 | `79f8e12d` | 2026-07-22 | oui | oui | fix: show live progress during Phase A dir discovery, reset at Phase B start |
 | `afad2e87` | 2026-07-22 | oui | oui | fix: pass domain to SMBClient in worker |
 | `33de4985` | 2026-07-22 | oui | oui | chore: debug connect method |
-| `708d04d3` | 2026-07-22 | oui | oui | fix: smbclient connect pass password via stdin, connect to share not -L |
