@@ -411,12 +411,29 @@
                             <div x-show="!explorer.archive.loading && explorer.archive.error" class="text-sm text-red-600 py-4" x-text="explorer.archive.error"></div>
                             <div x-show="!explorer.archive.loading && !explorer.archive.error" class="max-h-[60vh] overflow-y-auto">
                                 <template x-for="item in explorer.archive.items" :key="item.path">
-                                    <div class="explorer-item" :class="{ 'selected': explorer.archive.selectedPath === item.path }"
+                                    <div class="explorer-item"
+                                            :class="{
+                                                'selected': explorer.archive.selectedPath === item.path,
+                                                'flag-duplicate': item.is_duplicate,
+                                                'flag-large': item.is_large && !item.is_duplicate,
+                                                'flag-old': item.is_old && !item.is_duplicate && !item.is_large,
+                                                'flag-garbage': item.is_garbage && !item.is_duplicate && !item.is_large && !item.is_old,
+                                                'flag-dirty': item.is_directory && item.has_flagged_files
+                                            }"
                                          @click="explorerSelect('archive', item)"
                                          @dblclick="explorerOpen('archive', item)">
-                                        <i class="w-5 text-center" :class="item.is_directory ? 'fas fa-folder text-amber-500' : 'fas fa-file text-gray-400'"></i>
-                                        <span class="flex-1 truncate text-sm" x-text="item.name"></span>
-                                        <span class="text-xs text-gray-400" x-show="!item.is_directory" x-text="formatBytes(item.size)"></span>
+                                            <i class="w-5 text-center" :class="item.is_directory ? 'fas fa-folder text-amber-500' : 'fas fa-file text-gray-400'"></i>
+                                            <span class="flex-1 truncate text-sm" x-text="item.name"></span>
+                                            <template x-if="item.is_directory">
+                                                <span class="flag-badge garbage" x-show="item.has_flagged_files">Contient des fichiers signalés</span>
+                                            </template>
+                                            <template x-if="!item.is_directory">
+                                                <span class="flag-badge duplicate" x-show="item.is_duplicate">Doublon</span>
+                                                <span class="flag-badge large" x-show="item.is_large && !item.is_duplicate">Gros</span>
+                                                <span class="flag-badge old" x-show="item.is_old && !item.is_duplicate && !item.is_large">Ancien</span>
+                                                <span class="flag-badge garbage" x-show="item.is_garbage && !item.is_duplicate && !item.is_large && !item.is_old">Indésirable</span>
+                                            </template>
+                                            <span class="text-xs text-gray-400" x-show="!item.is_directory" x-text="formatBytes(item.size)"></span>
                                     </div>
                                 </template>
                                 <div x-show="explorer.archive.items.length === 0" class="text-sm text-gray-500 py-4 text-center">Dossier vide</div>

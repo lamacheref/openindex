@@ -2322,6 +2322,10 @@ async def get_live_explorer_items(
         entries = smbclient.listdir(normalized_current_path)
         items: List[ExplorerItem] = []
 
+        now_ts = time.time()
+        large_threshold_bytes = 1073741824
+        old_threshold_seconds = 730 * 86400
+
         for entry_name in entries:
             if entry_name in {".", ".."}:
                 continue
@@ -2330,17 +2334,30 @@ async def get_live_explorer_items(
             try:
                 stat_info = smbclient.stat(child_path)
                 is_directory = bool(stat_info.st_file_attributes & 0x10) if hasattr(stat_info, 'st_file_attributes') else False
+                entry_size = None if is_directory else getattr(stat_info, 'st_size', 0)
+                entry_mtime = getattr(stat_info, 'st_mtime', 0)
+                is_garbage = False
+                is_large = False
+                is_old = False
+                if not is_directory:
+                    lowered = entry_name.lower()
+                    is_garbage = any(p in entry_name or lowered.endswith(p) for p in ('~$', '.tmp', '.lock', '.lnk')) or entry_name in ('Thumbs.db', 'desktop.ini')
+                    is_large = entry_size is not None and entry_size > large_threshold_bytes
+                    is_old = entry_mtime and (now_ts - entry_mtime) > old_threshold_seconds
                 items.append(ExplorerItem(
                     path=child_path,
                     name=entry_name,
                     is_directory=is_directory,
-                    size=None if is_directory else getattr(stat_info, 'st_size', 0),
-                    last_modified=datetime.fromtimestamp(getattr(stat_info, 'st_mtime', 0), tz=timezone.utc),
+                    size=entry_size,
+                    last_modified=datetime.fromtimestamp(entry_mtime, tz=timezone.utc) if entry_mtime else None,
                     created_at=datetime.fromtimestamp(getattr(stat_info, 'st_ctime', 0), tz=timezone.utc),
                     extension=None if is_directory else _smb_extension(child_path),
                     crawl_config_id=config.get("id"),
                     has_duplicates=False,
                     duplicate_count=0,
+                    is_garbage=is_garbage,
+                    is_large=is_large,
+                    is_old=is_old,
                 ))
             except OSError:
                 items.append(ExplorerItem(
