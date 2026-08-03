@@ -77,7 +77,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `4227840b` | 2026-08-03 | non | non | fix(backend): add missing versioning.get_current_version shim (tracked) |
+| `faf359ca` | 2026-08-03 | non | non | fix(deploy): make deploy_lxc.sh robust (clean reset, rsync frontend to /var/www/html) |
+| `c7cc1386` | 2026-08-03 | non | oui | fix(backend): add missing versioning.get_current_version shim (tracked) |
 | `2b3ea4c6` | 2026-08-03 | oui | oui | feat(live-explorer): surligner les pourriels/gros/anciens dans le panneau Archive SMB live |
 | `71ecfeec` | 2026-08-03 | oui | oui | feat(ui): gris clair sur les dossiers contenant des fichiers signalés (doublons/gros/anciens/indesirables) |
 | `6736eff6` | 2026-08-03 | oui | oui | feat(ui): surligner les lignes de l'explorateur (doublons/gros/anciens/pourriels) + icone archive locale |
@@ -126,4 +127,3 @@ pytest -q tests/
 | `c2b4af4a` | 2026-07-22 | oui | oui | fix: smbclient cannot connect to subdirectory, use cd before ls |
 | `cf310d30` | 2026-07-22 | oui | oui | fix: correct import path crawl_utils (utils.crawl_utils) |
 | `03df7049` | 2026-07-22 | oui | oui | fix: normalize UNC start_path in backend (strip duplicate slashes) |
-| `e9b8161f` | 2026-07-22 | oui | oui | fix: start_path triple slash, use local tailwind.css |
