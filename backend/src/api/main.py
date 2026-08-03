@@ -158,6 +158,10 @@ class ExplorerItem(BaseModel):
     crawl_config_id: Optional[str] = None
     has_duplicates: bool = False
     duplicate_count: int = 0
+    is_duplicate: bool = False
+    is_large: bool = False
+    is_old: bool = False
+    is_garbage: bool = False
 
 
 class ArchiveFileRequest(BaseModel):
@@ -2416,15 +2420,35 @@ async def get_explorer_items(
                 )
                 if dir_id_rows:
                     dir_id = dir_id_rows[0][0]
+                    try:
+                        pref_rows = db.execute_query(
+                            "SELECT large_file_threshold_mb, old_file_threshold_days FROM current_artefact_filters"
+                        )
+                        if pref_rows:
+                            large_threshold_mb = pref_rows[0][0]
+                            old_threshold_days = pref_rows[0][1]
+                        else:
+                            large_threshold_mb = 1024
+                            old_threshold_days = 730
+                    except Exception:
+                        large_threshold_mb = 1024
+                        old_threshold_days = 730
                     file_rows = db.execute_query(
                         """
-                        SELECT path, name, size, last_modified, created_at, hash_xxh64
-                        FROM indexed_files_optimized
-                        WHERE space_id::text = %s AND directory_id::text = %s AND NOT is_deleted
-                        ORDER BY name ASC
+                        SELECT f.path, f.name, f.size, f.last_modified, f.created_at, f.hash_xxh64,
+                               f.is_garbage,
+                               (SELECT COUNT(*) FROM indexed_files_optimized d
+                                WHERE d.hash_xxh64 = f.hash_xxh64 AND d.size = f.size
+                                  AND d.space_id = f.space_id AND NOT d.is_deleted
+                                  AND d.id <> f.id) > 0 AS is_duplicate,
+                               f.size > %s AS is_large,
+                               f.last_modified < CURRENT_TIMESTAMP - make_interval(days => %s) AS is_old
+                        FROM indexed_files_optimized f
+                        WHERE f.space_id::text = %s AND f.directory_id::text = %s AND NOT f.is_deleted
+                        ORDER BY f.name ASC
                         LIMIT %s
                         """,
-                        [space_id, dir_id, remaining],
+                        [large_threshold_mb * 1024 * 1024, old_threshold_days, space_id, dir_id, remaining],
                     )
                     for row in file_rows:
                         child_path = _join_smb_path(normalized_current_path, row[1])
@@ -2436,7 +2460,11 @@ async def get_explorer_items(
                             last_modified=row[3],
                             created_at=row[4],
                             crawl_config_id=space_id,
-                            has_duplicates=bool(row[5]),
+                            has_duplicates=bool(row[7]),
+                            is_duplicate=bool(row[7]),
+                            is_garbage=bool(row[6]),
+                            is_large=bool(row[8]),
+                            is_old=bool(row[9]),
                         ))
         return items
     except Exception as e:

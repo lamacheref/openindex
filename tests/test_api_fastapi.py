@@ -57,6 +57,27 @@ class DummyDB:
                 )
             ]
 
+        if "current_artefact_filters" in query:
+            return [(1024, 730)]
+
+        if "FROM indexed_files_optimized f" in query:
+            large_threshold_bytes = (params[0] if params else 1024 * 1024 * 1024)
+            return [
+                # path, name, size, last_modified, created_at, hash_xxh64, is_garbage, is_duplicate, is_large, is_old
+                ("/share/docs/old_report.pdf", "old_report.pdf", 5_000_000, "2018-01-01T10:00:00Z", "2018-01-01T10:00:00Z", "oldhash", False, True, False, True),
+                ("/share/docs/readme.md", "readme.md", 128, "2026-02-27T10:00:00Z", "2026-02-27T10:00:00Z", "xyz", False, False, False, False),
+                ("/share/docs/big.iso", "big.iso", 2_147_483_648, "2026-02-27T10:00:00Z", "2026-02-27T10:00:00Z", "bighash", False, False, True, False),
+            ]
+
+        if "FROM directories" in query and "parent_path" in query:
+            return []
+
+        if "FROM directories" in query and "path = %s" in query:
+            return [("dir-uuid",)]
+
+        if "FROM smb_spaces WHERE host" in query:
+            return [("space-uuid",)]
+
         if "SELECT path FROM files WHERE path IS NOT NULL" in query:
             return [
                 ("/share/docs",),
@@ -430,9 +451,11 @@ def test_get_explorer_items_endpoint_exposes_highlighting_metadata(client):
     assert response.status_code == 200
     payload = response.json()
     assert payload[0]["is_directory"] is False
-    assert payload[0]["duplicate_count"] == 2
     assert payload[0]["has_duplicates"] is True
-    assert payload[0]["created_at"] == "2024-02-27T10:00:00Z"
+    assert payload[0]["is_duplicate"] is True
+    assert payload[0]["is_old"] is True
+    assert payload[0]["is_large"] is False
+    assert payload[0]["is_garbage"] is False
 
 
 def test_get_explorer_items_keeps_rows_without_config_link_when_under_root(client):

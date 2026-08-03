@@ -77,7 +77,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `71b1e147` | 2026-08-03 | non | non | fix(ui): use fa-box-archive (FA6) instead of deprecated fa-archive for archive zones icons |
+| `6498cdd1` | 2026-08-03 | non | non | feat(ui): surligner les lignes de l'explorateur (doublons/gros/anciens/pourriels) + icone archive locale |
+| `2dedbad0` | 2026-08-03 | oui | oui | fix(ui): use fa-box-archive (FA6) instead of deprecated fa-archive for archive zones icons |
 | `f540bcbd` | 2026-08-03 | oui | oui | feat(ui): distinct color and badge for archive zones vs sources in configured sources view |
 | `0bee0901` | 2026-08-03 | oui | oui | fix(smb): fall back to domain_zone when connection_domain is empty (archive server auth) |
 | `9cbbd6c9` | 2026-08-03 | oui | oui | fix(smb): use 'or WORKGROUP' fallback for domain_zone when connection_domain is NULL (resolves smb_spaces NOT NULL violation) |
@@ -126,4 +127,3 @@ pytest -q tests/
 | `d8fd155e` | 2026-07-22 | oui | oui | fix: add GET /api/indexer/jobs/{job_id}, update benchmark script for Phase A/B |
 | `4f85ecac` | 2026-07-22 | oui | oui | fix frontend: copy alpine.min.js + fontawesome assets, add node_modules to gitignore |
 | `5e0301d1` | 2026-07-22 | oui | oui | fix integration tests: use UUID for space_id |
-| `c87adf6f` | 2026-07-22 | oui | oui | add integration DB tests (real PG) |

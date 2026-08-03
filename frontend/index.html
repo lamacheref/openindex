@@ -38,6 +38,15 @@
         .explorer-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; border-radius: 0.5rem; cursor: pointer; transition: background 0.15s; }
         .explorer-item:hover { background: #f1f5f9; }
         .explorer-item.selected { background: #dbeafe; }
+        .explorer-item.flag-duplicate { background: #fef2f2; box-shadow: inset 3px 0 0 #dc2626; }
+        .explorer-item.flag-large { background: #eff6ff; box-shadow: inset 3px 0 0 #2563eb; }
+        .explorer-item.flag-old { background: #fffbeb; box-shadow: inset 3px 0 0 #d97706; }
+        .explorer-item.flag-garbage { background: #f9fafb; box-shadow: inset 3px 0 0 #9ca3af; }
+        .flag-badge { display: inline-flex; align-items: center; font-size: 0.625rem; font-weight: 700; padding: 0.0625rem 0.375rem; border-radius: 9999px; line-height: 1.25rem; }
+        .flag-badge.duplicate { background: #fee2e2; color: #b91c1c; }
+        .flag-badge.large { background: #dbeafe; color: #1d4ed8; }
+        .flag-badge.old { background: #fef3c7; color: #b45309; }
+        .flag-badge.garbage { background: #e5e7eb; color: #4b5563; }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 h-screen overflow-hidden" x-data="openIndexApp()" x-init="init()">
@@ -284,6 +293,12 @@
                             <i class="fas fa-rotate"></i> Rafraîchir
                         </button>
                     </div>
+                    <div class="flex items-center gap-3 text-xs text-gray-600">
+                        <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-red-100 border border-red-300"></span> Doublon</span>
+                        <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-blue-100 border border-blue-300"></span> Gros fichier</span>
+                        <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-amber-100 border border-amber-300"></span> Ancien</span>
+                        <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-gray-100 border border-gray-300"></span> Indésirable</span>
+                    </div>
                     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
                         <!-- Source Panel -->
                         <div class="bg-white rounded-xl border border-gray-200 p-4">
@@ -310,11 +325,24 @@
                             <div x-show="!explorer.source.loading && explorer.source.error" class="text-sm text-red-600 py-4" x-text="explorer.source.error"></div>
                             <div x-show="!explorer.source.loading && !explorer.source.error" class="max-h-[60vh] overflow-y-auto">
                                 <template x-for="item in explorer.source.items" :key="item.path">
-                                    <div class="explorer-item" :class="{ 'selected': explorer.source.selectedPath === item.path }"
+                                    <div class="explorer-item"
+                                         :class="{
+                                            'selected': explorer.source.selectedPath === item.path,
+                                            'flag-duplicate': item.is_duplicate,
+                                            'flag-large': item.is_large && !item.is_duplicate,
+                                            'flag-old': item.is_old && !item.is_duplicate && !item.is_large,
+                                            'flag-garbage': item.is_garbage && !item.is_duplicate && !item.is_large && !item.is_old
+                                         }"
                                          @click="explorerSelect('source', item)"
                                          @dblclick="explorerOpen('source', item)">
                                         <i class="w-5 text-center" :class="item.is_directory ? 'fas fa-folder text-amber-500' : 'fas fa-file text-gray-400'"></i>
                                         <span class="flex-1 truncate text-sm" x-text="item.name"></span>
+                                        <template x-if="!item.is_directory">
+                                            <span class="flag-badge duplicate" x-show="item.is_duplicate">Doublon</span>
+                                            <span class="flag-badge large" x-show="item.is_large && !item.is_duplicate">Gros</span>
+                                            <span class="flag-badge old" x-show="item.is_old && !item.is_duplicate && !item.is_large">Ancien</span>
+                                            <span class="flag-badge garbage" x-show="item.is_garbage && !item.is_duplicate && !item.is_large && !item.is_old">Indésirable</span>
+                                        </template>
                                         <span class="text-xs text-gray-400" x-show="!item.is_directory" x-text="formatBytes(item.size)"></span>
                                         <input type="checkbox" :checked="isSelected('source', item.path)"
                                                @click.stop="toggleSelection('source', item)" class="ml-2">
