@@ -124,7 +124,7 @@ async def get_duplicate_files(
                    f.last_modified, NULL, g.cnt AS duplicate_count
             FROM indexed_files_optimized f
             JOIN (
-                SELECT hash_xxh64, size, space_id
+                SELECT hash_xxh64, size, space_id, COUNT(*) AS cnt
                 FROM indexed_files_optimized
                 WHERE NOT is_deleted AND hash_xxh64 IS NOT NULL AND NOT is_garbage
                 GROUP BY hash_xxh64, size, space_id
