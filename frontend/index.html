@@ -312,15 +312,16 @@
                                 <h4 class="font-semibold text-sm text-gray-700">Source</h4>
                                 <span class="text-xs text-gray-500" x-text="explorer.source.currentPath"></span>
                             </div>
-                            <div class="flex items-center gap-2 mb-3 flex-wrap">
-                                <button @click="explorerGoUp('source')" :disabled="!canGoUp('source')"
+                             <div class="flex items-center gap-2 mb-3 flex-wrap bg-gray-50 rounded-lg px-3 py-1.5">
+                                 <button @click="explorerGoUp('source')" :disabled="!canGoUp('source')"
                                         class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded text-xs font-medium disabled:opacity-30">
                                     <i class="fas fa-arrow-up mr-1"></i> Remonter
                                 </button>
                                 <template x-for="(crumb, idx) in explorerBreadcrumbs('source')" :key="idx">
-                                    <span :class="crumb.path ? 'text-blue-600 hover:text-blue-800 hover:underline cursor-pointer' : (crumb.ellipsis ? 'text-gray-400' : 'text-gray-800 font-medium')"
+                                    <span class="text-xs"
+                                          :class="crumb.path ? 'text-blue-600 hover:text-blue-800 hover:underline cursor-pointer' : (crumb.ellipsis ? 'text-gray-400' : 'text-gray-800 font-medium')"
                                           @click="crumb.path && explorerNavigate('source', crumb.path)" x-text="crumb.label"></span>
-                                    <span x-show="idx < explorerBreadcrumbs('source').length - 1" class="text-gray-400 mx-1">/</span>
+                                    <span x-show="idx < explorerBreadcrumbs('source').length - 1" class="text-gray-300 mx-1">&gt;</span>
                                 </template>
                             </div>
                             <div x-show="explorer.source.loading" class="flex items-center gap-2 py-8 justify-center text-gray-500">
@@ -397,15 +398,16 @@
                                     <span class="text-xs text-gray-500" x-text="explorer.archive.currentPath"></span>
                                 </div>
                             </div>
-                            <div class="flex items-center gap-2 mb-3 flex-wrap">
-                                <button @click="explorerGoUp('archive')" :disabled="!canGoUp('archive')"
+                             <div class="flex items-center gap-2 mb-3 flex-wrap bg-gray-50 rounded-lg px-3 py-1.5">
+                                 <button @click="explorerGoUp('archive')" :disabled="!canGoUp('archive')"
                                         class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded text-xs font-medium disabled:opacity-30">
                                     <i class="fas fa-arrow-up mr-1"></i> Remonter
                                 </button>
                                 <template x-for="(crumb, idx) in explorerBreadcrumbs('archive')" :key="idx">
-                                    <span :class="crumb.path ? 'text-blue-600 hover:text-blue-800 hover:underline cursor-pointer' : (crumb.ellipsis ? 'text-gray-400' : 'text-gray-800 font-medium')"
+                                    <span class="text-xs"
+                                          :class="crumb.path ? 'text-blue-600 hover:text-blue-800 hover:underline cursor-pointer' : (crumb.ellipsis ? 'text-gray-400' : 'text-gray-800 font-medium')"
                                           @click="crumb.path && explorerNavigate('archive', crumb.path)" x-text="crumb.label"></span>
-                                    <span x-show="idx < explorerBreadcrumbs('archive').length - 1" class="text-gray-400 mx-1">/</span>
+                                    <span x-show="idx < explorerBreadcrumbs('archive').length - 1" class="text-gray-300 mx-1">&gt;</span>
                                 </template>
                             </div>
                             <div x-show="explorer.archive.loading" class="flex items-center gap-2 py-8 justify-center text-gray-500">
