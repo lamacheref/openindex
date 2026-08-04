@@ -77,7 +77,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `418248e6` | 2026-08-04 | non | non | fix(ui): badge/bouton doublon conditionné sur duplicate_count>1 (robuste) + légendes en mini-rangées type explorateur |
+| `6400ff10` | 2026-08-04 | non | non | feat(explorer): le panneau Archive (live-items) résout checksum + doublons depuis la base |
+| `92e26a5a` | 2026-08-04 | oui | oui | fix(ui): badge/bouton doublon conditionné sur duplicate_count>1 (robuste) + légendes en mini-rangées type explorateur |
 | `ce8bd0e8` | 2026-08-04 | oui | oui | fix(ui): bouton rouge 'n doublon(s)' cliquable dans l'explorateur + légendes lisibles (échantillons élargis) |
 | `971017ec` | 2026-08-04 | oui | oui | fix(ui): onglet Signaler — badges/labels par filtre actif (items sans category) + légende ; badge 'Doublon (n)' agrandi |
 | `cfca44b7` | 2026-08-04 | oui | oui | fix(api): artefact duplicates stats — SUM(f.size) (ambiguïté de colonne entre f et g) |
@@ -126,4 +127,3 @@ pytest -q tests/
 | `58c0b0a5` | 2026-07-23 | oui | oui | feat: real-time dir count in progression column (every 10 dirs) |
 | `f5d552ad` | 2026-07-23 | oui | oui | fix: add cancelJob function |
 | `253640ca` | 2026-07-23 | oui | oui | fix: add commit=True to purge/resume/cancel endpoints |
-| `aac68b17` | 2026-07-23 | oui | oui | feat: fault-tolerant worker (resume after crash), purge + resume buttons |

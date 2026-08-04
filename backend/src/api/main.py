@@ -2376,6 +2376,42 @@ async def get_live_explorer_items(
                     duplicate_count=0,
                 ))
 
+        # Enrichissement doublons depuis la base (path relatif au partage SMB)
+        start_path_norm = _normalize_smb_path(start_path) if start_path else ""
+        rel_targets = []
+        for it in items:
+            if not it.is_directory and it.path and start_path_norm and it.path.startswith(start_path_norm):
+                rel = it.path[len(start_path_norm):].lstrip("\\").replace("\\", "/")
+                if rel:
+                    rel_targets.append((it, rel))
+        if rel_targets:
+            try:
+                db = get_db_adapter()
+                rows = db.execute_query(
+                    "SELECT path, hash_xxh64 FROM indexed_files_optimized WHERE path = ANY(%s) AND NOT is_deleted",
+                    [[r for _, r in rel_targets]],
+                )
+                hash_by_rel = {r[0]: r[1] for r in rows if r[1]}
+                unique_hashes = list(set(hash_by_rel.values()))
+                cnt_by_hash = {}
+                if unique_hashes:
+                    cnt_rows = db.execute_query(
+                        "SELECT hash_xxh64, COUNT(*) FROM indexed_files_optimized"
+                        " WHERE hash_xxh64 = ANY(%s) AND NOT is_deleted AND NOT is_garbage GROUP BY hash_xxh64",
+                        [unique_hashes],
+                    )
+                    cnt_by_hash = {r[0]: int(r[1]) for r in cnt_rows}
+                for it, rel in rel_targets:
+                    h = hash_by_rel.get(rel)
+                    if h:
+                        it.checksum = h
+                        c = cnt_by_hash.get(h, 0)
+                        it.has_duplicates = c > 1
+                        it.is_duplicate = c > 1
+                        it.duplicate_count = c
+            except Exception:
+                logger.warning("Enrichissement doublons du panneau live ignoré", exc_info=True)
+
         return sorted(items, key=lambda item: (not item.is_directory, item.name.lower()))
     except HTTPException:
         raise
