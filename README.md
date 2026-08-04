@@ -77,7 +77,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `f3a1023f` | 2026-08-04 | non | non | docs(operations): accès au token API Gitea (gitea.smiden.eu) |
+| `7d0d26f5` | 2026-08-04 | non | non | fix(api): /api/artefacts/duplicates calcule depuis indexed_files_optimized (table duplicate_files vide -> onglet Doublons vide) ; légende explorateur enrichie |
+| `369c9ba4` | 2026-08-04 | oui | oui | docs(operations): accès au token API Gitea (gitea.smiden.eu) |
 | `1d9f713c` | 2026-08-04 | oui | oui | fix(api): duplicate_details_router réutilise get_db_adapter de main (import cassé backend.src.postgres_adapter) |
 | `de00e543` | 2026-08-04 | oui | oui | feat(explorer): badge 'Doublon (n)' cliquable -> lightbox lecture seule listant toutes les occurrences |
 | `aeff7cd9` | 2026-08-04 | oui | oui | fix(ui): un pourriel prime sur doublon; doublons excluent les garbage; is_garbage live strict |
@@ -126,4 +127,3 @@ pytest -q tests/
 | `0ec256fe` | 2026-07-22 | oui | oui | fix: standard log order (newest at bottom, auto-scroll to bottom) |
 | `f37fce82` | 2026-07-22 | oui | oui | fix: reverse log order (newest first), auto-scroll to top |
 | `a02a6714` | 2026-07-22 | oui | oui | fix: default logService value |
-| `96b86be6` | 2026-07-22 | oui | oui | feat: dedicated log file /var/log/openindex/indexer-worker.log, logs tab reads from file |

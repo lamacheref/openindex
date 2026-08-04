@@ -17,7 +17,7 @@ client = TestClient(app)
 @pytest.fixture
 def mock_db_adapter():
     """Mock de l'adaptateur de base de données"""
-    with patch('src.api.artefacts_router.get_db_adapter') as mock:
+    with patch('backend.src.api.artefacts_router.get_db_adapter') as mock:
         yield mock
 
 
@@ -275,7 +275,7 @@ class TestArtefactsAPI:
         assert categories["duplicates"]["count"] == 3658
         assert categories["large"]["count"] == 47
         assert categories["old"]["count"] == 44144
-        assert categories["unused"]["count"] == 0
+        assert categories["garbage"]["count"] == 0
 
 
 class TestArtefactsEdgeCases:

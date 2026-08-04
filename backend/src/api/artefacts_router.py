@@ -120,20 +120,34 @@ async def get_duplicate_files(
         
         # Récupérer les fichiers en doublon avec pagination
         query = """
-            SELECT 
-                id, path, name, size, checksum, last_modified, last_accessed, duplicate_count
-            FROM duplicate_files
-            ORDER BY duplicate_count DESC, size DESC
+            SELECT f.id::text, f.path, f.name, f.size, f.hash_xxh64 AS checksum,
+                   f.last_modified, NULL, g.cnt AS duplicate_count
+            FROM indexed_files_optimized f
+            JOIN (
+                SELECT hash_xxh64, size, space_id
+                FROM indexed_files_optimized
+                WHERE NOT is_deleted AND hash_xxh64 IS NOT NULL AND NOT is_garbage
+                GROUP BY hash_xxh64, size, space_id
+                HAVING COUNT(*) > 1
+            ) g ON f.hash_xxh64 = g.hash_xxh64 AND f.size = g.size AND f.space_id = g.space_id
+            WHERE NOT f.is_deleted AND NOT f.is_garbage
+            ORDER BY g.cnt DESC, f.size DESC
             LIMIT %s OFFSET %s
         """
         files = db.execute_query(query, (limit, offset))
         
         # Calculer les statistiques
         stats_query = """
-            SELECT 
-                COUNT(*) as count,
-                SUM(size) as total_size
-            FROM duplicate_files
+            SELECT COUNT(*), COALESCE(SUM(size), 0)
+            FROM indexed_files_optimized f
+            JOIN (
+                SELECT hash_xxh64, size, space_id
+                FROM indexed_files_optimized
+                WHERE NOT is_deleted AND hash_xxh64 IS NOT NULL AND NOT is_garbage
+                GROUP BY hash_xxh64, size, space_id
+                HAVING COUNT(*) > 1
+            ) g ON f.hash_xxh64 = g.hash_xxh64 AND f.size = g.size AND f.space_id = g.space_id
+            WHERE NOT f.is_deleted AND NOT f.is_garbage
         """
         stats = db.execute_query(stats_query)[0]
         
@@ -482,8 +496,20 @@ async def get_artefacts_stats(space: Optional[str] = None):
                     params = [row[0][0]]
         
         # Statistiques pour chaque catégorie
+        duplicate_stats_query = f"""
+            SELECT COUNT(*), COALESCE(SUM(size), 0)
+            FROM indexed_files_optimized f
+            JOIN (
+                SELECT hash_xxh64, size, space_id
+                FROM indexed_files_optimized
+                WHERE NOT is_deleted AND hash_xxh64 IS NOT NULL AND NOT is_garbage
+                GROUP BY hash_xxh64, size, space_id
+                HAVING COUNT(*) > 1
+            ) g ON f.hash_xxh64 = g.hash_xxh64 AND f.size = g.size AND f.space_id = g.space_id
+            WHERE NOT f.is_deleted AND NOT f.is_garbage{space_filter.replace('space_id', 'f.space_id')}
+        """
         categories = [
-            ("duplicates", f"SELECT COUNT(*) as count, SUM(size) as total_size FROM duplicate_files{space_filter}"),
+            ("duplicates", duplicate_stats_query),
             ("large", f"SELECT COUNT(*) as count, SUM(size) as total_size FROM large_files{space_filter}"),
             ("old", f"SELECT COUNT(*) as count, SUM(size) as total_size FROM old_files{space_filter}"),
             ("garbage", f"SELECT COUNT(*) as count, SUM(size) as total_size FROM garbage_listing{space_filter}")
