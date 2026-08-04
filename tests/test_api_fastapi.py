@@ -26,7 +26,7 @@ class DummyDB:
     def execute_query(self, query, params=None):
         params = params or []
         config_id = None
-        if "crawl_config_id::text" in query:
+        if "crawl_config_id::text" in query or "space_id::text" in query:
             for value in reversed(params):
                 if isinstance(value, str) and value.startswith("cfg-"):
                     config_id = value
@@ -38,6 +38,23 @@ class DummyDB:
         if "EXPLAIN QUERY PLAN" in query:
             return [
                 (3, 0, 0, "SCAN files"),
+            ]
+
+        if "FROM indexed_files_optimized f1" in query and "JOIN indexed_files_optimized f2" in query:
+            if config_id is not None:
+                return self.duplicates_by_config.get(config_id, [])
+            return [
+                (
+                    "00000000-0000-0000-0000-000000000001",
+                    "/share/a.txt",
+                    "a.txt",
+                    42,
+                    "abc",
+                    "2026-02-27T10:00:00Z",
+                    None,
+                    None,
+                    "/share/original/a.txt",
+                )
             ]
 
         if "FROM files" in query and "JOIN files f2" in query:

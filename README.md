@@ -77,7 +77,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `794633ff` | 2026-08-03 | non | non | docs(ops): split psql_lxc.sh usage into its own doc file; clean up DEPLOY_LXC numbering |
+| `89a64195` | 2026-08-04 | non | non | fix(api): /api/duplicates detect duplicates by hash+size group (issue #3); fix versioning path + system status version env |
+| `a65c4c69` | 2026-08-03 | oui | oui | docs(ops): split psql_lxc.sh usage into its own doc file; clean up DEPLOY_LXC numbering |
 | `bd689a75` | 2026-08-03 | oui | oui | docs(ops): document scripts/psql_lxc.sh in DEPLOY_LXC (read-only DB access dev->LXC) |
 | `e4322503` | 2026-08-03 | oui | oui | docs(psql_lxc): document wrapper, env vars, examples and read-only usage note |
 | `376646d8` | 2026-08-03 | oui | oui | feat(dev): add scripts/psql_lxc.sh SSH wrapper to query the LXC database directly (read-only) |
@@ -126,4 +127,3 @@ pytest -q tests/
 | `703e4d83` | 2026-07-22 | oui | oui | fix: stop job endpoint + frontend stopJob + Phase A table display |
 | `8ff7e798` | 2026-07-22 | oui | oui | fix: keep files_found=0 during Phase A, show discovery text in UI |
 | `79f8e12d` | 2026-07-22 | oui | oui | fix: show live progress during Phase A dir discovery, reset at Phase B start |
-| `afad2e87` | 2026-07-22 | oui | oui | fix: pass domain to SMBClient in worker |

@@ -2911,11 +2911,13 @@ async def get_duplicates(space: Optional[str] = None):
                    f2.path as duplicate_of_path
             FROM indexed_files_optimized f1
             JOIN indexed_files_optimized f2
-              ON f1.hash_xxh64 = f2.hash_xxh64 AND f1.space_id = f2.space_id
-             AND f1.size = f2.size AND f1.id != f2.id
-             AND f1.is_duplicate = TRUE AND f2.is_deleted = FALSE
-             AND f1.is_deleted = FALSE
-            WHERE f1.is_duplicate = TRUE
+              ON f1.hash_xxh64 = f2.hash_xxh64
+             AND f1.size = f2.size
+             AND f1.space_id = f2.space_id
+             AND f1.id <> f2.id
+             AND f2.is_deleted = FALSE
+            WHERE f1.is_deleted = FALSE
+              AND f1.hash_xxh64 IS NOT NULL
         """
         params: List[Any] = []
         if space:
@@ -2926,7 +2928,7 @@ async def get_duplicates(space: Optional[str] = None):
             else:
                 query += " AND f1.path LIKE %s"
                 params.append(f"%{space}%")
-        query += " ORDER BY f1.size DESC"
+        query += " ORDER BY f1.size DESC, f1.path ASC"
         results = db.execute_query(query, params)
         return [
             {
@@ -3592,7 +3594,7 @@ def _build_system_status_payload() -> SystemStatus:
     timezone_name = os.getenv("OPENINDEX_TIMEZONE") or os.getenv("TZ") or "UTC"
 
     if os.getenv("OPENINDEX_APP_VERSION"):
-        version = version_from_file
+        version = os.getenv("OPENINDEX_APP_VERSION")
     else:
         version = version_from_file
 
