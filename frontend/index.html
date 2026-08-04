@@ -327,27 +327,27 @@
                             <div x-show="!explorer.source.loading && explorer.source.error" class="text-sm text-red-600 py-4" x-text="explorer.source.error"></div>
                             <div x-show="!explorer.source.loading && !explorer.source.error" class="max-h-[60vh] overflow-y-auto">
                                 <template x-for="item in explorer.source.items" :key="item.path">
-                                    <div class="explorer-item"
-                                         :class="{
-                                            'selected': explorer.source.selectedPath === item.path,
-                                            'flag-dirty': item.is_directory && item.has_flagged_files,
-                                            'flag-duplicate': !item.is_directory && item.is_duplicate,
-                                            'flag-large': !item.is_directory && item.is_large && !item.is_duplicate,
-                                            'flag-old': !item.is_directory && item.is_old && !item.is_duplicate && !item.is_large,
-                                            'flag-garbage': !item.is_directory && item.is_garbage && !item.is_duplicate && !item.is_large && !item.is_old
-                                         }"
-                                         @click="explorerSelect('source', item)"
-                                         @dblclick="explorerOpen('source', item)">
+                                     <div class="explorer-item"
+                                          :class="{
+                                             'selected': explorer.source.selectedPath === item.path,
+                                             'flag-dirty': item.is_directory && item.has_flagged_files,
+                                             'flag-garbage': !item.is_directory && item.is_garbage,
+                                             'flag-duplicate': !item.is_directory && item.is_duplicate && !item.is_garbage,
+                                             'flag-large': !item.is_directory && item.is_large && !item.is_garbage && !item.is_duplicate,
+                                             'flag-old': !item.is_directory && item.is_old && !item.is_garbage && !item.is_duplicate && !item.is_large
+                                          }"
+                                          @click="explorerSelect('source', item)"
+                                          @dblclick="explorerOpen('source', item)">
                                         <i class="w-5 text-center" :class="item.is_directory ? 'fas fa-folder text-amber-500' : 'fas fa-file text-gray-400'"></i>
                                         <span class="flex-1 truncate text-sm" x-text="item.name"></span>
                                         <template x-if="item.is_directory">
                                             <span class="flag-badge garbage" x-show="item.has_flagged_files">Contient des fichiers signalés</span>
                                         </template>
                                         <template x-if="!item.is_directory">
-                                            <span class="flag-badge duplicate" x-show="item.is_duplicate">Doublon</span>
-                                            <span class="flag-badge large" x-show="item.is_large && !item.is_duplicate">Gros</span>
-                                            <span class="flag-badge old" x-show="item.is_old && !item.is_duplicate && !item.is_large">Ancien</span>
-                                            <span class="flag-badge garbage" x-show="item.is_garbage && !item.is_duplicate && !item.is_large && !item.is_old">Indésirable</span>
+                                            <span class="flag-badge garbage" x-show="item.is_garbage">Indésirable</span>
+                                            <span class="flag-badge duplicate" x-show="item.is_duplicate && !item.is_garbage">Doublon</span>
+                                            <span class="flag-badge large" x-show="item.is_large && !item.is_garbage && !item.is_duplicate">Gros</span>
+                                            <span class="flag-badge old" x-show="item.is_old && !item.is_garbage && !item.is_duplicate && !item.is_large">Ancien</span>
                                         </template>
                                         <span class="text-xs text-gray-400" x-show="!item.is_directory" x-text="formatBytes(item.size)"></span>
                                         <input type="checkbox" :checked="isSelected('source', item.path)"
@@ -414,10 +414,10 @@
                                     <div class="explorer-item"
                                             :class="{
                                                 'selected': explorer.archive.selectedPath === item.path,
-                                                'flag-duplicate': item.is_duplicate,
-                                                'flag-large': item.is_large && !item.is_duplicate,
-                                                'flag-old': item.is_old && !item.is_duplicate && !item.is_large,
-                                                'flag-garbage': item.is_garbage && !item.is_duplicate && !item.is_large && !item.is_old,
+                                                'flag-garbage': !item.is_directory && item.is_garbage,
+                                                'flag-duplicate': item.is_duplicate && !item.is_garbage,
+                                                'flag-large': item.is_large && !item.is_garbage && !item.is_duplicate,
+                                                'flag-old': item.is_old && !item.is_garbage && !item.is_duplicate && !item.is_large,
                                                 'flag-dirty': item.is_directory && item.has_flagged_files
                                             }"
                                          @click="explorerSelect('archive', item)"
@@ -428,10 +428,10 @@
                                                 <span class="flag-badge garbage" x-show="item.has_flagged_files">Contient des fichiers signalés</span>
                                             </template>
                                             <template x-if="!item.is_directory">
-                                                <span class="flag-badge duplicate" x-show="item.is_duplicate">Doublon</span>
-                                                <span class="flag-badge large" x-show="item.is_large && !item.is_duplicate">Gros</span>
-                                                <span class="flag-badge old" x-show="item.is_old && !item.is_duplicate && !item.is_large">Ancien</span>
-                                                <span class="flag-badge garbage" x-show="item.is_garbage && !item.is_duplicate && !item.is_large && !item.is_old">Indésirable</span>
+                                                <span class="flag-badge garbage" x-show="item.is_garbage">Indésirable</span>
+                                                <span class="flag-badge duplicate" x-show="item.is_duplicate && !item.is_garbage">Doublon</span>
+                                                <span class="flag-badge large" x-show="item.is_large && !item.is_garbage && !item.is_duplicate">Gros</span>
+                                                <span class="flag-badge old" x-show="item.is_old && !item.is_garbage && !item.is_duplicate && !item.is_large">Ancien</span>
                                             </template>
                                             <span class="text-xs text-gray-400" x-show="!item.is_directory" x-text="formatBytes(item.size)"></span>
                                     </div>

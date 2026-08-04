@@ -2341,7 +2341,13 @@ async def get_live_explorer_items(
                 is_old = False
                 if not is_directory:
                     lowered = entry_name.lower()
-                    is_garbage = any(p in entry_name or lowered.endswith(p) for p in ('~$', '.tmp', '.lock', '.lnk')) or entry_name in ('Thumbs.db', 'desktop.ini')
+                    is_garbage = (
+                        entry_name.startswith('~$')
+                        or lowered.endswith('.tmp')
+                        or lowered.endswith('.lock')
+                        or lowered.endswith('.lnk')
+                        or entry_name in ('Thumbs.db', 'desktop.ini', '.DS_Store')
+                    )
                     is_large = entry_size is not None and entry_size > large_threshold_bytes
                     is_old = entry_mtime and (now_ts - entry_mtime) > old_threshold_seconds
                 items.append(ExplorerItem(
@@ -2468,7 +2474,8 @@ async def get_explorer_items(
                                (SELECT COUNT(*) FROM indexed_files_optimized d
                                 WHERE d.hash_xxh64 = f.hash_xxh64 AND d.size = f.size
                                   AND d.space_id = f.space_id AND NOT d.is_deleted
-                                  AND d.id <> f.id) > 0 AS is_duplicate,
+                                  AND NOT d.is_garbage
+                                  AND d.id <> f.id) > 0 AND NOT f.is_garbage AS is_duplicate,
                                f.size > %s AS is_large,
                                f.last_modified < CURRENT_TIMESTAMP - make_interval(days => %s) AS is_old
                         FROM indexed_files_optimized f
