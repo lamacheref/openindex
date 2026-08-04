@@ -77,7 +77,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `c0c619d9` | 2026-08-04 | non | non | fix(ui): onglet Signaler — badges/labels par filtre actif (items sans category) + légende ; badge 'Doublon (n)' agrandi |
+| `78b613c9` | 2026-08-04 | non | non | fix(ui): bouton rouge 'n doublon(s)' cliquable dans l'explorateur + légendes lisibles (échantillons élargis) |
+| `971017ec` | 2026-08-04 | oui | oui | fix(ui): onglet Signaler — badges/labels par filtre actif (items sans category) + légende ; badge 'Doublon (n)' agrandi |
 | `cfca44b7` | 2026-08-04 | oui | oui | fix(api): artefact duplicates stats — SUM(f.size) (ambiguïté de colonne entre f et g) |
 | `95adcfd8` | 2026-08-04 | oui | oui | fix(api): artefact duplicates — expose COUNT(*) AS cnt dans la sous-requête (colonne g.cnt manquante) |
 | `7e7f7813` | 2026-08-04 | oui | oui | fix(api): /api/artefacts/duplicates calcule depuis indexed_files_optimized (table duplicate_files vide -> onglet Doublons vide) ; légende explorateur enrichie |
@@ -126,4 +127,3 @@ pytest -q tests/
 | `253640ca` | 2026-07-23 | oui | oui | fix: add commit=True to purge/resume/cancel endpoints |
 | `aac68b17` | 2026-07-23 | oui | oui | feat: fault-tolerant worker (resume after crash), purge + resume buttons |
 | `33383a9c` | 2026-07-22 | oui | oui | fix: add index col + smart auto-scroll (only if near bottom) |
-| `acdc1e54` | 2026-07-22 | oui | oui | fix: increase scroll timeout to 200ms |

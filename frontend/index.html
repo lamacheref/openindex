@@ -296,13 +296,13 @@
                             <i class="fas fa-rotate"></i> Rafraîchir
                         </button>
                     </div>
-                    <div class="flex items-center gap-3 text-xs text-gray-600 flex-wrap">
-                        <span class="font-medium text-gray-500">Légende :</span>
-                        <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-red-100 border border-red-300"></span> Doublon <span class="text-gray-400">(badge cliquable → liste des occurrences)</span></span>
-                        <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-blue-100 border border-blue-300"></span> Gros fichier</span>
-                        <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-amber-100 border border-amber-300"></span> Ancien</span>
-                        <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-gray-100 border border-gray-300"></span> Indésirable</span>
-                        <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-gray-200 border border-gray-300"></span> Dossier avec fichiers signalés</span>
+                    <div class="bg-gray-50 border border-gray-200 rounded-xl p-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-gray-700">
+                        <span class="font-semibold text-gray-600 uppercase tracking-wide">Légende :</span>
+                        <span class="inline-flex items-center gap-2"><span class="w-6 h-4 rounded bg-red-200 border border-red-400"></span> Doublon — bouton rouge <span class="font-semibold text-red-700">cliquable</span> → liste des occurrences</span>
+                        <span class="inline-flex items-center gap-2"><span class="w-6 h-4 rounded bg-blue-200 border border-blue-400"></span> Gros fichier</span>
+                        <span class="inline-flex items-center gap-2"><span class="w-6 h-4 rounded bg-amber-200 border border-amber-400"></span> Ancien</span>
+                        <span class="inline-flex items-center gap-2"><span class="w-6 h-4 rounded bg-gray-200 border border-gray-400"></span> Indésirable</span>
+                        <span class="inline-flex items-center gap-2"><span class="w-6 h-4 rounded bg-gray-300 border border-gray-500"></span> Dossier avec fichiers signalés</span>
                     </div>
                     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
                         <!-- Source Panel -->
@@ -348,9 +348,11 @@
                                         </template>
                                         <template x-if="!item.is_directory">
                                             <span class="flag-badge garbage" x-show="item.is_garbage">Indésirable</span>
-                                            <span class="flag-badge duplicate clickable" @click.stop="showDuplicateDetails(item)" title="Voir toutes les occurrences"
-                                                  x-show="item.is_duplicate && !item.is_garbage"
-                                                  x-text="item.duplicate_count > 0 ? 'Doublon (' + item.duplicate_count + ')' : 'Doublon'"></span>
+                                            <button x-show="item.is_duplicate && !item.is_garbage" @click.stop="showDuplicateDetails(item)"
+                                                    class="text-[0.7rem] font-semibold bg-red-600 hover:bg-red-700 text-white px-2 py-0.5 rounded-full shrink-0"
+                                                    :title="'Voir les ' + item.duplicate_count + ' occurrences'">
+                                                <i class="fas fa-copy mr-1"></i><span x-text="item.duplicate_count + ' doublon(s)'"></span>
+                                            </button>
                                             <span class="flag-badge large" x-show="item.is_large && !item.is_garbage && !item.is_duplicate">Gros</span>
                                             <span class="flag-badge old" x-show="item.is_old && !item.is_garbage && !item.is_duplicate && !item.is_large">Ancien</span>
                                         </template>
@@ -434,9 +436,11 @@
                                             </template>
                                             <template x-if="!item.is_directory">
                                                 <span class="flag-badge garbage" x-show="item.is_garbage">Indésirable</span>
-                                                <span class="flag-badge duplicate clickable" @click.stop="showDuplicateDetails(item)" title="Voir toutes les occurrences"
-                                                      x-show="item.is_duplicate && !item.is_garbage"
-                                                      x-text="item.duplicate_count > 0 ? 'Doublon (' + item.duplicate_count + ')' : 'Doublon'"></span>
+                                                <button x-show="item.is_duplicate && !item.is_garbage" @click.stop="showDuplicateDetails(item)"
+                                                        class="text-[0.7rem] font-semibold bg-red-600 hover:bg-red-700 text-white px-2 py-0.5 rounded-full shrink-0"
+                                                        :title="'Voir les ' + item.duplicate_count + ' occurrences'">
+                                                    <i class="fas fa-copy mr-1"></i><span x-text="item.duplicate_count + ' doublon(s)'"></span>
+                                                </button>
                                                 <span class="flag-badge large" x-show="item.is_large && !item.is_garbage && !item.is_duplicate">Gros</span>
                                                 <span class="flag-badge old" x-show="item.is_old && !item.is_garbage && !item.is_duplicate && !item.is_large">Ancien</span>
                                             </template>
@@ -576,12 +580,12 @@
                     </div>
 
                     <!-- Artifact Legend -->
-                    <div class="flex items-center gap-3 text-xs text-gray-600 flex-wrap">
-                        <span class="font-medium text-gray-500">Légende :</span>
-                        <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-red-100 border border-red-300"></span> Doublon <span class="text-gray-400">(bouton "Détails" → liste des occurrences)</span></span>
-                        <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-blue-100 border border-blue-300"></span> Gros fichier</span>
-                        <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-amber-100 border border-amber-300"></span> Vieux fichier</span>
-                        <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-gray-100 border border-gray-300"></span> Pourriel</span>
+                    <div class="bg-gray-50 border border-gray-200 rounded-xl p-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-gray-700">
+                        <span class="font-semibold text-gray-600 uppercase tracking-wide">Légende :</span>
+                        <span class="inline-flex items-center gap-2"><span class="w-6 h-4 rounded bg-red-200 border border-red-400"></span> Doublon — bouton "Détails" → liste des occurrences</span>
+                        <span class="inline-flex items-center gap-2"><span class="w-6 h-4 rounded bg-blue-200 border border-blue-400"></span> Gros fichier</span>
+                        <span class="inline-flex items-center gap-2"><span class="w-6 h-4 rounded bg-amber-200 border border-amber-400"></span> Vieux fichier</span>
+                        <span class="inline-flex items-center gap-2"><span class="w-6 h-4 rounded bg-gray-200 border border-gray-400"></span> Pourriel</span>
                     </div>
 
                     <!-- Artifact Actions -->
