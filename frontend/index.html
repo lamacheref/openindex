@@ -349,9 +349,8 @@
                                         </template>
                                         <span class="flag-badge garbage" x-show="!item.is_directory && item.is_garbage">Indésirable</span>
                                         <button x-show="!item.is_directory && item.duplicate_count > 1 && !item.is_garbage" @click.stop="showDuplicateDetails(item)"
-                                                class="text-[0.7rem] font-semibold bg-red-600 hover:bg-red-700 text-white px-2 py-0.5 rounded-full shrink-0"
-                                                :title="'Voir les ' + item.duplicate_count + ' occurrences'">
-                                            <i class="fas fa-copy mr-1"></i><span x-text="item.duplicate_count + ' doublon(s)'"></span>
+                                                class="flag-badge duplicate clickable" :title="'Voir les ' + item.duplicate_count + ' occurrences'">
+                                            <span x-text="'Doublon (' + item.duplicate_count + ')'"></span>
                                         </button>
                                         <span class="flag-badge large" x-show="!item.is_directory && item.is_large && !item.is_garbage && item.duplicate_count <= 1">Gros</span>
                                         <span class="flag-badge old" x-show="!item.is_directory && item.is_old && !item.is_garbage && item.duplicate_count <= 1 && !item.is_large">Ancien</span>
@@ -435,9 +434,8 @@
                                             </template>
                                             <span class="flag-badge garbage" x-show="!item.is_directory && item.is_garbage">Indésirable</span>
                                             <button x-show="!item.is_directory && item.duplicate_count > 1 && !item.is_garbage" @click.stop="showDuplicateDetails(item)"
-                                                    class="text-[0.7rem] font-semibold bg-red-600 hover:bg-red-700 text-white px-2 py-0.5 rounded-full shrink-0"
-                                                    :title="'Voir les ' + item.duplicate_count + ' occurrences'">
-                                                <i class="fas fa-copy mr-1"></i><span x-text="item.duplicate_count + ' doublon(s)'"></span>
+                                                    class="flag-badge duplicate clickable" :title="'Voir les ' + item.duplicate_count + ' occurrences'">
+                                                <span x-text="'Doublon (' + item.duplicate_count + ')'"></span>
                                             </button>
                                             <span class="flag-badge large" x-show="!item.is_directory && item.is_large && !item.is_garbage && item.duplicate_count <= 1">Gros</span>
                                             <span class="flag-badge old" x-show="!item.is_directory && item.is_old && !item.is_garbage && item.duplicate_count <= 1 && !item.is_large">Ancien</span>

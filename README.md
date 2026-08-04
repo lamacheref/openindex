@@ -77,7 +77,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `ab523ec6` | 2026-08-04 | non | non | fix(explorer): badges doublons/Gros/Ancien jamais affichés (x-if multi-enfants) |
+| `323dff13` | 2026-08-04 | non | non | fix(explorer): badge doublon aligné sur les autres badges (flag-badge) |
+| `8f65dd8b` | 2026-08-04 | oui | oui | fix(explorer): badges doublons/Gros/Ancien jamais affichés (x-if multi-enfants) |
 | `ef2c2264` | 2026-08-04 | oui | oui | feat(explorer): le panneau Archive (live-items) résout checksum + doublons depuis la base |
 | `92e26a5a` | 2026-08-04 | oui | oui | fix(ui): badge/bouton doublon conditionné sur duplicate_count>1 (robuste) + légendes en mini-rangées type explorateur |
 | `ce8bd0e8` | 2026-08-04 | oui | oui | fix(ui): bouton rouge 'n doublon(s)' cliquable dans l'explorateur + légendes lisibles (échantillons élargis) |
@@ -126,4 +127,3 @@ pytest -q tests/
 | `7d4758fb` | 2026-07-23 | oui | oui | perf: avoid duplicate list_dir in get_file_info by passing entries_list |
 | `ba62f8c3` | 2026-07-23 | oui | oui | fix: update progress every 10 items in Phase B too |
 | `58c0b0a5` | 2026-07-23 | oui | oui | feat: real-time dir count in progression column (every 10 dirs) |
-| `f5d552ad` | 2026-07-23 | oui | oui | fix: add cancelJob function |
