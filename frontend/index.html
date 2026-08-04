@@ -38,11 +38,12 @@
         .explorer-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; border-radius: 0.5rem; cursor: pointer; transition: background 0.15s; }
         .explorer-item:hover { background: #f1f5f9; }
         .explorer-item.selected { background: #dbeafe; }
-        .explorer-item.flag-duplicate { background: #fef2f2; box-shadow: inset 3px 0 0 #dc2626; }
-        .explorer-item.flag-large { background: #eff6ff; box-shadow: inset 3px 0 0 #2563eb; }
-        .explorer-item.flag-old { background: #fffbeb; box-shadow: inset 3px 0 0 #d97706; }
-        .explorer-item.flag-garbage { background: #f9fafb; box-shadow: inset 3px 0 0 #9ca3af; }
-        .explorer-item.flag-dirty { background: #f8fafc; box-shadow: inset 3px 0 0 #cbd5e1; }
+        .explorer-item.flag-duplicate, .legend-item.flag-duplicate { background: #fef2f2; box-shadow: inset 3px 0 0 #dc2626; }
+        .explorer-item.flag-large, .legend-item.flag-large { background: #eff6ff; box-shadow: inset 3px 0 0 #2563eb; }
+        .explorer-item.flag-old, .legend-item.flag-old { background: #fffbeb; box-shadow: inset 3px 0 0 #d97706; }
+        .explorer-item.flag-garbage, .legend-item.flag-garbage { background: #f9fafb; box-shadow: inset 3px 0 0 #9ca3af; }
+        .explorer-item.flag-dirty, .legend-item.flag-dirty { background: #f8fafc; box-shadow: inset 3px 0 0 #cbd5e1; }
+        .legend-item { display: inline-flex; align-items: center; padding: 0.25rem 0.6rem; border-radius: 0.5rem; }
         .flag-badge { display: inline-flex; align-items: center; font-size: 0.625rem; font-weight: 700; padding: 0.0625rem 0.375rem; border-radius: 9999px; line-height: 1.25rem; }
         .flag-badge.duplicate { background: #fee2e2; color: #b91c1c; padding: 0.125rem 0.5rem; border: 1px solid #fca5a5; }
         .flag-badge.large { background: #dbeafe; color: #1d4ed8; }
@@ -297,12 +298,12 @@
                         </button>
                     </div>
                     <div class="bg-gray-50 border border-gray-200 rounded-xl p-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-gray-700">
-                        <span class="font-semibold text-gray-600 uppercase tracking-wide">Légende :</span>
-                        <span class="inline-flex items-center gap-2"><span class="w-6 h-4 rounded bg-red-200 border border-red-400"></span> Doublon — bouton rouge <span class="font-semibold text-red-700">cliquable</span> → liste des occurrences</span>
-                        <span class="inline-flex items-center gap-2"><span class="w-6 h-4 rounded bg-blue-200 border border-blue-400"></span> Gros fichier</span>
-                        <span class="inline-flex items-center gap-2"><span class="w-6 h-4 rounded bg-amber-200 border border-amber-400"></span> Ancien</span>
-                        <span class="inline-flex items-center gap-2"><span class="w-6 h-4 rounded bg-gray-200 border border-gray-400"></span> Indésirable</span>
-                        <span class="inline-flex items-center gap-2"><span class="w-6 h-4 rounded bg-gray-300 border border-gray-500"></span> Dossier avec fichiers signalés</span>
+                        <span class="font-semibold text-gray-600 uppercase tracking-wide">Légende</span>
+                        <span class="legend-item flag-duplicate">Doublon (n)</span>
+                        <span class="legend-item flag-large">Gros fichier</span>
+                        <span class="legend-item flag-old">Ancien</span>
+                        <span class="legend-item flag-garbage">Indésirable</span>
+                        <span class="legend-item flag-dirty">Dossier avec fichiers signalés</span>
                     </div>
                     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
                         <!-- Source Panel -->
@@ -335,9 +336,9 @@
                                              'selected': explorer.source.selectedPath === item.path,
                                              'flag-dirty': item.is_directory && item.has_flagged_files,
                                              'flag-garbage': !item.is_directory && item.is_garbage,
-                                             'flag-duplicate': !item.is_directory && item.is_duplicate && !item.is_garbage,
-                                             'flag-large': !item.is_directory && item.is_large && !item.is_garbage && !item.is_duplicate,
-                                             'flag-old': !item.is_directory && item.is_old && !item.is_garbage && !item.is_duplicate && !item.is_large
+                                             'flag-duplicate': !item.is_directory && item.duplicate_count > 1 && !item.is_garbage,
+                                             'flag-large': !item.is_directory && item.is_large && !item.is_garbage && item.duplicate_count <= 1,
+                                             'flag-old': !item.is_directory && item.is_old && !item.is_garbage && item.duplicate_count <= 1 && !item.is_large
                                           }"
                                           @click="explorerSelect('source', item)"
                                           @dblclick="explorerOpen('source', item)">
@@ -348,13 +349,13 @@
                                         </template>
                                         <template x-if="!item.is_directory">
                                             <span class="flag-badge garbage" x-show="item.is_garbage">Indésirable</span>
-                                            <button x-show="item.is_duplicate && !item.is_garbage" @click.stop="showDuplicateDetails(item)"
+                                            <button x-show="item.duplicate_count > 1 && !item.is_garbage" @click.stop="showDuplicateDetails(item)"
                                                     class="text-[0.7rem] font-semibold bg-red-600 hover:bg-red-700 text-white px-2 py-0.5 rounded-full shrink-0"
                                                     :title="'Voir les ' + item.duplicate_count + ' occurrences'">
                                                 <i class="fas fa-copy mr-1"></i><span x-text="item.duplicate_count + ' doublon(s)'"></span>
                                             </button>
-                                            <span class="flag-badge large" x-show="item.is_large && !item.is_garbage && !item.is_duplicate">Gros</span>
-                                            <span class="flag-badge old" x-show="item.is_old && !item.is_garbage && !item.is_duplicate && !item.is_large">Ancien</span>
+                                            <span class="flag-badge large" x-show="item.is_large && !item.is_garbage && item.duplicate_count <= 1">Gros</span>
+                                            <span class="flag-badge old" x-show="item.is_old && !item.is_garbage && item.duplicate_count <= 1 && !item.is_large">Ancien</span>
                                         </template>
                                         <span class="text-xs text-gray-400" x-show="!item.is_directory" x-text="formatBytes(item.size)"></span>
                                         <input type="checkbox" :checked="isSelected('source', item.path)"
@@ -422,9 +423,9 @@
                                             :class="{
                                                 'selected': explorer.archive.selectedPath === item.path,
                                                 'flag-garbage': !item.is_directory && item.is_garbage,
-                                                'flag-duplicate': item.is_duplicate && !item.is_garbage,
-                                                'flag-large': item.is_large && !item.is_garbage && !item.is_duplicate,
-                                                'flag-old': item.is_old && !item.is_garbage && !item.is_duplicate && !item.is_large,
+                                                'flag-duplicate': item.duplicate_count > 1 && !item.is_garbage,
+                                                'flag-large': item.is_large && !item.is_garbage && item.duplicate_count <= 1,
+                                                'flag-old': item.is_old && !item.is_garbage && item.duplicate_count <= 1 && !item.is_large,
                                                 'flag-dirty': item.is_directory && item.has_flagged_files
                                             }"
                                          @click="explorerSelect('archive', item)"
@@ -436,13 +437,13 @@
                                             </template>
                                             <template x-if="!item.is_directory">
                                                 <span class="flag-badge garbage" x-show="item.is_garbage">Indésirable</span>
-                                                <button x-show="item.is_duplicate && !item.is_garbage" @click.stop="showDuplicateDetails(item)"
+                                                <button x-show="item.duplicate_count > 1 && !item.is_garbage" @click.stop="showDuplicateDetails(item)"
                                                         class="text-[0.7rem] font-semibold bg-red-600 hover:bg-red-700 text-white px-2 py-0.5 rounded-full shrink-0"
                                                         :title="'Voir les ' + item.duplicate_count + ' occurrences'">
                                                     <i class="fas fa-copy mr-1"></i><span x-text="item.duplicate_count + ' doublon(s)'"></span>
                                                 </button>
-                                                <span class="flag-badge large" x-show="item.is_large && !item.is_garbage && !item.is_duplicate">Gros</span>
-                                                <span class="flag-badge old" x-show="item.is_old && !item.is_garbage && !item.is_duplicate && !item.is_large">Ancien</span>
+                                                <span class="flag-badge large" x-show="item.is_large && !item.is_garbage && item.duplicate_count <= 1">Gros</span>
+                                                <span class="flag-badge old" x-show="item.is_old && !item.is_garbage && item.duplicate_count <= 1 && !item.is_large">Ancien</span>
                                             </template>
                                             <span class="text-xs text-gray-400" x-show="!item.is_directory" x-text="formatBytes(item.size)"></span>
                                     </div>
@@ -581,11 +582,11 @@
 
                     <!-- Artifact Legend -->
                     <div class="bg-gray-50 border border-gray-200 rounded-xl p-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-gray-700">
-                        <span class="font-semibold text-gray-600 uppercase tracking-wide">Légende :</span>
-                        <span class="inline-flex items-center gap-2"><span class="w-6 h-4 rounded bg-red-200 border border-red-400"></span> Doublon — bouton "Détails" → liste des occurrences</span>
-                        <span class="inline-flex items-center gap-2"><span class="w-6 h-4 rounded bg-blue-200 border border-blue-400"></span> Gros fichier</span>
-                        <span class="inline-flex items-center gap-2"><span class="w-6 h-4 rounded bg-amber-200 border border-amber-400"></span> Vieux fichier</span>
-                        <span class="inline-flex items-center gap-2"><span class="w-6 h-4 rounded bg-gray-200 border border-gray-400"></span> Pourriel</span>
+                        <span class="font-semibold text-gray-600 uppercase tracking-wide">Légende</span>
+                        <span class="legend-item flag-duplicate">Doublon</span>
+                        <span class="legend-item flag-large">Gros fichier</span>
+                        <span class="legend-item flag-old">Vieux fichier</span>
+                        <span class="legend-item flag-garbage">Pourriel</span>
                     </div>
 
                     <!-- Artifact Actions -->
