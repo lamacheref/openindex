@@ -347,16 +347,14 @@
                                         <template x-if="item.is_directory">
                                             <span class="flag-badge garbage" x-show="item.has_flagged_files">Contient des fichiers signalés</span>
                                         </template>
-                                        <template x-if="!item.is_directory">
-                                            <span class="flag-badge garbage" x-show="item.is_garbage">Indésirable</span>
-                                            <button x-show="item.duplicate_count > 1 && !item.is_garbage" @click.stop="showDuplicateDetails(item)"
-                                                    class="text-[0.7rem] font-semibold bg-red-600 hover:bg-red-700 text-white px-2 py-0.5 rounded-full shrink-0"
-                                                    :title="'Voir les ' + item.duplicate_count + ' occurrences'">
-                                                <i class="fas fa-copy mr-1"></i><span x-text="item.duplicate_count + ' doublon(s)'"></span>
-                                            </button>
-                                            <span class="flag-badge large" x-show="item.is_large && !item.is_garbage && item.duplicate_count <= 1">Gros</span>
-                                            <span class="flag-badge old" x-show="item.is_old && !item.is_garbage && item.duplicate_count <= 1 && !item.is_large">Ancien</span>
-                                        </template>
+                                        <span class="flag-badge garbage" x-show="!item.is_directory && item.is_garbage">Indésirable</span>
+                                        <button x-show="!item.is_directory && item.duplicate_count > 1 && !item.is_garbage" @click.stop="showDuplicateDetails(item)"
+                                                class="text-[0.7rem] font-semibold bg-red-600 hover:bg-red-700 text-white px-2 py-0.5 rounded-full shrink-0"
+                                                :title="'Voir les ' + item.duplicate_count + ' occurrences'">
+                                            <i class="fas fa-copy mr-1"></i><span x-text="item.duplicate_count + ' doublon(s)'"></span>
+                                        </button>
+                                        <span class="flag-badge large" x-show="!item.is_directory && item.is_large && !item.is_garbage && item.duplicate_count <= 1">Gros</span>
+                                        <span class="flag-badge old" x-show="!item.is_directory && item.is_old && !item.is_garbage && item.duplicate_count <= 1 && !item.is_large">Ancien</span>
                                         <span class="text-xs text-gray-400" x-show="!item.is_directory" x-text="formatBytes(item.size)"></span>
                                         <input type="checkbox" :checked="isSelected('source', item.path)"
                                                @click.stop="toggleSelection('source', item)" class="ml-2">
@@ -435,16 +433,14 @@
                                             <template x-if="item.is_directory">
                                                 <span class="flag-badge garbage" x-show="item.has_flagged_files">Contient des fichiers signalés</span>
                                             </template>
-                                            <template x-if="!item.is_directory">
-                                                <span class="flag-badge garbage" x-show="item.is_garbage">Indésirable</span>
-                                                <button x-show="item.duplicate_count > 1 && !item.is_garbage" @click.stop="showDuplicateDetails(item)"
-                                                        class="text-[0.7rem] font-semibold bg-red-600 hover:bg-red-700 text-white px-2 py-0.5 rounded-full shrink-0"
-                                                        :title="'Voir les ' + item.duplicate_count + ' occurrences'">
-                                                    <i class="fas fa-copy mr-1"></i><span x-text="item.duplicate_count + ' doublon(s)'"></span>
-                                                </button>
-                                                <span class="flag-badge large" x-show="item.is_large && !item.is_garbage && item.duplicate_count <= 1">Gros</span>
-                                                <span class="flag-badge old" x-show="item.is_old && !item.is_garbage && item.duplicate_count <= 1 && !item.is_large">Ancien</span>
-                                            </template>
+                                            <span class="flag-badge garbage" x-show="!item.is_directory && item.is_garbage">Indésirable</span>
+                                            <button x-show="!item.is_directory && item.duplicate_count > 1 && !item.is_garbage" @click.stop="showDuplicateDetails(item)"
+                                                    class="text-[0.7rem] font-semibold bg-red-600 hover:bg-red-700 text-white px-2 py-0.5 rounded-full shrink-0"
+                                                    :title="'Voir les ' + item.duplicate_count + ' occurrences'">
+                                                <i class="fas fa-copy mr-1"></i><span x-text="item.duplicate_count + ' doublon(s)'"></span>
+                                            </button>
+                                            <span class="flag-badge large" x-show="!item.is_directory && item.is_large && !item.is_garbage && item.duplicate_count <= 1">Gros</span>
+                                            <span class="flag-badge old" x-show="!item.is_directory && item.is_old && !item.is_garbage && item.duplicate_count <= 1 && !item.is_large">Ancien</span>
                                             <span class="text-xs text-gray-400" x-show="!item.is_directory" x-text="formatBytes(item.size)"></span>
                                     </div>
                                 </template>
