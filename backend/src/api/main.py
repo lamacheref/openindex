@@ -2905,19 +2905,36 @@ async def get_stats_hash_progress(space: Optional[str] = None):
 async def get_duplicates(space: Optional[str] = None):
     try:
         db = get_db_adapter()
+        # Identifie les groupes de doublons via GROUP BY (une passe sur l'index
+        # hash_xxh64), puis pour chaque membre du groupe on récupère UN sibling
+        # comme duplicate_of (LATERAL LIMIT 1). Évite le JOIN f1 x f2 (N^2) qui
+        # saturait le CPU sur les espaces volumineux.
         query = """
             SELECT f1.id, f1.path, f1.name, f1.size, f1.hash_xxh64,
                    f1.last_modified, f1.created_at, f1.updated_at,
                    f2.path as duplicate_of_path
             FROM indexed_files_optimized f1
-            JOIN indexed_files_optimized f2
-              ON f1.hash_xxh64 = f2.hash_xxh64
-             AND f1.size = f2.size
-             AND f1.space_id = f2.space_id
-             AND f1.id <> f2.id
-             AND f2.is_deleted = FALSE
+            JOIN (
+                SELECT hash_xxh64, size, space_id
+                FROM indexed_files_optimized
+                WHERE is_deleted = FALSE AND hash_xxh64 IS NOT NULL
+                GROUP BY hash_xxh64, size, space_id
+                HAVING COUNT(*) > 1
+            ) g
+              ON g.hash_xxh64 = f1.hash_xxh64
+             AND g.size = f1.size
+             AND g.space_id = f1.space_id
+            JOIN LATERAL (
+                SELECT f2.path
+                FROM indexed_files_optimized f2
+                WHERE f2.hash_xxh64 = f1.hash_xxh64
+                  AND f2.size = f1.size
+                  AND f2.space_id = f1.space_id
+                  AND f2.id <> f1.id
+                  AND f2.is_deleted = FALSE
+                LIMIT 1
+            ) f2 ON TRUE
             WHERE f1.is_deleted = FALSE
-              AND f1.hash_xxh64 IS NOT NULL
         """
         params: List[Any] = []
         if space:
@@ -2928,7 +2945,7 @@ async def get_duplicates(space: Optional[str] = None):
             else:
                 query += " AND f1.path LIKE %s"
                 params.append(f"%{space}%")
-        query += " ORDER BY f1.size DESC, f1.path ASC"
+        query += " ORDER BY f1.size DESC, f1.path ASC LIMIT 500"
         results = db.execute_query(query, params)
         return [
             {

@@ -40,7 +40,7 @@ class DummyDB:
                 (3, 0, 0, "SCAN files"),
             ]
 
-        if "FROM indexed_files_optimized f1" in query and "JOIN indexed_files_optimized f2" in query:
+        if "FROM indexed_files_optimized f1" in query and "GROUP BY hash_xxh64" in query:
             if config_id is not None:
                 return self.duplicates_by_config.get(config_id, [])
             return [
