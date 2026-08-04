@@ -41,20 +41,10 @@ class DuplicateFileDetails(BaseModel):
 
 # Fonction utilitaire pour obtenir l'adaptateur de base de données
 def get_db_adapter():
-    """Retourne l'adaptateur de base de données"""
+    """Retourne l'adaptateur de base de données (réutilise celui de l'API principale)."""
     try:
-        from backend.src.postgres_adapter import PostgreSQLAdapter
-        import os
-        
-        # Configuration PostgreSQL depuis les variables d'environnement
-        config = {
-            'host': os.getenv('POSTGRES_HOST', 'localhost'),
-            'port': int(os.getenv('POSTGRES_PORT', 5432)),
-            'database': os.getenv('POSTGRES_DB', 'openindex'),
-            'user': os.getenv('POSTGRES_USER', 'openindex_user'),
-            'password': os.getenv('POSTGRES_PASSWORD', 'openindex_secure_password')
-        }
-        return PostgreSQLAdapter(config)
+        from backend.src.api.main import get_db_adapter as main_get_db_adapter
+        return main_get_db_adapter()
     except Exception as e:
         logger.error(f"Erreur lors de l'initialisation de l'adaptateur DB: {e}")
         raise HTTPException(status_code=500, detail="Erreur de configuration de la base de données")

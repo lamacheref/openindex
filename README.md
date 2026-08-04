@@ -77,7 +77,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `9ee39b78` | 2026-08-04 | non | non | feat(explorer): badge 'Doublon (n)' cliquable -> lightbox lecture seule listant toutes les occurrences |
+| `cdaa782a` | 2026-08-04 | non | non | fix(api): duplicate_details_router réutilise get_db_adapter de main (import cassé backend.src.postgres_adapter) |
+| `de00e543` | 2026-08-04 | oui | oui | feat(explorer): badge 'Doublon (n)' cliquable -> lightbox lecture seule listant toutes les occurrences |
 | `aeff7cd9` | 2026-08-04 | oui | oui | fix(ui): un pourriel prime sur doublon; doublons excluent les garbage; is_garbage live strict |
 | `b9190f98` | 2026-08-04 | oui | oui | fix(api): /api/duplicates perf — GROUP BY + LATERAL LIMIT 1 instead of N^2 join |
 | `83f0f54a` | 2026-08-04 | oui | oui | fix(api): /api/duplicates detect duplicates by hash+size group (issue #3); fix versioning path + system status version env |
@@ -126,4 +127,3 @@ pytest -q tests/
 | `a02a6714` | 2026-07-22 | oui | oui | fix: default logService value |
 | `96b86be6` | 2026-07-22 | oui | oui | feat: dedicated log file /var/log/openindex/indexer-worker.log, logs tab reads from file |
 | `4768de08` | 2026-07-22 | oui | oui | feat: add logs tab with real-time journalctl view + deploy script |
-| `f95821b4` | 2026-07-22 | oui | oui | fix: escape apostrophe in SQL |
