@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Détails des doublons — OpenIndex</title>
+<link rel="stylesheet" href="assets/tailwind.css">
+<link rel="stylesheet" href="assets/fontawesome/css/all.min.css">
+<style>
+    body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .table-data th { background: #f8fafc; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; }
+    .table-data td { border-top: 1px solid #e2e8f0; }
+    .table-data tr:hover { background: #f8fafc; }
+    .badge { display: inline-block; padding: 2px 10px; border-radius: 9999px; font-size: 10px; font-weight: 700; background: #fee2e2; color: #b91c1c; }
+</style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="max-w-5xl mx-auto p-6">
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h1 class="text-xl font-bold text-gray-900"><i class="fas fa-copy text-red-600 mr-2"></i>Détails des doublons</h1>
+                <p id="summary" class="text-sm text-gray-600 mt-1">Chargement…</p>
+            </div>
+            <a href="/" class="text-sm text-blue-600 hover:text-blue-800 hover:underline"><i class="fas fa-arrow-left mr-1"></i>Retour à OpenIndex</a>
+        </div>
+        <p id="error" class="hidden text-sm text-red-600 mb-4 bg-red-50 rounded-lg px-4 py-3"></p>
+        <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <table class="table-data w-full">
+                <thead>
+                    <tr><th class="text-left px-4 py-3">Chemin</th><th class="text-left px-4 py-3 w-28">Taille</th><th class="text-left px-4 py-3 w-44">Modifié le</th></tr>
+                </thead>
+                <tbody id="rows"></tbody>
+            </table>
+        </div>
+        <p class="text-xs text-gray-500 mt-4 bg-gray-50 rounded-lg p-3">
+            Lecture seule : la déduplication (ne garder qu'un seul fichier) est en cours de réflexion.
+        </p>
+    </div>
+<script>
+    (async () => {
+        const checksum = new URLSearchParams(location.search).get('checksum');
+        const summary = document.getElementById('summary');
+        const error = document.getElementById('error');
+        const rows = document.getElementById('rows');
+
+        if (!checksum) {
+            error.textContent = 'Paramètre checksum manquant dans l\u2019URL (?checksum=...)';
+            error.classList.remove('hidden');
+            summary.textContent = '';
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/duplicates/' + encodeURIComponent(checksum) + '/details');
+            if (!res.ok) throw new Error('Erreur HTTP ' + res.status);
+            const d = await res.json();
+
+            summary.innerHTML = '<span class="badge mr-2">' + d.total_occurrences + ' occurrence(s)</span>' +
+                escapeHtml(d.name) + ' (' + formatBytes(d.size) + ') — <span class="text-gray-400">Checksum: ' + escapeHtml(d.checksum) + '</span>';
+
+            const occs = d.occurrences || [];
+            if (!occs.length) {
+                rows.innerHTML = '<tr><td colspan="3" class="text-gray-500 text-center py-8">Aucune occurrence trouvée</td></tr>';
+                return;
+            }
+            rows.innerHTML = occs.map(function (o) {
+                return '<tr>' +
+                    '<td class="px-4 py-2.5 text-sm truncate max-w-2xl">' + escapeHtml(o.path) + '</td>' +
+                    '<td class="px-4 py-2.5 text-sm text-gray-600">' + formatBytes(o.size) + '</td>' +
+                    '<td class="px-4 py-2.5 text-sm text-gray-500">' + (o.last_modified ? new Date(o.last_modified).toLocaleString('fr-FR') : '—') + '</td>' +
+                    '</tr>';
+            }).join('');
+        } catch (e) {
+            error.textContent = 'Erreur de chargement : ' + e.message;
+            error.classList.remove('hidden');
+            summary.textContent = '';
+        }
+    })();
+
+    function formatBytes(n) {
+        if (!n || n === 0) return '0 o';
+        const k = 1024;
+        const s = ['o', 'Ko', 'Mo', 'Go', 'To'];
+        const i = Math.floor(Math.log(n) / Math.log(k));
+        return parseFloat((n / Math.pow(k, i)).toFixed(1)) + ' ' + s[i];
+    }
+
+    function escapeHtml(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+</script>
+</body>
+</html>

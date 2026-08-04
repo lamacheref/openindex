@@ -77,7 +77,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `3b8319fe` | 2026-08-04 | non | non | fix(explorer): badge doublon strictement identique aux autres + lightbox robuste |
+| `27d932fd` | 2026-08-04 | non | non | feat(explorer): liste des doublons dans une page externe /duplicates.html |
+| `39347e2c` | 2026-08-04 | oui | oui | fix(explorer): badge doublon strictement identique aux autres + lightbox robuste |
 | `981cd7fc` | 2026-08-04 | oui | oui | fix(explorer): badge doublon aligné sur les autres badges (flag-badge) |
 | `8f65dd8b` | 2026-08-04 | oui | oui | fix(explorer): badges doublons/Gros/Ancien jamais affichés (x-if multi-enfants) |
 | `ef2c2264` | 2026-08-04 | oui | oui | feat(explorer): le panneau Archive (live-items) résout checksum + doublons depuis la base |
@@ -126,4 +127,3 @@ pytest -q tests/
 | `166e994f` | 2026-07-24 | oui | oui | ajout version commit dans le footer sidebar |
 | `9cebdec6` | 2026-07-24 | oui | oui | fix: parsing SMB (espaces/accents), frontend 3 lignes progression, dirs_found |
 | `7d4758fb` | 2026-07-23 | oui | oui | perf: avoid duplicate list_dir in get_file_info by passing entries_list |
-| `ba62f8c3` | 2026-07-23 | oui | oui | fix: update progress every 10 items in Phase B too |

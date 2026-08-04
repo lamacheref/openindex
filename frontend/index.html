@@ -348,10 +348,12 @@
                                             <span class="flag-badge garbage" x-show="item.has_flagged_files">Contient des fichiers signalés</span>
                                         </template>
                                         <span class="flag-badge garbage" x-show="!item.is_directory && item.is_garbage">Indésirable</span>
-                                        <button type="button" x-show="!item.is_directory && item.duplicate_count > 1 && !item.is_garbage" @click.stop="showDuplicateDetails(item)"
-                                                class="flag-badge duplicate clickable" :title="'Voir les ' + item.duplicate_count + ' occurrences'">
+                                        <a x-show="!item.is_directory && item.duplicate_count > 1 && !item.is_garbage"
+                                           :href="'/duplicates.html?checksum=' + (item.checksum || '')" target="_blank" rel="noopener"
+                                           @click.stop class="flag-badge duplicate clickable"
+                                           :title="'Voir les ' + item.duplicate_count + ' occurrences (nouvel onglet)'">
                                             <span x-text="'Doublon (' + item.duplicate_count + ')'"></span>
-                                        </button>
+                                        </a>
                                         <span class="flag-badge large" x-show="!item.is_directory && item.is_large && !item.is_garbage && item.duplicate_count <= 1">Gros</span>
                                         <span class="flag-badge old" x-show="!item.is_directory && item.is_old && !item.is_garbage && item.duplicate_count <= 1 && !item.is_large">Ancien</span>
                                         <span class="text-xs text-gray-400" x-show="!item.is_directory" x-text="formatBytes(item.size)"></span>
@@ -433,10 +435,12 @@
                                                 <span class="flag-badge garbage" x-show="item.has_flagged_files">Contient des fichiers signalés</span>
                                             </template>
                                             <span class="flag-badge garbage" x-show="!item.is_directory && item.is_garbage">Indésirable</span>
-                                            <button type="button" x-show="!item.is_directory && item.duplicate_count > 1 && !item.is_garbage" @click.stop="showDuplicateDetails(item)"
-                                                    class="flag-badge duplicate clickable" :title="'Voir les ' + item.duplicate_count + ' occurrences'">
+                                            <a x-show="!item.is_directory && item.duplicate_count > 1 && !item.is_garbage"
+                                               :href="'/duplicates.html?checksum=' + (item.checksum || '')" target="_blank" rel="noopener"
+                                               @click.stop class="flag-badge duplicate clickable"
+                                               :title="'Voir les ' + item.duplicate_count + ' occurrences (nouvel onglet)'">
                                                 <span x-text="'Doublon (' + item.duplicate_count + ')'"></span>
-                                            </button>
+                                            </a>
                                             <span class="flag-badge large" x-show="!item.is_directory && item.is_large && !item.is_garbage && item.duplicate_count <= 1">Gros</span>
                                             <span class="flag-badge old" x-show="!item.is_directory && item.is_old && !item.is_garbage && item.duplicate_count <= 1 && !item.is_large">Ancien</span>
                                             <span class="text-xs text-gray-400" x-show="!item.is_directory" x-text="formatBytes(item.size)"></span>
