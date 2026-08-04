@@ -318,11 +318,9 @@
                                     <i class="fas fa-arrow-up mr-1"></i> Remonter
                                 </button>
                                 <template x-for="(crumb, idx) in explorerBreadcrumbs('source')" :key="idx">
-                                    <button @click="explorerNavigate('source', crumb.path)"
-                                            class="text-xs text-blue-600 hover:text-blue-800 hover:underline">
-                                        <span x-text="crumb.label"></span>
-                                        <span x-show="idx < explorerBreadcrumbs('source').length - 1" class="text-gray-400 mx-1">/</span>
-                                    </button>
+                                    <span :class="crumb.path ? 'text-blue-600 hover:text-blue-800 hover:underline cursor-pointer' : (crumb.ellipsis ? 'text-gray-400' : 'text-gray-800 font-medium')"
+                                          @click="crumb.path && explorerNavigate('source', crumb.path)" x-text="crumb.label"></span>
+                                    <span x-show="idx < explorerBreadcrumbs('source').length - 1" class="text-gray-400 mx-1">/</span>
                                 </template>
                             </div>
                             <div x-show="explorer.source.loading" class="flex items-center gap-2 py-8 justify-center text-gray-500">
@@ -405,11 +403,9 @@
                                     <i class="fas fa-arrow-up mr-1"></i> Remonter
                                 </button>
                                 <template x-for="(crumb, idx) in explorerBreadcrumbs('archive')" :key="idx">
-                                    <button @click="explorerNavigate('archive', crumb.path)"
-                                            class="text-xs text-blue-600 hover:text-blue-800 hover:underline">
-                                        <span x-text="crumb.label"></span>
-                                        <span x-show="idx < explorerBreadcrumbs('archive').length - 1" class="text-gray-400 mx-1">/</span>
-                                    </button>
+                                    <span :class="crumb.path ? 'text-blue-600 hover:text-blue-800 hover:underline cursor-pointer' : (crumb.ellipsis ? 'text-gray-400' : 'text-gray-800 font-medium')"
+                                          @click="crumb.path && explorerNavigate('archive', crumb.path)" x-text="crumb.label"></span>
+                                    <span x-show="idx < explorerBreadcrumbs('archive').length - 1" class="text-gray-400 mx-1">/</span>
                                 </template>
                             </div>
                             <div x-show="explorer.archive.loading" class="flex items-center gap-2 py-8 justify-center text-gray-500">
@@ -1175,7 +1171,10 @@
                     const res = await fetch(endpoint + '?root=' + encodeURIComponent(p.root) + '&current_path=' + encodeURIComponent(p.currentPath));
                     if (res.ok) {
                         const data = await res.json();
-                        p.items = (Array.isArray(data) ? data : data.items || data.files || []).sort((a, b) => {
+                        p.items = (Array.isArray(data) ? data : data.items || data.files || []).map(it => ({
+                            ...it,
+                            path: this.normalizePath(it.path)
+                        })).sort((a, b) => {
                             if (a.is_directory !== b.is_directory) return a.is_directory ? -1 : 1;
                             return (a.name || '').localeCompare(b.name || '');
                         });
@@ -1190,20 +1189,22 @@
 
             canGoUp(panel) {
                 const p = this.explorer[panel];
-                return p.currentPath && p.currentPath !== p.root;
+                return p.currentPath && this.normalizePath(p.currentPath) !== this.normalizePath(p.root);
             },
 
             explorerGoUp(panel) {
                 const p = this.explorer[panel];
                 if (!this.canGoUp(panel)) return;
-                const parent = p.currentPath.substring(0, p.currentPath.lastIndexOf('/'));
-                p.currentPath = parent || p.root;
+                const current = this.normalizePath(p.currentPath);
+                const root = this.normalizePath(p.root);
+                const parent = current.substring(0, current.lastIndexOf('/'));
+                p.currentPath = (parent && parent.length >= root.length) ? parent : root;
                 this.refreshExplorerPanel(panel);
             },
 
             explorerNavigate(panel, path) {
                 const p = this.explorer[panel];
-                p.currentPath = path;
+                p.currentPath = this.normalizePath(path);
                 this.refreshExplorerPanel(panel);
             },
 
@@ -1220,15 +1221,53 @@
                 }
             },
 
+            normalizePath(path) {
+                return (path || '').replace(/\\/g, '/');
+            },
+
+            shortLabel(name) {
+                const s = String(name == null ? '' : name);
+                return s.length > 10 ? s.slice(0, 10) + '…' : s;
+            },
+
             explorerBreadcrumbs(panel) {
                 const p = this.explorer[panel];
                 if (!p.currentPath) return [];
-                const parts = p.currentPath.split('/');
+                const root = this.normalizePath(p.root);
+                const current = this.normalizePath(p.currentPath);
+                const rootLabel = this.shortLabel(root.split('/').filter(Boolean).pop()) || '/';
                 const crumbs = [];
-                for (let i = 0; i < parts.length; i++) {
-                    const path = parts.slice(0, i + 1).join('/');
-                    crumbs.push({ label: parts[i] || '/', path: i === 0 ? p.root : path });
+                if (current === root) {
+                    crumbs.push({ label: rootLabel, path: root, last: true });
+                    return crumbs;
                 }
+                let all;
+                if (current.startsWith(root)) {
+                    const rel = current.slice(root.length).replace(/^\/+/, '');
+                    const relParts = rel.split('/').filter(Boolean);
+                    all = [{ label: rootLabel, path: root }];
+                    let acc = root;
+                    for (const part of relParts) {
+                        acc = acc + '/' + part;
+                        all.push({ label: this.shortLabel(part), path: acc });
+                    }
+                } else {
+                    const parts = current.split('/').filter(Boolean);
+                    all = [];
+                    let acc = '';
+                    for (const part of parts) {
+                        acc = acc ? acc + '/' + part : part;
+                        all.push({ label: this.shortLabel(part), path: acc });
+                    }
+                }
+                if (all.length > 4) {
+                    const head = [all[0]];
+                    const tail = all.slice(all.length - 3);
+                    crumbs.push(...head, { label: '…', path: null, ellipsis: true }, ...tail);
+                } else {
+                    crumbs.push(...all);
+                }
+                crumbs[crumbs.length - 1].last = true;
                 return crumbs;
             },
 
