@@ -138,7 +138,7 @@ async def get_duplicate_files(
         
         # Calculer les statistiques
         stats_query = """
-            SELECT COUNT(*), COALESCE(SUM(size), 0)
+            SELECT COUNT(*), COALESCE(SUM(f.size), 0)
             FROM indexed_files_optimized f
             JOIN (
                 SELECT hash_xxh64, size, space_id
@@ -497,7 +497,7 @@ async def get_artefacts_stats(space: Optional[str] = None):
         
         # Statistiques pour chaque catégorie
         duplicate_stats_query = f"""
-            SELECT COUNT(*), COALESCE(SUM(size), 0)
+            SELECT COUNT(*), COALESCE(SUM(f.size), 0)
             FROM indexed_files_optimized f
             JOIN (
                 SELECT hash_xxh64, size, space_id
