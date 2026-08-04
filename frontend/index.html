@@ -350,7 +350,7 @@
                                         <span class="flag-badge garbage" x-show="!item.is_directory && item.is_garbage">Indésirable</span>
                                         <a x-show="!item.is_directory && item.duplicate_count > 1 && !item.is_garbage"
                                            :href="'/duplicates.html?checksum=' + (item.checksum || '')" target="_blank" rel="noopener"
-                                           @click.stop class="flag-badge duplicate clickable"
+                                           @click.stop.prevent="openDuplicates(item)" class="flag-badge duplicate clickable"
                                            :title="'Voir les ' + item.duplicate_count + ' occurrences (nouvel onglet)'">
                                             <span x-text="'Doublon (' + item.duplicate_count + ')'"></span>
                                         </a>
@@ -437,7 +437,7 @@
                                             <span class="flag-badge garbage" x-show="!item.is_directory && item.is_garbage">Indésirable</span>
                                             <a x-show="!item.is_directory && item.duplicate_count > 1 && !item.is_garbage"
                                                :href="'/duplicates.html?checksum=' + (item.checksum || '')" target="_blank" rel="noopener"
-                                               @click.stop class="flag-badge duplicate clickable"
+                                               @click.stop.prevent="openDuplicates(item)" class="flag-badge duplicate clickable"
                                                :title="'Voir les ' + item.duplicate_count + ' occurrences (nouvel onglet)'">
                                                 <span x-text="'Doublon (' + item.duplicate_count + ')'"></span>
                                             </a>
@@ -1417,6 +1417,12 @@
                     this.duplicateDetails = { checksum: checksum, name: item.name || checksum, size: item.size || 0, total_occurrences: 0, occurrences: [], error: e.message || 'Erreur réseau' };
                 }
                 this.showDuplicateDetailsModal = true;
+            },
+
+            openDuplicates(item) {
+                const checksum = item.checksum || item;
+                if (!checksum) return;
+                window.open('/duplicates.html?checksum=' + encodeURIComponent(checksum), '_blank');
             },
 
             applyPreset() {

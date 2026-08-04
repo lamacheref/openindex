@@ -21,7 +21,7 @@
                 <h1 class="text-xl font-bold text-gray-900"><i class="fas fa-copy text-red-600 mr-2"></i>Détails des doublons</h1>
                 <p id="summary" class="text-sm text-gray-600 mt-1">Chargement…</p>
             </div>
-            <a href="/" class="text-sm text-blue-600 hover:text-blue-800 hover:underline"><i class="fas fa-arrow-left mr-1"></i>Retour à OpenIndex</a>
+            <button id="closeBtn" class="inline-flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900 bg-white border border-gray-300 rounded-lg px-4 py-2 hover:bg-gray-50"><i class="fas fa-times mr-1"></i>Fermer l'onglet</button>
         </div>
         <p id="error" class="hidden text-sm text-red-600 mb-4 bg-red-50 rounded-lg px-4 py-3"></p>
         <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -42,6 +42,14 @@
         const summary = document.getElementById('summary');
         const error = document.getElementById('error');
         const rows = document.getElementById('rows');
+
+        document.getElementById('closeBtn').addEventListener('click', function () {
+            window.close();
+            if (!window.closed) {
+                error.textContent = 'Cet onglet ne peut pas être fermé par le script. Fermez-le manuellement (Ctrl+W ou la croix du navigateur).';
+                error.classList.remove('hidden');
+            }
+        });
 
         if (!checksum) {
             error.textContent = 'Paramètre checksum manquant dans l\u2019URL (?checksum=...)';
