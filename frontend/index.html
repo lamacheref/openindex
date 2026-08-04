@@ -45,7 +45,7 @@
         .explorer-item.flag-dirty, .legend-item.flag-dirty { background: #f8fafc; box-shadow: inset 3px 0 0 #cbd5e1; }
         .legend-item { display: inline-flex; align-items: center; padding: 0.25rem 0.6rem; border-radius: 0.5rem; }
         .flag-badge { display: inline-flex; align-items: center; font-size: 0.625rem; font-weight: 700; padding: 0.0625rem 0.375rem; border-radius: 9999px; line-height: 1.25rem; }
-        .flag-badge.duplicate { background: #fee2e2; color: #b91c1c; padding: 0.125rem 0.5rem; border: 1px solid #fca5a5; }
+        .flag-badge.duplicate { background: #fee2e2; color: #b91c1c; }
         .flag-badge.large { background: #dbeafe; color: #1d4ed8; }
         .flag-badge.old { background: #fef3c7; color: #b45309; }
         .flag-badge.garbage { background: #e5e7eb; color: #4b5563; }
@@ -348,7 +348,7 @@
                                             <span class="flag-badge garbage" x-show="item.has_flagged_files">Contient des fichiers signalés</span>
                                         </template>
                                         <span class="flag-badge garbage" x-show="!item.is_directory && item.is_garbage">Indésirable</span>
-                                        <button x-show="!item.is_directory && item.duplicate_count > 1 && !item.is_garbage" @click.stop="showDuplicateDetails(item)"
+                                        <button type="button" x-show="!item.is_directory && item.duplicate_count > 1 && !item.is_garbage" @click.stop="showDuplicateDetails(item)"
                                                 class="flag-badge duplicate clickable" :title="'Voir les ' + item.duplicate_count + ' occurrences'">
                                             <span x-text="'Doublon (' + item.duplicate_count + ')'"></span>
                                         </button>
@@ -433,7 +433,7 @@
                                                 <span class="flag-badge garbage" x-show="item.has_flagged_files">Contient des fichiers signalés</span>
                                             </template>
                                             <span class="flag-badge garbage" x-show="!item.is_directory && item.is_garbage">Indésirable</span>
-                                            <button x-show="!item.is_directory && item.duplicate_count > 1 && !item.is_garbage" @click.stop="showDuplicateDetails(item)"
+                                            <button type="button" x-show="!item.is_directory && item.duplicate_count > 1 && !item.is_garbage" @click.stop="showDuplicateDetails(item)"
                                                     class="flag-badge duplicate clickable" :title="'Voir les ' + item.duplicate_count + ' occurrences'">
                                                 <span x-text="'Doublon (' + item.duplicate_count + ')'"></span>
                                             </button>
@@ -678,6 +678,7 @@
                          @click.self="showDuplicateDetailsModal = false">
                         <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-auto p-6">
                             <h3 class="font-semibold text-lg mb-2">Détails des doublons</h3>
+                            <p class="text-sm text-red-600 mb-2" x-show="duplicateDetails.error" x-text="duplicateDetails.error"></p>
                             <p class="text-sm text-gray-600 mb-2" x-text="duplicateDetails.occurrences?.length + ' occurrence(s) — ' + duplicateDetails.name + ' (' + formatBytes(duplicateDetails.size) + ')'"></p>
                             <p class="text-xs text-gray-400 mb-3" x-text="'Checksum: ' + duplicateDetails.checksum"></p>
                             <table class="table-data">
@@ -1403,9 +1404,15 @@
                     const res = await fetch('/api/duplicates/' + checksum + '/details');
                     if (res.ok) {
                         this.duplicateDetails = await res.json();
-                        this.showDuplicateDetailsModal = true;
+                    } else {
+                        console.error('Duplicate details HTTP', res.status);
+                        this.duplicateDetails = { checksum: checksum, name: item.name || checksum, size: item.size || 0, total_occurrences: 0, occurrences: [], error: 'Erreur ' + res.status + ' lors du chargement des occurrences' };
                     }
-                } catch (e) { console.error('Duplicate details error:', e); }
+                } catch (e) {
+                    console.error('Duplicate details error:', e);
+                    this.duplicateDetails = { checksum: checksum, name: item.name || checksum, size: item.size || 0, total_occurrences: 0, occurrences: [], error: e.message || 'Erreur réseau' };
+                }
+                this.showDuplicateDetailsModal = true;
             },
 
             applyPreset() {
