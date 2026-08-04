@@ -24,7 +24,7 @@ def mock_db_adapter(monkeypatch):
     monkeypatch.setenv('POSTGRES_USER', 'openindex_user')
     monkeypatch.setenv('POSTGRES_PASSWORD', 'openindex_secure_password')
     
-    with patch('src.api.duplicate_details_router.get_db_adapter') as mock:
+    with patch('backend.src.api.duplicate_details_router.get_db_adapter') as mock:
         yield mock
 
 

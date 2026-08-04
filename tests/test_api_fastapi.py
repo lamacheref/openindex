@@ -80,10 +80,10 @@ class DummyDB:
         if "AS is_large" in query:
             large_threshold_bytes = (params[0] if params else 1024 * 1024 * 1024)
             return [
-                # path, name, size, last_modified, created_at, hash_xxh64, is_garbage, is_duplicate, is_large, is_old
-                ("/share/docs/old_report.pdf", "old_report.pdf", 5_000_000, "2018-01-01T10:00:00Z", "2018-01-01T10:00:00Z", "oldhash", False, True, False, True),
-                ("/share/docs/readme.md", "readme.md", 128, "2026-02-27T10:00:00Z", "2026-02-27T10:00:00Z", "xyz", False, False, False, False),
-                ("/share/docs/big.iso", "big.iso", 2_147_483_648, "2026-02-27T10:00:00Z", "2026-02-27T10:00:00Z", "bighash", False, False, True, False),
+                # path, name, size, last_modified, created_at, hash_xxh64, is_garbage, duplicate_count, is_large, is_old
+                ("/share/docs/old_report.pdf", "old_report.pdf", 5_000_000, "2018-01-01T10:00:00Z", "2018-01-01T10:00:00Z", "oldhash", False, 2, False, True),
+                ("/share/docs/readme.md", "readme.md", 128, "2026-02-27T10:00:00Z", "2026-02-27T10:00:00Z", "xyz", False, 1, False, False),
+                ("/share/docs/big.iso", "big.iso", 2_147_483_648, "2026-02-27T10:00:00Z", "2026-02-27T10:00:00Z", "bighash", False, 1, True, False),
             ]
 
         if "FROM directories d" in query and "parent_path" in query:

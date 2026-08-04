@@ -48,6 +48,8 @@
         .flag-badge.large { background: #dbeafe; color: #1d4ed8; }
         .flag-badge.old { background: #fef3c7; color: #b45309; }
         .flag-badge.garbage { background: #e5e7eb; color: #4b5563; }
+        .flag-badge.clickable { cursor: pointer; }
+        .flag-badge.clickable:hover { outline: 1px solid #b91c1c; }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 h-screen overflow-hidden" x-data="openIndexApp()" x-init="init()">
@@ -345,7 +347,9 @@
                                         </template>
                                         <template x-if="!item.is_directory">
                                             <span class="flag-badge garbage" x-show="item.is_garbage">Indésirable</span>
-                                            <span class="flag-badge duplicate" x-show="item.is_duplicate && !item.is_garbage">Doublon</span>
+                                            <span class="flag-badge duplicate clickable" @click.stop="showDuplicateDetails(item)" title="Voir toutes les occurrences"
+                                                  x-show="item.is_duplicate && !item.is_garbage"
+                                                  x-text="item.duplicate_count > 0 ? 'Doublon (' + item.duplicate_count + ')' : 'Doublon'"></span>
                                             <span class="flag-badge large" x-show="item.is_large && !item.is_garbage && !item.is_duplicate">Gros</span>
                                             <span class="flag-badge old" x-show="item.is_old && !item.is_garbage && !item.is_duplicate && !item.is_large">Ancien</span>
                                         </template>
@@ -429,7 +433,9 @@
                                             </template>
                                             <template x-if="!item.is_directory">
                                                 <span class="flag-badge garbage" x-show="item.is_garbage">Indésirable</span>
-                                                <span class="flag-badge duplicate" x-show="item.is_duplicate && !item.is_garbage">Doublon</span>
+                                                <span class="flag-badge duplicate clickable" @click.stop="showDuplicateDetails(item)" title="Voir toutes les occurrences"
+                                                      x-show="item.is_duplicate && !item.is_garbage"
+                                                      x-text="item.duplicate_count > 0 ? 'Doublon (' + item.duplicate_count + ')' : 'Doublon'"></span>
                                                 <span class="flag-badge large" x-show="item.is_large && !item.is_garbage && !item.is_duplicate">Gros</span>
                                                 <span class="flag-badge old" x-show="item.is_old && !item.is_garbage && !item.is_duplicate && !item.is_large">Ancien</span>
                                             </template>
@@ -662,29 +668,28 @@
                     <div x-show="showDuplicateDetailsModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
                          @click.self="showDuplicateDetailsModal = false">
                         <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-auto p-6">
-                            <h3 class="font-semibold text-lg mb-4">Détails des doublons</h3>
-                            <p class="text-sm text-gray-600 mb-3" x-text="'Checksum: ' + duplicateDetails.checksum"></p>
+                            <h3 class="font-semibold text-lg mb-2">Détails des doublons</h3>
+                            <p class="text-sm text-gray-600 mb-2" x-text="duplicateDetails.occurrences?.length + ' occurrence(s) — ' + duplicateDetails.name + ' (' + formatBytes(duplicateDetails.size) + ')'"></p>
+                            <p class="text-xs text-gray-400 mb-3" x-text="'Checksum: ' + duplicateDetails.checksum"></p>
                             <table class="table-data">
                                 <thead>
-                                    <tr><th>Chemin</th><th>Taille</th><th>Action</th></tr>
+                                    <tr><th>Chemin</th><th>Taille</th></tr>
                                 </thead>
                                 <tbody>
                                     <template x-for="(occ, idx) in duplicateDetails.occurrences" :key="idx">
                                         <tr>
                                             <td class="text-sm truncate max-w-md" x-text="occ.path"></td>
                                             <td class="text-sm" x-text="formatBytes(occ.size)"></td>
-                                            <td>
-                                                <button @click="markAsKept(occ.id)" class="text-xs text-blue-600 hover:underline font-medium">
-                                                    <span x-text="occ.keep ? '✓ Gardé' : 'Garder'"></span>
-                                                </button>
-                                            </td>
                                         </tr>
                                     </template>
                                 </tbody>
                             </table>
+                            <p class="text-xs text-gray-500 mt-4 bg-gray-50 rounded-lg p-3">
+                                Lecture seule : la déduplication (ne garder qu'un seul fichier) est en cours de réflexion.
+                            </p>
                             <div class="flex justify-end mt-4">
-                                <button @click="deleteAllButKept" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
-                                    Supprimer tout sauf le gardé
+                                <button @click="showDuplicateDetailsModal = false" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium">
+                                    Fermer
                                 </button>
                             </div>
                         </div>
@@ -1388,24 +1393,6 @@
                         this.showDuplicateDetailsModal = true;
                     }
                 } catch (e) { console.error('Duplicate details error:', e); }
-            },
-
-            async markAsKept(occurrenceId) {
-                try {
-                    await fetch('/api/duplicates/' + this.duplicateDetails.checksum + '/keep?occurrence_id=' + occurrenceId, { method: 'POST' });
-                    await this.showDuplicateDetails({ checksum: this.duplicateDetails.checksum });
-                } catch (e) { console.error('Mark kept error:', e); }
-            },
-
-            async deleteAllButKept() {
-                const kept = this.duplicateDetails.occurrences?.find(o => o.keep)?.id;
-                const keptId = kept || this.duplicateDetails.occurrences?.[0]?.id;
-                if (!keptId) return;
-                try {
-                    await fetch('/api/duplicates/' + this.duplicateDetails.checksum + '/occurrences?keep_occurrence_id=' + keptId, { method: 'DELETE' });
-                    this.showDuplicateDetailsModal = false;
-                    await this.loadArtifacts();
-                } catch (e) { console.error('Delete duplicates error:', e); }
             },
 
             applyPreset() {

@@ -77,7 +77,8 @@ pytest -q tests/
 
 | Hash | Date | Gitea | GitHub | Description |
 |------|------|-------|--------|-------------|
-| `dab7e8a3` | 2026-08-04 | non | non | fix(ui): un pourriel prime sur doublon; doublons excluent les garbage; is_garbage live strict |
+| `9ee39b78` | 2026-08-04 | non | non | feat(explorer): badge 'Doublon (n)' cliquable -> lightbox lecture seule listant toutes les occurrences |
+| `aeff7cd9` | 2026-08-04 | oui | oui | fix(ui): un pourriel prime sur doublon; doublons excluent les garbage; is_garbage live strict |
 | `b9190f98` | 2026-08-04 | oui | oui | fix(api): /api/duplicates perf — GROUP BY + LATERAL LIMIT 1 instead of N^2 join |
 | `83f0f54a` | 2026-08-04 | oui | oui | fix(api): /api/duplicates detect duplicates by hash+size group (issue #3); fix versioning path + system status version env |
 | `a65c4c69` | 2026-08-03 | oui | oui | docs(ops): split psql_lxc.sh usage into its own doc file; clean up DEPLOY_LXC numbering |
@@ -126,4 +127,3 @@ pytest -q tests/
 | `96b86be6` | 2026-07-22 | oui | oui | feat: dedicated log file /var/log/openindex/indexer-worker.log, logs tab reads from file |
 | `4768de08` | 2026-07-22 | oui | oui | feat: add logs tab with real-time journalctl view + deploy script |
 | `f95821b4` | 2026-07-22 | oui | oui | fix: escape apostrophe in SQL |
-| `703e4d83` | 2026-07-22 | oui | oui | fix: stop job endpoint + frontend stopJob + Phase A table display |

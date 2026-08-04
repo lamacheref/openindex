@@ -86,9 +86,9 @@ async def get_duplicate_file_details(
         # Récupérer les détails du fichier principal (première occurrence)
         main_file_query = """
             SELECT 
-                f.id, f.path, f.name, f.size, f.checksum, f.last_modified, f.last_accessed, f.crawl_config_id
-            FROM files f
-            WHERE f.checksum = %s
+                f.id, f.path, f.name, f.size, f.hash_xxh64, f.last_modified, f.space_id::text
+            FROM indexed_files_optimized f
+            WHERE f.hash_xxh64 = %s AND NOT f.is_deleted
             ORDER BY f.last_modified DESC
             LIMIT 1
         """
@@ -103,11 +103,11 @@ async def get_duplicate_file_details(
         # Récupérer toutes les occurrences du fichier
         occurrences_query = """
             SELECT 
-                f.id, f.path, f.name, f.size, f.checksum, f.last_modified, f.last_accessed, f.crawl_config_id, 
-                cc.name as crawl_config_name
-            FROM files f
-            LEFT JOIN crawl_configs cc ON f.crawl_config_id = cc.id
-            WHERE f.checksum = %s
+                f.id, f.path, f.name, f.size, f.hash_xxh64, f.last_modified, NULL, f.space_id::text,
+                sp.name as space_name
+            FROM indexed_files_optimized f
+            LEFT JOIN smb_spaces sp ON f.space_id = sp.id
+            WHERE f.hash_xxh64 = %s AND NOT f.is_deleted
             ORDER BY f.path
             LIMIT %s OFFSET %s
         """
@@ -125,8 +125,8 @@ async def get_duplicate_file_details(
         # Compter le nombre total d'occurrences
         count_query = """
             SELECT COUNT(*)
-            FROM files f
-            WHERE f.checksum = %s
+            FROM indexed_files_optimized f
+            WHERE f.hash_xxh64 = %s AND NOT f.is_deleted
         """
         total_count = db.execute_query(count_query, (checksum,))[0][0]
         

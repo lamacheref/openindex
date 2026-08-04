@@ -156,6 +156,7 @@ class ExplorerItem(BaseModel):
     created_at: Optional[datetime] = None
     extension: Optional[str] = None
     crawl_config_id: Optional[str] = None
+    checksum: Optional[str] = None
     has_duplicates: bool = False
     duplicate_count: int = 0
     is_duplicate: bool = False
@@ -2474,8 +2475,7 @@ async def get_explorer_items(
                                (SELECT COUNT(*) FROM indexed_files_optimized d
                                 WHERE d.hash_xxh64 = f.hash_xxh64 AND d.size = f.size
                                   AND d.space_id = f.space_id AND NOT d.is_deleted
-                                  AND NOT d.is_garbage
-                                  AND d.id <> f.id) > 0 AND NOT f.is_garbage AS is_duplicate,
+                                  AND NOT d.is_garbage) AS duplicate_count,
                                f.size > %s AS is_large,
                                f.last_modified < CURRENT_TIMESTAMP - make_interval(days => %s) AS is_old
                         FROM indexed_files_optimized f
@@ -2487,6 +2487,9 @@ async def get_explorer_items(
                     )
                     for row in file_rows:
                         child_path = _join_smb_path(normalized_current_path, row[1])
+                        is_garbage = bool(row[6])
+                        duplicate_count = int(row[7] or 0)
+                        is_duplicate = duplicate_count > 1 and not is_garbage
                         items.append(ExplorerItem(
                             path=child_path,
                             name=row[1],
@@ -2495,9 +2498,11 @@ async def get_explorer_items(
                             last_modified=row[3],
                             created_at=row[4],
                             crawl_config_id=space_id,
-                            has_duplicates=bool(row[7]),
-                            is_duplicate=bool(row[7]),
-                            is_garbage=bool(row[6]),
+                            checksum=row[5],
+                            has_duplicates=is_duplicate,
+                            is_duplicate=is_duplicate,
+                            duplicate_count=duplicate_count,
+                            is_garbage=is_garbage,
                             is_large=bool(row[8]),
                             is_old=bool(row[9]),
                         ))
